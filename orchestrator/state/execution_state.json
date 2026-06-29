@@ -1,0 +1,89 @@
+{
+  "current_sprint": 0,
+  "current_task": "0.5",
+  "current_subtask": "0.5.2",
+  "status": "running",
+  "history": [
+    {
+      "subtask_id": "0.1.2",
+      "subtask_name": "Escrever proposta de valor",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T21:42:40.361648",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.1.2.md"
+    },
+    {
+      "subtask_id": "0.1.3",
+      "subtask_name": "Definir público-alvo",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T21:51:41.551331",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.1.3.md"
+    },
+    {
+      "subtask_id": "0.2.2",
+      "subtask_name": "Declarar não-objetivos",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T22:04:40.579771",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.2.2.md"
+    },
+    {
+      "subtask_id": "0.2.3",
+      "subtask_name": "Separar futuro desejado",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T22:09:48.982739",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.2.3.md"
+    },
+    {
+      "subtask_id": "0.3.1",
+      "subtask_name": "Listar entidades principais",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T22:20:41.260338",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.3.1.md"
+    },
+    {
+      "subtask_id": "0.3.2",
+      "subtask_name": "Listar atributos por entidade",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T22:23:30.643601",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.3.2.md"
+    },
+    {
+      "subtask_id": "0.3.3",
+      "subtask_name": "Descrever relacionamento entre entidades",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T22:41:51.652790",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.3.3.md"
+    },
+    {
+      "subtask_id": "0.4.1",
+      "subtask_name": "Identificar fluxo principal",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T22:49:00.524104",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.4.1.md"
+    },
+    {
+      "subtask_id": "0.4.2",
+      "subtask_name": "Identificar fluxos secundários",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T23:03:19.306167",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.4.2.md"
+    },
+    {
+      "subtask_id": "0.4.3",
+      "subtask_name": "Marcar pontos de falha",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T23:14:23.878476",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.4.3.md"
+    },
+    {
+      "subtask_id": "0.5.1",
+      "subtask_name": "Escrever invariantes de negócio",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T23:26:22.462406",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.5.1.md"
+    }
+  ],
+  "review_queue": [],
+  "failures": {},
+  "started_at": "2026-06-28T21:37:59.744354",
+  "last_updated": "2026-06-28T23:26:23.664016"
+}

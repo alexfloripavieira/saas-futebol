@@ -1,0 +1,910 @@
+{
+  "model": "opencode-go/glm-5.2",
+  "sprints": [
+    {
+      "id": "sprint_0",
+      "name": "Fundação, escopo e contratos",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "0.1",
+          "name": "Definir visão do produto",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "0.1.1",
+              "name": "Escrever problema central",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.1.2",
+              "name": "Escrever proposta de valor",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.1.3",
+              "name": "Definir público-alvo",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "0.2",
+          "name": "Delimitar escopo",
+          "status": "in_progress",
+          "subtasks": [
+            {
+              "id": "0.2.1",
+              "name": "Listar entregas do MVP",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.2.2",
+              "name": "Declarar não-objetivos",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.2.3",
+              "name": "Separar futuro desejado",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "0.3",
+          "name": "Mapear entidades",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "0.3.1",
+              "name": "Listar entidades principais",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.3.2",
+              "name": "Listar atributos por entidade",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.3.3",
+              "name": "Descrever relacionamento entre entidades",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "0.4",
+          "name": "Mapear fluxos",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "0.4.1",
+              "name": "Identificar fluxo principal",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.4.2",
+              "name": "Identificar fluxos secundários",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.4.3",
+              "name": "Marcar pontos de falha",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "0.5",
+          "name": "Contratos e invariantes",
+          "status": "in_progress",
+          "subtasks": [
+            {
+              "id": "0.5.1",
+              "name": "Escrever invariantes de negócio",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "0.5.2",
+              "name": "Definir fronteiras técnicas",
+              "status": "in_progress",
+              "needs_review": false
+            },
+            {
+              "id": "0.5.3",
+              "name": "Mapear integrações externas",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "0.6",
+          "name": "Consolidar Sprint 0",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "0.6.1",
+              "name": "Resumir decisões tomadas",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "0.6.2",
+              "name": "Registrar pendências abertas",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "0.6.3",
+              "name": "Preparar handoff para Sprint 1",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_1",
+      "name": "Fundação da plataforma",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "1.1",
+          "name": "Shell da aplicação",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "1.1.1",
+              "name": "Definir composição geral",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.1.2",
+              "name": "Definir áreas persistentes",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.1.3",
+              "name": "Definir slots dinâmicos",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "1.2",
+          "name": "Autenticação e sessão",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "1.2.1",
+              "name": "Definir login",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.2.2",
+              "name": "Definir logout",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.2.3",
+              "name": "Definir expiração de sessão",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "1.3",
+          "name": "Design system mínimo",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "1.3.1",
+              "name": "Tokens visuais",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.3.2",
+              "name": "Componentes base",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.3.3",
+              "name": "Estados base",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "1.4",
+          "name": "Observabilidade mínima",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "1.4.1",
+              "name": "Logging",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.4.2",
+              "name": "Erros",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.4.3",
+              "name": "Auditoria",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "1.5",
+          "name": "Consolidação da Sprint 1",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "1.5.1",
+              "name": "Fechar lacunas",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "1.5.2",
+              "name": "Escrever handoff",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_2",
+      "name": "Núcleo de dados do futebol",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "2.1",
+          "name": "Entidades centrais",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "2.1.1",
+              "name": "Listar entidades primárias",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.1.2",
+              "name": "Definir atributos mínimos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.1.3",
+              "name": "Definir chaves e identificadores",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "2.2",
+          "name": "Regras de integridade",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "2.2.1",
+              "name": "Regras de criação",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.2.2",
+              "name": "Regras de edição",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.2.3",
+              "name": "Regras de exclusão",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.2.4",
+              "name": "Transições de estado",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "2.3",
+          "name": "Padrão de listagem",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "2.3.1",
+              "name": "Colunas",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.3.2",
+              "name": "Ordenação",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.3.3",
+              "name": "Busca",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.3.4",
+              "name": "Paginação",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "2.4",
+          "name": "Importação e exportação",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "2.4.1",
+              "name": "Formatos aceitos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.4.2",
+              "name": "Validação de arquivo",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.4.3",
+              "name": "Conflitos de dados",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "2.4.4",
+              "name": "Relatório de falhas",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "2.5",
+          "name": "Consolidação da Sprint 2",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "2.5.1",
+              "name": "Consolidar sprint",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_3",
+      "name": "Fluxos operacionais",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "3.1",
+          "name": "Fluxo principal 1",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "3.1.1",
+              "name": "Etapas do fluxo",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.1.2",
+              "name": "Estados do fluxo",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.1.3",
+              "name": "Exceções e erros",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "3.2",
+          "name": "Fluxo principal 2",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "3.2.1",
+              "name": "Etapas do fluxo",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.2.2",
+              "name": "Estados do fluxo",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.2.3",
+              "name": "Exceções e erros",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "3.3",
+          "name": "Aprovações",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "3.3.1",
+              "name": "Quem aprova",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.3.2",
+              "name": "O que aprova",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.3.3",
+              "name": "Evidências necessárias",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.3.4",
+              "name": "Rejeição e retorno",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "3.4",
+          "name": "Notificações",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "3.4.1",
+              "name": "Gatilhos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.4.2",
+              "name": "Canal",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.4.3",
+              "name": "Prioridade",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "3.4.4",
+              "name": "Conteúdo da mensagem",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "3.5",
+          "name": "Consolidação da Sprint 3",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "3.5.1",
+              "name": "Consolidar sprint",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_4",
+      "name": "Interface de operação",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "4.1",
+          "name": "Estrutura visual principal",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "4.1.1",
+              "name": "Layout base",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.1.2",
+              "name": "Navegação",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.1.3",
+              "name": "Conteúdo principal",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "4.2",
+          "name": "Formulários críticos",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "4.2.1",
+              "name": "Campos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.2.2",
+              "name": "Labels",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.2.3",
+              "name": "Validação",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.2.4",
+              "name": "Mensagens de erro e sucesso",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "4.3",
+          "name": "Tabelas e cards",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "4.3.1",
+              "name": "Tabela",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.3.2",
+              "name": "Cards",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.3.3",
+              "name": "Empty state",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.3.4",
+              "name": "Ações por item",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "4.4",
+          "name": "Estados de sistema",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "4.4.1",
+              "name": "Loading",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.4.2",
+              "name": "Empty",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.4.3",
+              "name": "Error",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "4.4.4",
+              "name": "Success",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "4.5",
+          "name": "Consolidação da Sprint 4",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "4.5.1",
+              "name": "Consolidar sprint",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_5",
+      "name": "Integrações, automações e IA",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "5.1",
+          "name": "Integrações externas",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "5.1.1",
+              "name": "Sistemas externos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.1.2",
+              "name": "Autenticação",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.1.3",
+              "name": "Entrada e saída de dados",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "5.2",
+          "name": "Automações",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "5.2.1",
+              "name": "Tarefas repetitivas",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.2.2",
+              "name": "Gatilhos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.2.3",
+              "name": "Regras",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.2.4",
+              "name": "Exceções",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "5.3",
+          "name": "IA",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "5.3.1",
+              "name": "Casos de uso",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.3.2",
+              "name": "Limites",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "5.3.3",
+              "name": "Fallback manual",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "5.4",
+          "name": "Consolidação da Sprint 5",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "5.4.1",
+              "name": "Consolidar sprint",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_6",
+      "name": "Segurança, qualidade e governança",
+      "status": "pending",
+      "tasks": [
+        {
+          "id": "6.1",
+          "name": "Papéis e permissões",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "6.1.1",
+              "name": "Papéis",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.1.2",
+              "name": "Escopos",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.1.3",
+              "name": "Restrições",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "6.2",
+          "name": "Auditoria",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "6.2.1",
+              "name": "Eventos auditáveis",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.2.2",
+              "name": "Quem altera o quê",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.2.3",
+              "name": "Retenção de histórico",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "6.3",
+          "name": "Qualidade e testes",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "6.3.1",
+              "name": "Testes unitários",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.3.2",
+              "name": "Testes de integração",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.3.3",
+              "name": "Testes de contrato",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.3.4",
+              "name": "Critérios de regressão",
+              "status": "pending",
+              "needs_review": false
+            }
+          ]
+        },
+        {
+          "id": "6.4",
+          "name": "Consolidação final",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "6.4.1",
+              "name": "Fechar backlog",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.4.2",
+              "name": "Gerar relatório técnico",
+              "status": "pending",
+              "needs_review": false
+            },
+            {
+              "id": "6.4.3",
+              "name": "Produzir handoff final",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

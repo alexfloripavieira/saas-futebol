@@ -109,7 +109,7 @@
         {
           "id": "0.5",
           "name": "Contratos e invariantes",
-          "status": "in_progress",
+          "status": "completed",
           "subtasks": [
             {
               "id": "0.5.1",
@@ -120,13 +120,13 @@
             {
               "id": "0.5.2",
               "name": "Definir fronteiras técnicas",
-              "status": "in_progress",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "0.5.3",
               "name": "Mapear integrações externas",
-              "status": "pending",
+              "status": "completed",
               "needs_review": true
             }
           ]
@@ -134,24 +134,24 @@
         {
           "id": "0.6",
           "name": "Consolidar Sprint 0",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "0.6.1",
               "name": "Resumir decisões tomadas",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "0.6.2",
               "name": "Registrar pendências abertas",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "0.6.3",
               "name": "Preparar handoff para Sprint 1",
-              "status": "pending",
+              "status": "completed",
               "needs_review": true
             }
           ]

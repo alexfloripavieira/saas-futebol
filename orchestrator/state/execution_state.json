@@ -1,8 +1,8 @@
 {
   "current_sprint": 0,
   "current_task": "0.5",
-  "current_subtask": "0.5.2",
-  "status": "running",
+  "current_subtask": "0.5.3",
+  "status": "pending",
   "history": [
     {
       "subtask_id": "0.1.2",
@@ -80,10 +80,45 @@
       "sprint": "Fundação, escopo e contratos",
       "timestamp": "2026-06-28T23:26:22.462406",
       "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.5.1.md"
+    },
+    {
+      "subtask_id": "0.5.2",
+      "subtask_name": "Definir fronteiras técnicas",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-28T23:32:59.384080",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.5.2.md"
+    },
+    {
+      "subtask_id": "0.5.3",
+      "subtask_name": "Mapear integrações externas",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-29T07:57:06.668716",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.5.3.md"
+    },
+    {
+      "subtask_id": "0.6.1",
+      "subtask_name": "Resumir decisões tomadas",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-29T10:35:40.549362",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.6.1.md"
+    },
+    {
+      "subtask_id": "0.6.2",
+      "subtask_name": "Registrar pendências abertas",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-29T10:35:40.549370",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.6.2.md"
+    },
+    {
+      "subtask_id": "0.6.3",
+      "subtask_name": "Preparar handoff para Sprint 1",
+      "sprint": "Fundação, escopo e contratos",
+      "timestamp": "2026-06-29T10:35:40.549372",
+      "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.6.3.md"
     }
   ],
   "review_queue": [],
   "failures": {},
   "started_at": "2026-06-28T21:37:59.744354",
-  "last_updated": "2026-06-28T23:26:23.664016"
+  "last_updated": "2026-06-28T23:48:01.259732"
 }

@@ -4,7 +4,7 @@
 
 {% block content %}
   <div class="hero">
-    <span class="pill">{{ sprint_name|default:'Sprint 11 · API pública' }}</span>
+    <span class="ferrari-signal">{{ sprint_name|default:'Painel principal' }}</span>
     <h1>{{ title }}</h1>
     <p class="muted">{{ subtitle }}</p>
     <div class="hero-links">
@@ -21,7 +21,7 @@
   <section class="card stack">
     <div class="section-title">
       <h2>Painel operacional</h2>
-      <span class="badge">{{ primary_role }}</span>
+      <span class="ferrari-signal">{{ primary_role }}</span>
     </div>
     <div class="summary-cards">
       <div class="summary-card"><span class="muted">Clubes</span><strong>{{ club_count }}</strong></div>
@@ -38,14 +38,14 @@
   <div class="split" style="display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; margin-top:16px;">
     <section class="card stack">
       <div class="section-title">
-        <h2>Tenant ativo</h2>
+        <h2>Unidade ativa</h2>
         <span class="pill">{{ tenant_count }} vínculo(s)</span>
       </div>
       {% if memberships %}
         <table>
           <thead>
             <tr>
-              <th>Tenant</th>
+              <th>Unidade</th>
               <th>Perfil</th>
               <th>Status</th>
             </tr>
@@ -73,10 +73,10 @@
         <span class="pill">UI pronta</span>
       </div>
       <div class="stack">
-        <div class="state state-loading"><strong>Loading</strong><div class="muted">Preparando dados da operação.</div></div>
-        <div class="state state-empty"><strong>Empty</strong><div class="muted">Nenhum registro para esta visão.</div></div>
-        <div class="state state-error"><strong>Error</strong><div class="muted">Falha ao validar ou salvar.</div></div>
-        <div class="state state-success"><strong>Success</strong><div class="muted">Operação concluída com sucesso.</div></div>
+        <div class="state state-loading"><strong>Carregando</strong><div class="muted">Preparando dados da operação.</div></div>
+        <div class="state state-empty"><strong>Sem dados</strong><div class="muted">Nenhum registro para esta visão.</div></div>
+        <div class="state state-error"><strong>Erro</strong><div class="muted">Falha ao validar ou salvar.</div></div>
+        <div class="state state-success"><strong>Concluído</strong><div class="muted">Operação concluída com sucesso.</div></div>
       </div>
     </section>
   </div>
@@ -84,7 +84,7 @@
   <section class="card stack" style="margin-top:16px;">
     <div class="section-title">
       <h2>Fluxo rápido</h2>
-      <span class="pill">Ações por item</span>
+      <span class="ferrari-signal">Ações por item</span>
     </div>
     <div class="grid-3">
       <div class="metric">

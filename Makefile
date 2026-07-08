@@ -1,7 +1,7 @@
 COMPOSE ?= docker compose
 PROJECT ?= saas-futebol
 
-.PHONY: help build up down restart logs shell bash migrate makemigrations createsuperuser test ps clean
+.PHONY: help build up down restart logs shell bash migrate makemigrations createsuperuser test ps clean seed-demo
 
 help:
 	@echo "Comandos disponíveis:"
@@ -16,6 +16,9 @@ help:
 	@echo "  make makemigrations   # cria migrations"
 	@echo "  make createsuperuser   # cria superuser interativo"
 	@echo "  make test             # roda testes"
+	@echo "  make seed-demo        # cria o tenant demo local"
+	@echo "  make sync-ai-sources  # sincroniza as fontes de IA uma vez"
+	@echo "  make watch-ai-sources # sobe o watcher automático de fontes"
 	@echo "  make ps               # status dos containers"
 	@echo "  make clean            # remove containers e volumes"
 
@@ -51,6 +54,16 @@ createsuperuser:
 
 test:
 	$(COMPOSE) run --rm web python src/manage.py test futebol.tests
+
+seed-demo:
+	$(COMPOSE) up -d web db
+	$(COMPOSE) exec -T web python src/manage.py seed_futebol_demo
+
+sync-ai-sources:
+	$(COMPOSE) run --rm ai-sync python scripts/watch_ai_sources.py --project-root /app --vault-root /vault --interval 300 --seed-agent --once
+
+watch-ai-sources:
+	$(COMPOSE) up -d ai-sync
 
 ps:
 	$(COMPOSE) ps

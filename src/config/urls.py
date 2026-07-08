@@ -44,6 +44,7 @@ from futebol.views import (
     knowledge_source_edit,
     knowledge_source_list,
     knowledge_source_import_url,
+    landing,
     mark_notification_read,
     match_create,
     match_edit,
@@ -53,6 +54,7 @@ from futebol.views import (
     negotiation_list,
     notification_create,
     notification_list,
+    onboarding,
     proposal_create,
     proposal_edit,
     proposal_list,
@@ -61,11 +63,15 @@ from futebol.views import (
     public_api_overview,
     reject_request,
     report_center,
+    root_dispatch,
     transfer_center,
 )
 
 urlpatterns = [
-    path('', home, name='home'),
+    path('', root_dispatch, name='root'),
+    path('institucional/', landing, name='landing'),
+    path('onboarding/', onboarding, name='onboarding'),
+    path('painel/', home, name='home'),
     path('clubes/', club_list, name='club-list'),
     path('clubes/novo/', club_create, name='club-create'),
     path('clubes/<int:pk>/editar/', club_edit, name='club-edit'),

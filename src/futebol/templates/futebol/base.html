@@ -3,7 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}SaaS do Futebol{% endblock %}</title>
+    <title>{% block title %}{{ branding.public_title|default:'SaaS do Futebol' }}{% endblock %}</title>
+    {% if branding.favicon_url %}<link rel="icon" href="{{ branding.favicon_url }}">{% endif %}
     <style>
       :root {
         --bg: #06162d;
@@ -276,56 +277,45 @@
         .grid, .grid-3, .form-grid, .summary-cards { grid-template-columns: 1fr; }
       }
     </style>
+    {% if branding %}
+    <style>
+      :root {
+        --bg: {{ branding.background_color|default:'#06162d' }};
+        --panel: {{ branding.secondary_color|default:'#0b1f3f' }};
+        --accent: {{ branding.primary_color|default:'#1d6fe8' }};
+        --accent-2: {{ branding.accent_color|default:'#55a7ff' }};
+        --shine: linear-gradient(135deg, {{ branding.primary_color|default:'#1d6fe8' }}, {{ branding.accent_color|default:'#55a7ff' }});
+      }
+    </style>
+    {% endif %}
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
         <div class="brand">
           <span class="badge">{{ sprint_name|default:'Operação' }}</span>
-          <strong>SaaS do Futebol</strong>
-          <span class="muted">Operação multi-tenant</span>
+          {% if branding.logo_url %}<img class="brand-logo" src="{{ branding.logo_url }}" alt="{{ branding.public_title }}" style="max-width:140px;height:auto;">{% endif %}
+          <strong>{{ branding.public_title|default:'SaaS do Futebol' }}</strong>
+          <span class="muted">{{ branding.public_subtitle|default:'Operação multi-tenant' }}</span>
         </div>
         <nav class="nav">
-          <details class="menu-group" open>
-            <summary><span class="menu-summary-left"><span class="menu-icon">🏁</span><span>Operação</span></span></summary>
+          {% for group in nav_groups %}
+          <details class="menu-group"{% if group.open %} open{% endif %}>
+            <summary><span class="menu-summary-left"><span class="menu-icon">{{ group.icon }}</span><span>{{ group.label }}</span></span></summary>
             <div class="submenu">
-              <a class="nav-link" href="/"><span class="nav-link-icon">🏠</span><span>Dashboard</span></a>
-              <a class="nav-link" href="/clubes/"><span class="nav-link-icon">⚽</span><span>Clubes</span></a>
-              <a class="nav-link" href="/competicoes/"><span class="nav-link-icon">🏆</span><span>Competições</span></a>
-              <a class="nav-link" href="/partidas/"><span class="nav-link-icon">📅</span><span>Partidas</span></a>
-              <a class="nav-link" href="/aprovacoes/"><span class="nav-link-icon">✅</span><span>Fluxos</span></a>
-              <a class="nav-link" href="/solicitacoes-aprovacao/"><span class="nav-link-icon">📝</span><span>Solicitações</span></a>
-              <a class="nav-link" href="/notificacoes/"><span class="nav-link-icon">🔔</span><span>Notificações</span></a>
-              <a class="nav-link" href="/transferencias/"><span class="nav-link-icon">↔️</span><span>Transferências</span></a>
+              {% for item in group.items %}
+              <a class="nav-link" href="{% url item.url_name %}"><span class="nav-link-icon">{{ item.icon }}</span><span>{{ item.label }}</span></a>
+              {% endfor %}
             </div>
           </details>
-
-          <details class="menu-group" open>
-            <summary><span class="menu-summary-left"><span class="menu-icon">🧠</span><span>IA</span></span></summary>
-            <div class="submenu">
-              <a class="nav-link" href="/ia/"><span class="nav-link-icon">✨</span><span>Centro de IA</span></a>
-              <a class="nav-link" href="/ia/providers/"><span class="nav-link-icon">🔌</span><span>Providers IA</span></a>
-              <a class="nav-link" href="/ia/agentes/"><span class="nav-link-icon">🤖</span><span>Agentes IA</span></a>
-              <a class="nav-link" href="/ia/fontes/"><span class="nav-link-icon">📚</span><span>Fontes IA</span></a>
-            </div>
-          </details>
+          {% endfor %}
 
           <details class="menu-group">
-            <summary><span class="menu-summary-left"><span class="menu-icon">📊</span><span>Gestão</span></span></summary>
+            <summary><span class="menu-summary-left"><span class="menu-icon">{{ account_group.icon }}</span><span>{{ account_group.label }}</span></span></summary>
             <div class="submenu">
-              <a class="nav-link" href="/relatorios/"><span class="nav-link-icon">📈</span><span>Relatórios</span></a>
-              <a class="nav-link" href="/integracoes/"><span class="nav-link-icon">🔗</span><span>Integrações</span></a>
-              <a class="nav-link" href="/auditoria/"><span class="nav-link-icon">🕵️</span><span>Auditoria</span></a>
-              <a class="nav-link" href="/automacoes/"><span class="nav-link-icon">⚙️</span><span>Automações</span></a>
-            </div>
-          </details>
-
-          <details class="menu-group">
-            <summary><span class="menu-summary-left"><span class="menu-icon">👤</span><span>Conta</span></span></summary>
-            <div class="submenu">
-              <a class="nav-link" href="/accounts/login/"><span class="nav-link-icon">🔐</span><span>Login</span></a>
-              <a class="nav-link" href="/accounts/logout/"><span class="nav-link-icon">🚪</span><span>Logout</span></a>
-              <a class="nav-link" href="/admin/"><span class="nav-link-icon">🛠️</span><span>Admin</span></a>
+              {% for item in account_group.items %}
+              <a class="nav-link" href="{% url item.url_name %}"><span class="nav-link-icon">{{ item.icon }}</span><span>{{ item.label }}</span></a>
+              {% endfor %}
             </div>
           </details>
         </nav>

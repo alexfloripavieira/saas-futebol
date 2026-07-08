@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import wraps
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -34,6 +36,7 @@ from .forms import (
     MatchForm,
     NegotiationForm,
     NotificationForm,
+    OnboardingForm,
     ProposalForm,
 )
 from .models import (
@@ -60,7 +63,11 @@ from .models import (
     Person,
     Proposal,
     Tenant,
+    TenantBranding,
+    TenantMembership,
+    TenantModuleSubscription,
 )
+from .modules import MODULE_NAMES, tenant_has_module
 from .services.ai import import_knowledge_source_from_url, opencode_auth_configured, provider_catalog_rows, run_ai_agent, sync_opencode_provider_credentials
 from .services.data_io import export_csv, import_payload
 from .services import approvals
@@ -89,6 +96,29 @@ def _require_roles(request, roles, tenant=None, message='Sem permissão para exe
         return
     tenant_id = tenant.pk if tenant is not None else _primary_tenant(request).pk
     require_any_role(request.user, tenant_id, roles, message)
+
+
+def _module_required(module_code):
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapped(request, *args, **kwargs):
+            tenant = _primary_tenant(request)
+            if tenant_has_module(tenant, module_code):
+                return view_func(request, *args, **kwargs)
+            module_name = MODULE_NAMES.get(module_code, module_code)
+            return render(
+                request,
+                'futebol/module_unavailable.html',
+                {
+                    'title': 'Módulo não contratado',
+                    'module_name': module_name,
+                },
+                status=403,
+            )
+
+        return wrapped
+
+    return decorator
 
 
 def _scope_queryset(request, model, *select_related_fields):
@@ -350,6 +380,69 @@ class FormPage:
         return render(self.request, self.template_name, self.get_context(form))
 
 
+def root_dispatch(request):
+    """Ponto de entrada: institucional para visitantes, painel/onboarding para logados."""
+    if not request.user.is_authenticated:
+        return landing(request)
+    if request.user.is_superuser or _accessible_tenants(request.user).exists():
+        return redirect('home')
+    return redirect('onboarding')
+
+
+def landing(request):
+    """Página institucional pública para visitantes sem acesso ativo."""
+    context = {
+        'modules': list(MODULE_NAMES.values()),
+    }
+    return render(request, 'futebol/landing.html', context)
+
+
+@login_required
+def onboarding(request):
+    """Onboarding inicial: cria tenant, branding, módulos e o primeiro vínculo."""
+    if _accessible_tenants(request.user).exists():
+        messages.info(request, 'Você já possui um tenant ativo.')
+        return redirect('home')
+
+    if request.method == 'POST':
+        form = OnboardingForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            with transaction.atomic():
+                tenant = Tenant.objects.create(name=data['tenant_name'], slug=data['tenant_slug'])
+                TenantBranding.objects.create(
+                    tenant=tenant,
+                    primary_color=data['primary_color'],
+                    secondary_color=data['secondary_color'],
+                    background_color=data['background_color'],
+                    accent_color=data['accent_color'],
+                    logo_url=data['logo_url'],
+                    favicon_url=data['favicon_url'],
+                    public_title=data['public_title'],
+                    public_subtitle=data['public_subtitle'] or '',
+                )
+                for code in data['modules']:
+                    TenantModuleSubscription.objects.create(
+                        tenant=tenant,
+                        module_code=code,
+                        module_name=MODULE_NAMES.get(code, code),
+                        enabled=True,
+                    )
+                TenantMembership.objects.create(user=request.user, tenant=tenant, role=data['role'])
+            messages.success(request, 'Tenant configurado com sucesso. Bem-vindo à plataforma!')
+            return redirect('home')
+        messages.error(request, 'Corrija os campos destacados para concluir o onboarding.')
+    else:
+        form = OnboardingForm()
+
+    context = {
+        'title': 'Onboarding do tenant',
+        'subtitle': 'Configure o clube, a identidade visual e os módulos contratados.',
+        'form': form,
+    }
+    return render(request, 'futebol/onboarding.html', context)
+
+
 @login_required
 def home(request):
     memberships = request.user.tenant_memberships.select_related('tenant').filter(active=True, tenant__active=True)
@@ -521,6 +614,7 @@ def match_edit(request, pk):
 
 
 @login_required
+@_module_required('aprovacoes')
 def approval_flow_list(request):
     page = TablePage(request)
     page.model = ApprovalFlow
@@ -541,6 +635,7 @@ def approval_flow_list(request):
 
 
 @login_required
+@_module_required('aprovacoes')
 def approval_request_list(request):
     page = TablePage(request)
     page.model = ApprovalRequest
@@ -567,6 +662,7 @@ def approval_request_list(request):
 
 
 @login_required
+@_module_required('aprovacoes')
 def approval_request_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -579,6 +675,7 @@ def approval_request_create(request):
 
 
 @login_required
+@_module_required('aprovacoes')
 def notification_list(request):
     page = TablePage(request)
     page.model = Notification
@@ -603,6 +700,7 @@ def notification_list(request):
 
 
 @login_required
+@_module_required('auditoria')
 def audit_log_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -631,6 +729,7 @@ def audit_log_list(request):
 
 
 @login_required
+@_module_required('aprovacoes')
 def notification_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -640,6 +739,7 @@ def notification_create(request):
 
 
 @login_required
+@_module_required('transferencias')
 def transfer_center(request):
     _require_roles(request, [
         'admin_tenant',
@@ -686,6 +786,7 @@ def transfer_center(request):
 
 
 @login_required
+@_module_required('relatorios')
 def report_center(request):
     _require_roles(request, [
         'admin_tenant',
@@ -755,6 +856,7 @@ def report_center(request):
 
 
 @login_required
+@_module_required('relatorios')
 def bi_center(request):
     _require_roles(request, [
         'admin_tenant',
@@ -913,6 +1015,7 @@ def public_api_matches(request, tenant_slug):
 
 
 @login_required
+@_module_required('transferencias')
 def contract_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -942,6 +1045,7 @@ def contract_list(request):
 
 
 @login_required
+@_module_required('transferencias')
 def contract_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -952,6 +1056,7 @@ def contract_create(request):
 
 
 @login_required
+@_module_required('transferencias')
 def contract_edit(request, pk):
     contract = _get_visible_object(request, Contract, pk)
     _require_roles(request, [
@@ -963,6 +1068,7 @@ def contract_edit(request, pk):
 
 
 @login_required
+@_module_required('transferencias')
 def negotiation_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -993,6 +1099,7 @@ def negotiation_list(request):
 
 
 @login_required
+@_module_required('transferencias')
 def negotiation_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1003,6 +1110,7 @@ def negotiation_create(request):
 
 
 @login_required
+@_module_required('transferencias')
 def negotiation_edit(request, pk):
     negotiation = _get_visible_object(request, Negotiation, pk)
     _require_roles(request, [
@@ -1014,6 +1122,7 @@ def negotiation_edit(request, pk):
 
 
 @login_required
+@_module_required('transferencias')
 def proposal_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1044,6 +1153,7 @@ def proposal_list(request):
 
 
 @login_required
+@_module_required('transferencias')
 def proposal_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1054,6 +1164,7 @@ def proposal_create(request):
 
 
 @login_required
+@_module_required('transferencias')
 def proposal_edit(request, pk):
     proposal = _get_visible_object(request, Proposal, pk)
     _require_roles(request, [
@@ -1065,6 +1176,7 @@ def proposal_edit(request, pk):
 
 
 @login_required
+@_module_required('transferencias')
 def evidence_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1100,6 +1212,7 @@ def evidence_list(request):
 
 
 @login_required
+@_module_required('transferencias')
 def evidence_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1156,6 +1269,7 @@ def _cast(request, pk, outcome, success_text):
 
 
 @login_required
+@_module_required('integracoes')
 def external_system_list(request):
     page = TablePage(request)
     page.model = ExternalSystem
@@ -1179,6 +1293,7 @@ def external_system_list(request):
 
 
 @login_required
+@_module_required('integracoes')
 def external_system_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1188,6 +1303,7 @@ def external_system_create(request):
 
 
 @login_required
+@_module_required('integracoes')
 def external_system_edit(request, pk):
     external_system = _get_visible_object(request, ExternalSystem, pk)
     _require_roles(request, [
@@ -1198,6 +1314,7 @@ def external_system_edit(request, pk):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_record_list(request):
     page = TablePage(request)
     page.model = IntegrationRecord
@@ -1223,6 +1340,7 @@ def integration_record_list(request):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_record_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1232,6 +1350,7 @@ def integration_record_create(request):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_record_mark_processed(request, pk):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
@@ -1259,6 +1378,7 @@ def integration_record_mark_processed(request, pk):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_record_retry(request, pk):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
@@ -1285,6 +1405,7 @@ def integration_record_retry(request, pk):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_hub(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1331,6 +1452,7 @@ def integration_hub(request):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_import(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1363,6 +1485,7 @@ def integration_import(request):
 
 
 @login_required
+@_module_required('integracoes')
 def integration_export(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1390,6 +1513,7 @@ def integration_export(request):
 
 
 @login_required
+@_module_required('automacoes')
 def automation_center(request):
     context = {
         'title': 'Automações',
@@ -1423,6 +1547,7 @@ def _sync_ai_provider_credentials(form, provider):
 
 
 @login_required
+@_module_required('ia')
 def ai_provider_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1458,6 +1583,7 @@ def ai_provider_list(request):
 
 
 @login_required
+@_module_required('ia')
 def ai_provider_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1476,6 +1602,7 @@ def ai_provider_create(request):
 
 
 @login_required
+@_module_required('ia')
 def ai_provider_edit(request, pk):
     provider = _get_visible_object(request, AIProvider, pk)
     _require_roles(request, [
@@ -1496,6 +1623,7 @@ def ai_provider_edit(request, pk):
 
 
 @login_required
+@_module_required('ia')
 def knowledge_source_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1528,6 +1656,7 @@ def knowledge_source_list(request):
 
 
 @login_required
+@_module_required('ia')
 def knowledge_source_import_url(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1566,6 +1695,7 @@ def knowledge_source_import_url(request):
 
 
 @login_required
+@_module_required('ia')
 def knowledge_source_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1575,6 +1705,7 @@ def knowledge_source_create(request):
 
 
 @login_required
+@_module_required('ia')
 def knowledge_source_edit(request, pk):
     source = _get_visible_object(request, KnowledgeSource, pk)
     _require_roles(request, [
@@ -1585,6 +1716,7 @@ def knowledge_source_edit(request, pk):
 
 
 @login_required
+@_module_required('ia')
 def ai_agent_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1613,6 +1745,7 @@ def ai_agent_list(request):
 
 
 @login_required
+@_module_required('ia')
 def ai_agent_create(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1622,6 +1755,7 @@ def ai_agent_create(request):
 
 
 @login_required
+@_module_required('ia')
 def ai_agent_edit(request, pk):
     agent = _get_visible_object(request, AIAgent, pk)
     _require_roles(request, [
@@ -1632,6 +1766,7 @@ def ai_agent_edit(request, pk):
 
 
 @login_required
+@_module_required('ia')
 def ai_center(request):
     tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
     accessible_tenants = Tenant.objects.filter(active=True) if request.user.is_superuser else Tenant.objects.filter(pk__in=tenant_ids, active=True)
@@ -1801,16 +1936,19 @@ def ai_center(request):
 
 
 @login_required
+@_module_required('aprovacoes')
 def approve_request(request, pk):
     return _cast(request, pk, ApprovalDecision.Outcome.APPROVED, 'Etapa aprovada.')
 
 
 @login_required
+@_module_required('aprovacoes')
 def reject_request(request, pk):
     return _cast(request, pk, ApprovalDecision.Outcome.REJECTED, 'Solicitação rejeitada.')
 
 
 @login_required
+@_module_required('aprovacoes')
 def cancel_request(request, pk):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
@@ -1825,6 +1963,7 @@ def cancel_request(request, pk):
 
 
 @login_required
+@_module_required('aprovacoes')
 def mark_notification_read(request, pk):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])

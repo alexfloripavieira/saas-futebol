@@ -1,0 +1,21 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">Acesso restrito</span>
+    <h1>Módulo não contratado</h1>
+    <p class="muted">O módulo <strong>{{ module_name }}</strong> não faz parte do plano contratado por este tenant.</p>
+  </div>
+
+  <section class="card stack" style="max-width: 720px;">
+    <div class="state state-empty">
+      <strong>Este módulo está indisponível</strong>
+      <div class="muted">Fale com o administrador da plataforma para contratar o módulo {{ module_name }} e liberar o acesso.</div>
+    </div>
+    <div class="form-actions">
+      <a class="button" href="{% url 'home' %}">Voltar ao painel</a>
+    </div>
+  </section>
+{% endblock %}

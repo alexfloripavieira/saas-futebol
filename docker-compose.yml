@@ -25,11 +25,35 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,192.168.1.25,testserver
     volumes:
       - .:/app
+      - ${HOME}/.config/opencode:/root/.config/opencode
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode
     ports:
       - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ai-sync:
+    build:
+      context: .
+    command: python scripts/watch_ai_sources.py --project-root /app --vault-root /vault --interval 300 --seed-agent
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      AI_SYNC_PROJECT_ROOT: /app
+      AI_SYNC_VAULT_ROOT: /vault
+      AI_SYNC_INTERVAL_SECONDS: 300
+      AI_SYNC_SEED_AGENT: "1"
+    volumes:
+      - .:/app
+      - ${SECOND_CEREBRO_ROOT:-/Users/alexvieira/segundo-cerebro}:/vault:ro
+      - ${HOME}/.config/opencode:/root/.config/opencode
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode
     depends_on:
       db:
         condition: service_healthy

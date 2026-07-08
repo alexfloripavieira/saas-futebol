@@ -4,7 +4,7 @@
 
 {% block content %}
   <div class="hero">
-    {% if sprint_label %}<span class="pill">{{ sprint_label }}</span>{% endif %}
+    {% if sprint_label %}<span class="ferrari-signal">{{ sprint_label }}</span>{% endif %}
     <h1>{{ title }}</h1>
     <p class="muted">{{ subtitle }}</p>
   </div>
@@ -59,7 +59,7 @@
     <section class="card stack" style="margin-bottom:16px;">
       <div class="section-title">
         <h2>Mapa da área</h2>
-        <span class="pill">{{ sprint_label|default:'Sprint 5' }}</span>
+        <span class="pill">{{ sprint_label|default:'Visão operacional' }}</span>
       </div>
       <div class="grid-3">
         {% for title, description in summary %}
@@ -89,11 +89,55 @@
     </section>
   {% endif %}
 
+  {% if agent_run_form %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>Executar agente</h2>
+        <span class="pill">Pergunte à base documental</span>
+      </div>
+      <form method="post" class="stack">
+        {% csrf_token %}
+        {{ agent_run_form.tenant }}
+        {% if agent_run_form.non_field_errors %}
+          <div class="muted">{{ agent_run_form.non_field_errors }}</div>
+        {% endif %}
+        <div class="grid-3">
+          <div>
+            <label for="{{ agent_run_form.agent.id_for_label }}">{{ agent_run_form.agent.label }}</label>
+            {{ agent_run_form.agent }}
+            {% if agent_run_form.agent.errors %}<div class="muted">{{ agent_run_form.agent.errors }}</div>{% endif %}
+          </div>
+          <div style="grid-column: span 2;">
+            <label for="{{ agent_run_form.question.id_for_label }}">{{ agent_run_form.question.label }}</label>
+            {{ agent_run_form.question }}
+            {% if agent_run_form.question.errors %}<div class="muted">{{ agent_run_form.question.errors }}</div>{% endif %}
+          </div>
+        </div>
+        <div>
+          <button type="submit">Executar agente</button>
+        </div>
+      </form>
+      {% if agent_run_error %}
+        <p class="muted" style="margin-top:12px;"><strong>Erro:</strong> {{ agent_run_error }}</p>
+      {% endif %}
+      {% if agent_run_result %}
+        <div class="metric" style="margin-top:16px;">
+          <h3>{{ agent_run_result.agent_name }}</h3>
+          <p class="muted">{{ agent_run_result.provider_name }} · {{ agent_run_result.model_name }}{% if agent_run_result.used_fallback %} · fallback local{% endif %}</p>
+          <p style="white-space: pre-wrap; margin-top: 10px;">{{ agent_run_result.answer }}</p>
+          {% if agent_run_result.used_fallback %}
+            <p class="muted" style="margin-top:10px;"><strong>Atenção:</strong> sem credenciais do provider, a resposta é heurística e não uma chamada real ao modelo.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+
   {% if sections %}
     <section class="card stack">
       <div class="section-title">
         <h2>Detalhamento</h2>
-        <span class="pill">Operação</span>
+        <span class="ferrari-signal">Operação</span>
       </div>
       <div class="grid-3">
         {% for section in sections %}
@@ -115,7 +159,7 @@
     <section class="card stack" style="margin-bottom:16px;">
       <div class="section-title">
         <h2>Atletas observados</h2>
-        <span class="pill">{{ selected_tenant|default:'Tenant' }}</span>
+        <span class="pill">{{ selected_tenant|default:'Unidade' }}</span>
       </div>
       <table>
         <thead>

@@ -23,3 +23,25 @@ _Avoid_: approval (a Decisão may be a rejection, so "approval" is too narrow fo
 **Evidência** (Evidence):
 A document or note attached to a target to justify approving it (e.g. transfer paperwork). A Etapa may require ≥1 Evidência before its Decisão can be cast; most MVP flows require none.
 _Avoid_: attachment, anexo (use Evidência when the purpose is to justify an approval)
+
+## Commercial access and tenant setup
+
+**Tenant**:
+The club workspace sold to the customer. It carries its own data, users, branding, and enabled modules.
+_Avoid_: account, organization (use Tenant for the workspace itself)
+
+**Módulo Contratado** (Contracted Module):
+A feature area enabled for a Tenant based on what that club purchased. The sidebar should only show contracted modules.
+_Avoid_: feature flag (too technical), package (too vague)
+
+**Branding do Tenant** (Tenant Branding):
+The visual identity customized per Tenant — logo, colors, symbols, and the name shown in the app and institutional screen.
+_Avoid_: theme (too generic if the intent is tenant identity)
+
+**Tela Institucional** (Institutional Landing):
+The public-facing screen shown when a visitor or user has no active Tenant access. It presents login and marketing content instead of the operational app.
+_Avoid_: splash screen, home page (unless that is the exact public marketing entry)
+
+**Onboarding do Tenant**:
+The first configuration flow shown to the initial tenant admin after login. It creates the Tenant and configures the initial access, modules, and branding.
+_Avoid_: setup wizard (acceptable only in technical docs)

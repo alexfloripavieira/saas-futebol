@@ -13,6 +13,7 @@ Usage:
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import argparse
@@ -29,7 +30,7 @@ SPRINTS_FILE = ORCH / "sprints.json"
 STATE_FILE = ORCH / "state" / "execution_state.json"
 REPORTS_DIR = ORCH / "reports"
 PROMPTS_DIR = ORCH / "prompts"
-MODEL = "opencode-go/glm-5.2"
+MODEL = "opencode-go/deepseek-v4-flash"
 
 # ─── State helpers ─────────────────────────────────────────────────────────
 
@@ -106,14 +107,29 @@ Instruções:
 
 # ─── OpenCode execution ────────────────────────────────────────────────────
 
+def _find_opencode_binary():
+    candidates = [
+        shutil.which("opencode"),
+        shutil.which("opencode-go"),
+        str(Path.home() / ".opencode" / "bin" / "opencode"),
+        "/root/.opencode/bin/opencode",
+        "/Users/alexvieira/.opencode/bin/opencode",
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    raise FileNotFoundError("OpenCode CLI não encontrado no PATH nem nos caminhos padrão.")
+
+
 def run_opencode(prompt, timeout=900):
     """Executa uma subtask via opencode CLI em modo one-shot."""
+    binary = _find_opencode_binary()
     cmd = [
-        "opencode", "run", prompt,
+        binary, "run", prompt,
         "--model", MODEL,
         "-f", str(SPRINTS_FILE),
     ]
-    print(f"  → Executando: opencode run --model {MODEL} ...")
+    print(f"  → Executando: {binary} run --model {MODEL} ...")
     try:
         result = subprocess.run(
             cmd,

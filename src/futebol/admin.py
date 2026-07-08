@@ -1,6 +1,9 @@
 from django.contrib import admin
 
 from .models import (
+    AIAgent,
+    AIAgentSourceLink,
+    AIProvider,
     ApprovalDecision,
     ApprovalFlow,
     ApprovalFlowStep,
@@ -15,6 +18,7 @@ from .models import (
     Evidence,
     ExternalSystem,
     IntegrationRecord,
+    KnowledgeSource,
     Match,
     MatchEvent,
     MatchLineup,
@@ -24,7 +28,9 @@ from .models import (
     Proposal,
     TeamCategory,
     Tenant,
+    TenantBranding,
     TenantMembership,
+    TenantModuleSubscription,
 )
 
 
@@ -40,6 +46,19 @@ class TenantMembershipAdmin(admin.ModelAdmin):
     list_display = ('user', 'tenant', 'role', 'active', 'created_at')
     search_fields = ('user__username', 'user__email', 'tenant__name')
     list_filter = ('role', 'active')
+
+
+@admin.register(TenantBranding)
+class TenantBrandingAdmin(admin.ModelAdmin):
+    list_display = ('tenant', 'public_title', 'primary_color', 'accent_color', 'updated_at')
+    search_fields = ('tenant__name', 'public_title')
+
+
+@admin.register(TenantModuleSubscription)
+class TenantModuleSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ('module_name', 'module_code', 'tenant', 'enabled', 'plan_name')
+    search_fields = ('module_name', 'module_code', 'tenant__name', 'plan_name')
+    list_filter = ('enabled', 'module_code')
 
 
 @admin.register(Club)
@@ -184,6 +203,34 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_filter = ('action', 'content_type')
     search_fields = ('object_id', 'correlation_id')
     readonly_fields = ('occurred_at',)
+
+
+@admin.register(AIProvider)
+class AIProviderAdmin(admin.ModelAdmin):
+    list_display = ('name', 'kind', 'model_name', 'tenant', 'active')
+    list_filter = ('kind', 'active')
+    search_fields = ('name', 'model_name', 'notes')
+
+
+@admin.register(KnowledgeSource)
+class KnowledgeSourceAdmin(admin.ModelAdmin):
+    list_display = ('title', 'kind', 'tenant', 'identifier', 'source_url', 'active')
+    list_filter = ('kind', 'active')
+    search_fields = ('title', 'identifier', 'source_path', 'source_url', 'summary')
+
+
+@admin.register(AIAgent)
+class AIAgentAdmin(admin.ModelAdmin):
+    list_display = ('name', 'slug', 'provider', 'tenant', 'active')
+    list_filter = ('active', 'provider')
+    search_fields = ('name', 'slug', 'purpose', 'system_prompt')
+    filter_horizontal = ('knowledge_sources',)
+
+
+@admin.register(AIAgentSourceLink)
+class AIAgentSourceLinkAdmin(admin.ModelAdmin):
+    list_display = ('agent', 'source', 'tenant', 'order', 'active')
+    list_filter = ('active',)
 
 
 @admin.register(ExternalSystem)

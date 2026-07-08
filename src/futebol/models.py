@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -49,6 +50,40 @@ class TenantMembership(models.Model):
         return f'{self.user} — {self.tenant} — {self.get_role_display()}'
 
 
+_hex_color_validator = RegexValidator(
+    regex=r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$',
+    message='Informe uma cor no formato hexadecimal, por exemplo #1d6fe8.',
+)
+
+
+class TenantBranding(models.Model):
+    """Identidade visual white-label de um tenant, aplicada no layout base."""
+
+    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name='branding')
+    primary_color = models.CharField(max_length=9, default='#1d6fe8', validators=[_hex_color_validator])
+    secondary_color = models.CharField(max_length=9, default='#0c274a', validators=[_hex_color_validator])
+    background_color = models.CharField(max_length=9, default='#06162d', validators=[_hex_color_validator])
+    accent_color = models.CharField(max_length=9, default='#55a7ff', validators=[_hex_color_validator])
+    logo_url = models.URLField(blank=True, default='')
+    favicon_url = models.URLField(blank=True, default='')
+    symbol_url = models.URLField(blank=True, default='')
+    public_title = models.CharField(max_length=120, default='SaaS do Futebol')
+    public_subtitle = models.CharField(max_length=200, default='Operação multi-tenant')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Identidade visual do tenant'
+        verbose_name_plural = 'Identidades visuais dos tenants'
+
+    def __str__(self):
+        return f'Branding — {self.tenant.name}'
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
 class TenantScopedModel(models.Model):
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='%(class)ss')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -73,6 +108,27 @@ class TenantScopedModel(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class TenantModuleSubscription(TenantScopedModel):
+    """Módulo contratado por um tenant — dirige o menu dinâmico e o gating."""
+
+    module_code = models.CharField(max_length=40)
+    module_name = models.CharField(max_length=120)
+    enabled = models.BooleanField(default=True)
+    plan_name = models.CharField(max_length=120, blank=True, default='')
+
+    class Meta:
+        ordering = ['module_name']
+        verbose_name = 'Módulo contratado'
+        verbose_name_plural = 'Módulos contratados'
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'module_code'], name='uniq_module_subscription_per_tenant'),
+        ]
+
+    def __str__(self):
+        estado = 'ativo' if self.enabled else 'inativo'
+        return f'{self.module_name} ({estado}) — {self.tenant.name}'
 
 
 class Club(TenantScopedModel):
@@ -728,6 +784,102 @@ class AuditLog(TenantScopedModel):
 
     def __str__(self):
         return f'{self.get_action_display()} — {self.content_type}:{self.object_id}'
+
+
+class AIProvider(TenantScopedModel):
+    class Kind(models.TextChoices):
+        OPENAI = 'openai', 'OpenAI'
+        ANTHROPIC = 'anthropic', 'Anthropic'
+        OPENROUTER = 'openrouter', 'OpenRouter'
+        OLLAMA = 'ollama', 'Ollama'
+        OPENCODE = 'opencode', 'OpenCode Go'
+        GEMINI = 'gemini', 'Google Gemini'
+        CUSTOM = 'custom', 'Custom'
+
+    name = models.CharField(max_length=160)
+    kind = models.CharField(max_length=32, choices=Kind.choices, default=Kind.CUSTOM)
+    model_name = models.CharField(max_length=120)
+    api_base_url = models.URLField(blank=True, default='')
+    active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True, default='')
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'name'], name='uniq_ai_provider_name_per_tenant'),
+        ]
+
+    def __str__(self):
+        return f'{self.name} ({self.model_name})'
+
+
+class KnowledgeSource(TenantScopedModel):
+    class Kind(models.TextChoices):
+        DOCUMENT = 'document', 'Documento'
+        REPORT = 'report', 'Relatório'
+        REFERENCE = 'reference', 'Referência'
+        MANUAL = 'manual', 'Manual'
+        URL = 'url', 'URL'
+        OTHER = 'other', 'Outro'
+
+    identifier = models.CharField(max_length=240)
+    title = models.CharField(max_length=200)
+    kind = models.CharField(max_length=16, choices=Kind.choices, default=Kind.OTHER)
+    source_path = models.CharField(max_length=300, blank=True, default='')
+    source_url = models.URLField(blank=True, default='')
+    content = models.TextField(blank=True, default='')
+    summary = models.TextField(blank=True, default='')
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['title']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'identifier'], name='uniq_knowledge_source_identifier_per_tenant'),
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class AIAgent(TenantScopedModel):
+    provider = models.ForeignKey(AIProvider, on_delete=models.PROTECT, related_name='agents')
+    name = models.CharField(max_length=160)
+    slug = models.SlugField(max_length=160)
+    purpose = models.CharField(max_length=180, blank=True, default='')
+    system_prompt = models.TextField()
+    model_override = models.CharField(max_length=120, blank=True, default='')
+    temperature = models.DecimalField(max_digits=3, decimal_places=2, default=0.20)
+    active = models.BooleanField(default=True)
+    knowledge_sources = models.ManyToManyField(KnowledgeSource, through='AIAgentSourceLink', related_name='agents', blank=True)
+
+    tenant_bound_fields = ('provider',)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'slug'], name='uniq_ai_agent_slug_per_tenant'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class AIAgentSourceLink(TenantScopedModel):
+    agent = models.ForeignKey(AIAgent, on_delete=models.CASCADE, related_name='source_links')
+    source = models.ForeignKey(KnowledgeSource, on_delete=models.CASCADE, related_name='agent_links')
+    order = models.PositiveIntegerField(default=0)
+    active = models.BooleanField(default=True)
+
+    tenant_bound_fields = ('agent', 'source')
+
+    class Meta:
+        ordering = ['order', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'agent', 'source'], name='uniq_ai_agent_source_link_per_tenant'),
+        ]
+
+    def __str__(self):
+        return f'{self.agent} — {self.source}'
 
 
 class ExternalSystem(TenantScopedModel):

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SaaS for managing football (soccer) operations — registrations, approval flows, dashboards, and reports. Multi-tenant Django 4.2 application (Python 3.11, PostgreSQL 16). Codebase and domain language are **Portuguese (pt-br)**; the timezone is `America/Sao_Paulo`. Match the surrounding language when writing user-facing strings, model verbose names, and comments.
 
-The application is developed largely by an automated sprint orchestrator (`orchestrator/`) that drives an OpenCode CLI (GLM 5.2). See "Orchestrator" below.
+The application is developed largely by an automated sprint orchestrator (`orchestrator/`) that drives an OpenCode CLI (OpenCode Go / DeepSeek). See "Orchestrator" below.
 
 ## Commands
 

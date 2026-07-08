@@ -26,7 +26,9 @@ from .models import (
     Person,
     Proposal,
     Tenant,
+    TenantMembership,
 )
+from .modules import MODULE_CATALOG, MODULE_CODES
 from .services.ai import provider_model_catalog_flat, provider_model_options
 from .services.data_io import MODEL_REGISTRY
 
@@ -52,6 +54,46 @@ class TenantScopedForm(forms.ModelForm):
                 if candidate not in classes:
                     classes.append(candidate)
             widget.attrs['class'] = ' '.join(classes).strip()
+
+
+class OnboardingForm(forms.Form):
+    """Formulário de onboarding inicial do tenant (dados, branding e módulos)."""
+
+    _color_attrs = {'type': 'color', 'class': 'form-control field-input'}
+
+    tenant_name = forms.CharField(label='Nome do clube', max_length=120)
+    tenant_slug = forms.SlugField(label='Identificador (slug)', max_length=120)
+    role = forms.ChoiceField(
+        label='Seu papel inicial',
+        choices=TenantMembership.Role.choices,
+        initial=TenantMembership.Role.ADMIN_TENANT,
+    )
+    modules = forms.MultipleChoiceField(
+        label='Módulos contratados',
+        choices=[(m['code'], m['name']) for m in MODULE_CATALOG],
+        widget=forms.CheckboxSelectMultiple,
+        initial=list(MODULE_CODES),
+    )
+    public_title = forms.CharField(label='Título público', max_length=120, initial='SaaS do Futebol')
+    public_subtitle = forms.CharField(label='Subtítulo público', max_length=200, required=False, initial='Operação multi-tenant')
+    primary_color = forms.CharField(label='Cor primária', max_length=9, initial='#1d6fe8', widget=forms.TextInput(attrs=_color_attrs))
+    secondary_color = forms.CharField(label='Cor secundária', max_length=9, initial='#0c274a', widget=forms.TextInput(attrs=_color_attrs))
+    background_color = forms.CharField(label='Cor de fundo', max_length=9, initial='#06162d', widget=forms.TextInput(attrs=_color_attrs))
+    accent_color = forms.CharField(label='Cor de destaque', max_length=9, initial='#55a7ff', widget=forms.TextInput(attrs=_color_attrs))
+    logo_url = forms.URLField(label='URL do logo', required=False)
+    favicon_url = forms.URLField(label='URL do favicon', required=False)
+
+    def clean_tenant_slug(self):
+        slug = self.cleaned_data['tenant_slug']
+        if Tenant.objects.filter(slug=slug).exists():
+            raise ValidationError('Já existe um tenant com este identificador.')
+        return slug
+
+    def clean_tenant_name(self):
+        name = self.cleaned_data['tenant_name']
+        if Tenant.objects.filter(name=name).exists():
+            raise ValidationError('Já existe um tenant com este nome.')
+        return name
 
 
 class BIExplorerForm(forms.Form):

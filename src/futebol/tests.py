@@ -39,7 +39,9 @@ from .models import (
     Person,
     Proposal,
     Tenant,
+    TenantBranding,
     TenantMembership,
+    TenantModuleSubscription,
 )
 from .services.data_io import export_csv, import_payload
 
@@ -508,6 +510,32 @@ class InterfaceSprint4Tests(Sprint3BaseTestCase):
         notification_response = self.client.get(reverse('notification-list'))
         self.assertEqual(notification_response.status_code, 200)
         self.assertContains(notification_response, 'Marcar lida')
+
+
+class WhiteLabelModuleGatingTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+        TenantModuleSubscription.objects.create(
+            tenant=self.tenant,
+            module_code='operacao',
+            module_name='Operação',
+            enabled=True,
+        )
+
+    def test_uncontracted_module_is_blocked_even_when_url_is_accessed_directly(self):
+        response = self.client.get(reverse('ai-center'))
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTemplateUsed(response, 'futebol/module_unavailable.html')
+        self.assertContains(response, 'Módulo não contratado', status_code=403)
+        self.assertContains(response, 'IA', status_code=403)
+
+    def test_base_operation_module_remains_available(self):
+        response = self.client.get(reverse('club-list'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Clubes')
 
 
 class ImportExportTests(Sprint3BaseTestCase):
@@ -1199,3 +1227,99 @@ class Sprint8ReportingTests(Sprint3BaseTestCase):
         self.assertContains(response, 'Notificação Sprint 8')
         self.assertContains(response, 'Relatório de teste')
 
+
+
+class WhiteLabelPhase1Tests(TestCase):
+    """PRD Fase 1 — white-label, módulos contratados, institucional e onboarding."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='gestor', password='senha12345')
+        self.tenant = Tenant.objects.create(name='Avaí FC', slug='avai')
+        TenantMembership.objects.create(
+            user=self.user,
+            tenant=self.tenant,
+            role=TenantMembership.Role.ADMIN_TENANT,
+        )
+
+    def _subscribe(self, *codes):
+        for code in codes:
+            TenantModuleSubscription.objects.create(
+                tenant=self.tenant, module_code=code, module_name=code.title(), enabled=True,
+            )
+
+    def test_landing_page_is_public_for_anonymous(self):
+        response = self.client.get('/')
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'white-label')
+        self.assertContains(response, reverse('login'))
+
+    def test_root_redirects_authenticated_without_tenant_to_onboarding(self):
+        User.objects.create_user(username='novo', password='senha12345')
+        self.client.login(username='novo', password='senha12345')
+        response = self.client.get('/')
+        self.assertRedirects(response, reverse('onboarding'))
+
+    def test_root_redirects_authenticated_with_tenant_to_painel(self):
+        self.client.login(username='gestor', password='senha12345')
+        response = self.client.get('/')
+        self.assertRedirects(response, reverse('home'))
+
+    def test_onboarding_creates_tenant_branding_modules_and_membership(self):
+        newbie = User.objects.create_user(username='novo', password='senha12345')
+        self.client.login(username='novo', password='senha12345')
+        self.assertEqual(self.client.get(reverse('onboarding')).status_code, 200)
+
+        payload = {
+            'tenant_name': 'Figueirense', 'tenant_slug': 'figueira',
+            'role': TenantMembership.Role.ADMIN_TENANT,
+            'modules': ['operacao', 'ia'],
+            'public_title': 'Portal Figueira', 'public_subtitle': 'Futebol de Santa Catarina',
+            'primary_color': '#000000', 'secondary_color': '#111111',
+            'background_color': '#222222', 'accent_color': '#333333',
+            'logo_url': '', 'favicon_url': '',
+        }
+        response = self.client.post(reverse('onboarding'), payload)
+        self.assertRedirects(response, reverse('home'))
+
+        tenant = Tenant.objects.get(slug='figueira')
+        self.assertTrue(TenantBranding.objects.filter(tenant=tenant, primary_color='#000000', public_title='Portal Figueira').exists())
+        self.assertEqual(TenantModuleSubscription.objects.filter(tenant=tenant, enabled=True).count(), 2)
+        self.assertTrue(TenantMembership.objects.filter(user=newbie, tenant=tenant, role=TenantMembership.Role.ADMIN_TENANT).exists())
+
+    def test_onboarding_redirects_when_user_already_has_tenant(self):
+        self.client.login(username='gestor', password='senha12345')
+        response = self.client.get(reverse('onboarding'))
+        self.assertRedirects(response, reverse('home'))
+
+    def test_branding_is_applied_in_base_template(self):
+        TenantBranding.objects.create(tenant=self.tenant, primary_color='#abcdef', public_title='Portal Avaí')
+        self.client.login(username='gestor', password='senha12345')
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '#abcdef')
+        self.assertContains(response, 'Portal Avaí')
+
+    def test_menu_shows_only_contracted_modules(self):
+        self._subscribe('operacao')
+        self.client.login(username='gestor', password='senha12345')
+        response = self.client.get(reverse('home'))
+        self.assertContains(response, 'Clubes')
+        self.assertNotContains(response, 'Centro de IA')
+
+    def test_uncontracted_module_is_blocked(self):
+        self._subscribe('operacao')
+        self.client.login(username='gestor', password='senha12345')
+        response = self.client.get(reverse('ai-provider-list'))
+        self.assertEqual(response.status_code, 403)
+        self.assertContains(response, 'não contratado', status_code=403)
+
+    def test_unprovisioned_tenant_keeps_full_access(self):
+        self.client.login(username='gestor', password='senha12345')
+        self.assertEqual(self.client.get(reverse('ai-provider-list')).status_code, 200)
+
+    def test_module_subscription_is_unique_per_tenant(self):
+        self._subscribe('operacao')
+        with self.assertRaises(ValidationError):
+            TenantModuleSubscription(
+                tenant=self.tenant, module_code='operacao', module_name='Operação', enabled=True,
+            ).save()

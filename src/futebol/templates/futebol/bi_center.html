@@ -4,7 +4,7 @@
 
 {% block content %}
   <div class="hero">
-    <span class="pill">{{ sprint_label }}</span>
+    <span class="ferrari-signal">{{ sprint_label|default:'BI self-service' }}</span>
     <h1>{{ title|default:'BI self-service' }}</h1>
     <p class="muted">{{ subtitle|default:'Filtros operacionais e exportação JSON para leitura analítica' }}</p>
     <div class="hero-links">
@@ -17,7 +17,7 @@
   <section class="card stack" style="margin-bottom:16px;">
     <div class="section-title">
       <h2>Filtros</h2>
-      <span class="pill">{{ selected_tenant }}</span>
+      <span class="ferrari-signal">{{ selected_tenant }}</span>
     </div>
     <form method="get" class="stack" style="gap:12px;">
       <div class="grid-3">
@@ -41,7 +41,7 @@
   <section class="card stack" style="margin-bottom:16px;">
     <div class="section-title">
       <h2>Visão geral analítica</h2>
-      <span class="pill">{{ summary_cards|length }} indicadores</span>
+      <span class="ferrari-signal">{{ summary_cards|length }} indicadores</span>
     </div>
     <div class="summary-cards">
       {% for card in summary_cards %}

@@ -616,6 +616,19 @@ class Evidence(TenantScopedModel):
         verbose_name_plural = 'Evidências'
         ordering = ['-created_at']
 
+    def clean(self):
+        super().clean()
+        errors = {}
+        model_class = self.content_type.model_class() if self.content_type_id else None
+        if model_class is not None:
+            target = model_class.objects.filter(pk=self.object_id).first()
+            if target is None:
+                errors['object_id'] = 'O objeto de destino informado não existe.'
+            elif self.tenant_id is not None and hasattr(target, 'tenant_id') and target.tenant_id != self.tenant_id:
+                errors['content_type'] = 'A evidência precisa pertencer ao mesmo tenant do alvo.'
+        if errors:
+            raise ValidationError(errors)
+
     def __str__(self):
         return f'Evidência {self.content_type}:{self.object_id}'
 

@@ -9,7 +9,7 @@
     <p class="muted">{{ subtitle }}</p>
   </div>
 
-  {% if external_system_count is not None or integration_record_count is not None or approval_flow_count is not None %}
+  {% if external_system_count is not None or integration_record_count is not None or approval_flow_count is not None or integration_received_count is not None or integration_processed_count is not None or integration_error_count is not None or integration_retry_count is not None %}
     <section class="card stack" style="margin-bottom:16px;">
       <div class="section-title">
         <h2>Resumo operacional</h2>
@@ -21,6 +21,18 @@
         {% endif %}
         {% if integration_record_count is not None %}
           <div class="summary-card"><span class="muted">Registros de integração</span><strong>{{ integration_record_count }}</strong></div>
+        {% endif %}
+        {% if integration_received_count is not None %}
+          <div class="summary-card"><span class="muted">Recebidos</span><strong>{{ integration_received_count }}</strong></div>
+        {% endif %}
+        {% if integration_processed_count is not None %}
+          <div class="summary-card"><span class="muted">Processados</span><strong>{{ integration_processed_count }}</strong></div>
+        {% endif %}
+        {% if integration_error_count is not None %}
+          <div class="summary-card"><span class="muted">Erros</span><strong>{{ integration_error_count }}</strong></div>
+        {% endif %}
+        {% if integration_retry_count is not None %}
+          <div class="summary-card"><span class="muted">Em reprocesso</span><strong>{{ integration_retry_count }}</strong></div>
         {% endif %}
         {% if approval_flow_count is not None %}
           <div class="summary-card"><span class="muted">Fluxos de aprovação</span><strong>{{ approval_flow_count }}</strong></div>
@@ -47,7 +59,7 @@
     <section class="card stack" style="margin-bottom:16px;">
       <div class="section-title">
         <h2>Mapa da área</h2>
-        <span class="pill">Sprint 5</span>
+        <span class="pill">{{ sprint_label|default:'Sprint 5' }}</span>
       </div>
       <div class="grid-3">
         {% for title, description in summary %}
@@ -57,6 +69,23 @@
           </div>
         {% endfor %}
       </div>
+    </section>
+  {% endif %}
+
+  {% if use_cases %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>Casos de uso</h2>
+        <span class="pill">IA assistiva</span>
+      </div>
+      <ul class="muted" style="padding-left:18px; margin: 10px 0 0;">
+        {% for item in use_cases %}
+          <li>{{ item }}</li>
+        {% endfor %}
+      </ul>
+      {% if fallback_manual %}
+        <p class="muted" style="margin-top:12px;"><strong>Fallback manual:</strong> {{ fallback_manual|cut:'Fallback manual: ' }}</p>
+      {% endif %}
     </section>
   {% endif %}
 
@@ -79,6 +108,68 @@
           </div>
         {% endfor %}
       </div>
+    </section>
+  {% endif %}
+
+  {% if recent_players %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>Atletas observados</h2>
+        <span class="pill">{{ selected_tenant|default:'Tenant' }}</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Atleta</th>
+            <th>Escalações</th>
+            <th>Inícios</th>
+            <th>Gols</th>
+            <th>Cartões</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for player in recent_players %}
+            <tr>
+              <td>{{ player.name }}</td>
+              <td>{{ player.appearances }}</td>
+              <td>{{ player.starts }}</td>
+              <td>{{ player.goals }}</td>
+              <td>{{ player.cards }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  {% endif %}
+
+  {% if recent_matches %}
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Partidas recentes analisadas</h2>
+        <span class="pill">{{ recent_matches|length }} registros</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Referência</th>
+            <th>Jogo</th>
+            <th>Placar</th>
+            <th>Escalações</th>
+            <th>Gols</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for match in recent_matches %}
+            <tr>
+              <td>{{ match.reference_code }}</td>
+              <td>{{ match.pair }}</td>
+              <td>{{ match.score }}</td>
+              <td>{{ match.lineups }}</td>
+              <td>{{ match.goals }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </section>
   {% endif %}
 {% endblock %}

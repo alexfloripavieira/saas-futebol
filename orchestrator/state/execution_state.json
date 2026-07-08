@@ -1,7 +1,7 @@
 {
-  "current_sprint": "sprint_5",
-  "current_task": "4.5.1",
-  "current_subtask": "3.5.1",
+  "current_sprint": "sprint_12",
+  "current_task": "12.4.3",
+  "current_subtask": "12.4.3",
   "status": "completed",
   "history": [
     {
@@ -129,6 +129,13 @@
       "sprint": "Fluxos operacionais",
       "timestamp": "2026-07-07T21:42:30-03:00",
       "report": "orchestrator/reports/sprint_3_subtask_3.5.1.md"
+    },
+    {
+      "subtask_id": "12.4.3",
+      "subtask_name": "Registrar Sprint 12 no planner",
+      "sprint": "Análise tática e scouting",
+      "timestamp": "2026-07-08T10:34:26.490735",
+      "report": "/Users/alexvieira/saas-futebol/orchestrator/reports/sprint_12_subtask_12.4.3.md"
     }
   ],
   "review_queue": [],

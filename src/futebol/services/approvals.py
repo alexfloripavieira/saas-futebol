@@ -16,11 +16,13 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from futebol.models import (
+    AuditLog,
     ApprovalDecision,
     ApprovalFlow,
     ApprovalRequest,
     TenantMembership,
 )
+from futebol.services.audit import log_audit_event, snapshot_instance
 
 
 @dataclass(frozen=True)
@@ -76,6 +78,19 @@ def open_request(target: models.Model, requested_by, reason: str = '') -> Approv
         reason=reason,
     )
     request.save()
+    log_audit_event(
+        tenant=request.tenant,
+        actor=requested_by,
+        action='create',
+        obj=request,
+        after_state={
+            'flow_id': request.flow_id,
+            'target_kind': request.flow.target_kind,
+            'object_id': request.object_id,
+            'reason': request.reason,
+            'status': request.status,
+        },
+    )
     return request
 
 
@@ -102,6 +117,19 @@ def cast_decision(request: ApprovalRequest, step, user, outcome: str, note: str 
     if outcome == ApprovalDecision.Outcome.REJECTED:
         _resolve(request, ApprovalRequest.Status.REJECTED)
         spec.on_rejected(request)
+        log_audit_event(
+            tenant=request.tenant,
+            actor=user,
+            action='reject',
+            obj=request,
+            before_state={'status': ApprovalRequest.Status.OPEN},
+            after_state={
+                'status': request.status,
+                'decision_id': decision.pk,
+                'step_id': step.pk,
+                'outcome': outcome,
+            },
+        )
         return decision
 
     total_steps = request.flow.steps.count()
@@ -109,6 +137,19 @@ def cast_decision(request: ApprovalRequest, step, user, outcome: str, note: str 
     if approved_steps >= total_steps:
         _resolve(request, ApprovalRequest.Status.APPROVED)
         spec.on_approved(request)
+        log_audit_event(
+            tenant=request.tenant,
+            actor=user,
+            action='approve',
+            obj=request,
+            before_state={'status': ApprovalRequest.Status.OPEN},
+            after_state={
+                'status': request.status,
+                'decision_id': decision.pk,
+                'step_id': step.pk,
+                'outcome': outcome,
+            },
+        )
     return decision
 
 
@@ -127,6 +168,14 @@ def cancel_request(request: ApprovalRequest, user) -> ApprovalRequest:
     if not (is_requester or is_admin or user.is_superuser):
         raise ValidationError('Sem permissão para cancelar a solicitação.')
     _resolve(request, ApprovalRequest.Status.CANCELLED)
+    log_audit_event(
+        tenant=request.tenant,
+        actor=user,
+        action='update',
+        obj=request,
+        before_state={'status': ApprovalRequest.Status.OPEN},
+        after_state={'status': request.status},
+    )
     return request
 
 

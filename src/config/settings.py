@@ -27,6 +27,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-sa0s-futebol-dev-ke
 DEBUG = os.getenv('DJANGO_DEBUG', '1') == '1'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0').split(',')
+PUBLIC_API_KEY = os.getenv('SAAS_FUTEBOL_PUBLIC_API_KEY', '')
 
 
 # Application definition

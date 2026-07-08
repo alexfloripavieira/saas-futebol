@@ -796,7 +796,7 @@
     {
       "id": "sprint_6",
       "name": "Segurança, qualidade e governança",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         {
           "id": "6.1",
@@ -900,6 +900,648 @@
               "id": "6.4.3",
               "name": "Produzir handoff final",
               "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_7",
+      "name": "Transferências, contratos e evidências",
+      "status": "completed",
+      "tasks": [
+        {
+          "id": "7.1",
+          "name": "Centro de transferências",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "7.1.1",
+              "name": "Criar hub operacional",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.1.2",
+              "name": "Adicionar atalhos principais",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.1.3",
+              "name": "Atualizar menu e home",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "7.2",
+          "name": "Gestão de contratos e negociações",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "7.2.1",
+              "name": "Criar formulários de contrato",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.2.2",
+              "name": "Criar formulários de negociação",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.2.3",
+              "name": "Criar formulários de proposta",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "7.3",
+          "name": "Evidências anexas",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "7.3.1",
+              "name": "Expor cadastro de evidências",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.3.2",
+              "name": "Validar alvo e tenant",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.3.3",
+              "name": "Registrar uso em aprovações",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "7.4",
+          "name": "Validação final e regressão",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "7.4.1",
+              "name": "Rodar compilação e testes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.4.2",
+              "name": "Atualizar planner e estado",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "7.4.3",
+              "name": "Fechar Sprint 7",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_8",
+      "name": "Relatórios e indicadores operacionais",
+      "status": "completed",
+      "tasks": [
+        {
+          "id": "8.1",
+          "name": "Centro de relatórios",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "8.1.1",
+              "name": "Criar dashboard consolidado",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.1.2",
+              "name": "Expor resumo por domínio",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.1.3",
+              "name": "Atualizar navegação e home",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "8.2",
+          "name": "Trilhas recentes",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "8.2.1",
+              "name": "Listar solicitações recentes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.2.2",
+              "name": "Listar auditorias recentes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.2.3",
+              "name": "Listar notificações recentes",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "8.3",
+          "name": "Agrupamentos de status",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "8.3.1",
+              "name": "Contratos e negociações",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.3.2",
+              "name": "Propostas, aprovações e notificações",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.3.3",
+              "name": "Ajustar permissões de leitura",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "8.4",
+          "name": "Validação final",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "8.4.1",
+              "name": "Rodar compilação e testes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.4.2",
+              "name": "Atualizar planner e estado",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "8.4.3",
+              "name": "Fechar Sprint 8",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_9",
+      "name": "Integrações resilientes e reprocessamento",
+      "status": "completed",
+      "tasks": [
+        {
+          "id": "9.1",
+          "name": "Centro de integrações resilientes",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "9.1.1",
+              "name": "Atualizar o hub de integrações",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.1.2",
+              "name": "Expor métricas de recebidos e processados",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.1.3",
+              "name": "Ajustar a home e o rótulo global",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "9.2",
+          "name": "Reprocessamento de registros",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "9.2.1",
+              "name": "Criar ações de marcar processado",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.2.2",
+              "name": "Criar ação de reprocessar",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.2.3",
+              "name": "Registrar auditoria das mudanças",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "9.3",
+          "name": "Experiência visual e rastreabilidade",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "9.3.1",
+              "name": "Atualizar listagem de registros",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.3.2",
+              "name": "Exibir contadores no template genérico",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.3.3",
+              "name": "Destacar reprocessos no painel",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "9.4",
+          "name": "Validação final",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "9.4.1",
+              "name": "Rodar compilação e testes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.4.2",
+              "name": "Atualizar planner e estado",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "9.4.3",
+              "name": "Fechar Sprint 9",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_10",
+      "name": "BI self-service e exportação analítica",
+      "status": "completed",
+      "tasks": [
+        {
+          "id": "10.1",
+          "name": "Central analítica da operação",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "10.1.1",
+              "name": "Criar a tela de BI self-service",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.1.2",
+              "name": "Exibir os indicadores principais",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.1.3",
+              "name": "Incluir atalhos na home e relatórios",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "10.2",
+          "name": "Filtros e exportação em JSON",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "10.2.1",
+              "name": "Implementar filtros por tenant e competição",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.2.2",
+              "name": "Adicionar exportação JSON do painel",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.2.3",
+              "name": "Expor partidas e eventos recentes",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "10.3",
+          "name": "Cobertura e navegação",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "10.3.1",
+              "name": "Criar testes da central BI",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.3.2",
+              "name": "Atualizar o rótulo global da sprint",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.3.3",
+              "name": "Atualizar o roteamento principal",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "10.4",
+          "name": "Validação final",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "10.4.1",
+              "name": "Executar compilação Python",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.4.2",
+              "name": "Rodar a suíte completa de testes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "10.4.3",
+              "name": "Registrar Sprint 10 no planner",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_11",
+      "name": "API pública e documentação externa",
+      "status": "completed",
+      "tasks": [
+        {
+          "id": "11.1",
+          "name": "Expor leitura pública por tenant",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "11.1.1",
+              "name": "Criar autenticação por chave",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.1.2",
+              "name": "Publicar visão geral em JSON",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.1.3",
+              "name": "Publicar listagem de partidas",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "11.2",
+          "name": "Documentação navegável",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "11.2.1",
+              "name": "Criar página de documentação",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.2.2",
+              "name": "Explicar header e query param",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.2.3",
+              "name": "Exibir exemplos de uso",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "11.3",
+          "name": "Navegação e rótulos",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "11.3.1",
+              "name": "Atualizar home",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.3.2",
+              "name": "Atualizar centro de relatórios",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.3.3",
+              "name": "Atualizar rótulo global da sprint",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "11.4",
+          "name": "Validação final",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "11.4.1",
+              "name": "Compilar Python",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.4.2",
+              "name": "Rodar a suíte completa",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "11.4.3",
+              "name": "Registrar Sprint 11 no planner",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sprint_12",
+      "name": "Análise tática e scouting",
+      "status": "completed",
+      "tasks": [
+        {
+          "id": "12.1",
+          "name": "Centro de scouting",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "12.1.1",
+              "name": "Criar visão tática",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.1.2",
+              "name": "Calcular indicadores simples",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.1.3",
+              "name": "Publicar rota e atalhos",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "12.2",
+          "name": "Leituras do elenco",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "12.2.1",
+              "name": "Exibir atletas observados",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.2.2",
+              "name": "Exibir partidas recentes",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.2.3",
+              "name": "Exibir posições mais usadas",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "12.3",
+          "name": "Navegação e rótulos",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "12.3.1",
+              "name": "Atualizar home",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.3.2",
+              "name": "Atualizar rótulo global da sprint",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.3.3",
+              "name": "Adicionar alias de rota",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "12.4",
+          "name": "Validação final",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "12.4.1",
+              "name": "Compilar Python",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.4.2",
+              "name": "Rodar a suíte alvo em SQLite",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "12.4.3",
+              "name": "Registrar Sprint 12 no planner",
+              "status": "completed",
               "needs_review": true
             }
           ]

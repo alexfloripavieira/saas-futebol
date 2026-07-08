@@ -3,22 +3,32 @@ from datetime import timedelta
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
     ApprovalFlow,
+    ApprovalFlowStep,
+    ApprovalDecision,
     ApprovalRequest,
+    AuditLog,
     Club,
     Competition,
     CompetitionEdition,
     CompetitionPhase,
     CompetitionRuleSet,
+    Contract,
     ExternalSystem,
+    Evidence,
     IntegrationRecord,
     Match,
+    MatchEvent,
+    MatchLineup,
+    Negotiation,
     Notification,
+    Person,
+    Proposal,
     Tenant,
     TenantMembership,
 )
@@ -274,6 +284,7 @@ class Sprint5IntegrationTests(Sprint3BaseTestCase):
         hub = self.client.get(reverse('integration-hub'))
         self.assertEqual(hub.status_code, 200)
         self.assertContains(hub, 'Integrações, automações e IA')
+        self.assertContains(hub, 'Sprint 9 · Integrações resilientes')
         self.assertContains(hub, 'Sistemas externos')
         self.assertContains(hub, 'Automações')
         self.assertContains(hub, 'IA')
@@ -339,16 +350,244 @@ class Sprint5IntegrationTests(Sprint3BaseTestCase):
         self.assertIn('name,slug,registration_code,city,state,active', export.content.decode())
 
 
-from .models import (  # noqa: E402  (agrupado aqui para não mexer no bloco de imports acima)
-    ApprovalDecision,
-    ApprovalFlowStep,
-    Contract,
-    Evidence,
-    MatchEvent,
-    Negotiation,
-    Person,
-)
+class Sprint9IntegrationResilienceTests(Sprint5IntegrationTests):
+    def test_integration_record_retry_and_mark_processed(self):
+        external = ExternalSystem.objects.create(
+            tenant=self.tenant,
+            name='Webhook Operacional',
+            kind='payment',
+            base_url='https://example.com/webhook',
+            active=True,
+        )
+        record = IntegrationRecord.objects.create(
+            tenant=self.tenant,
+            external_system=external,
+            correlation_id='retry-001',
+            external_object_id='evt-1',
+            payload={'ok': False},
+            status='error',
+            error_message='Timeout no provedor externo',
+        )
+
+        hub = self.client.get(reverse('integration-hub'))
+        self.assertEqual(hub.status_code, 200)
+        self.assertContains(hub, 'Sprint 9 · Integrações resilientes')
+        self.assertContains(hub, 'Erros')
+        self.assertContains(hub, '1')
+
+        retry = self.client.post(reverse('integration-record-retry', args=[record.pk]), follow=True)
+        self.assertEqual(retry.status_code, 200)
+        self.assertContains(retry, 'Registro reenfileirado para reprocessamento.')
+        record.refresh_from_db()
+        self.assertEqual(record.status, 'retry')
+        self.assertIsNone(record.processed_at)
+        self.assertEqual(record.error_message, 'Timeout no provedor externo')
+
+        processed = self.client.post(reverse('integration-record-mark-processed', args=[record.pk]), follow=True)
+        self.assertEqual(processed.status_code, 200)
+        self.assertContains(processed, 'Registro marcado como processado.')
+        record.refresh_from_db()
+        self.assertEqual(record.status, 'processed')
+        self.assertIsNotNone(record.processed_at)
+        self.assertEqual(record.error_message, '')
+        records = self.client.get(reverse('integration-record-list'))
+        self.assertEqual(records.status_code, 200)
+        self.assertContains(records, 'Processado')
+
+
+class Sprint10BiCenterTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+        self.other_club = Club.objects.create(tenant=self.tenant, name='Clube C', slug='clube-c', city='Belo Horizonte', state='MG')
+        self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta BI')
+        self.match_played = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_a,
+            away_club=self.club_b,
+            reference_code='BI-001',
+            scheduled_at=timezone.now() + timedelta(days=1),
+            status=Match.Status.PLAYED,
+            home_score=2,
+            away_score=1,
+        )
+        self.match_scheduled = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_b,
+            away_club=self.other_club,
+            reference_code='BI-002',
+            scheduled_at=timezone.now() + timedelta(days=2),
+            status=Match.Status.SCHEDULED,
+        )
+        self.contract = Contract.objects.create(
+            tenant=self.tenant,
+            person=self.person,
+            club=self.club_a,
+            start_date=timezone.now().date(),
+            status=Contract.Status.ACTIVE,
+        )
+        MatchEvent.objects.create(
+            tenant=self.tenant,
+            match=self.match_played,
+            player=self.person,
+            event_type=MatchEvent.EventType.GOAL,
+            minute=12,
+        )
+
+    def test_bi_center_renders_and_exports_json(self):
+        response = self.client.get(reverse('bi-center'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Sprint 10')
+        self.assertContains(response, 'BI self-service')
+        self.assertContains(response, 'Partidas disputadas')
+        self.assertContains(response, 'Gol')
+        self.assertContains(response, 'Aplicar filtros')
+        self.assertContains(response, 'Exportar JSON')
+
+        json_response = self.client.get(reverse('bi-center'), {'format': 'json'})
+        self.assertEqual(json_response.status_code, 200)
+        payload = json_response.json()
+        self.assertEqual(payload['selected_tenant'], self.tenant.name)
+        self.assertTrue(any(card['label'] == 'Partidas' for card in payload['summary_cards']))
+        self.assertTrue(any(row['label'] == 'Disputada' for row in payload['breakdowns'][0]['rows']))
+        self.assertTrue(any(item['pair'] == 'Clube A x Clube B' for item in payload['recent_matches']))
+        self.assertTrue(any(item['type'] == 'Gol' for item in payload['recent_events']))
+
+
+@override_settings(PUBLIC_API_KEY='chave-publica-teste')
+class Sprint11PublicApiTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.other_club = Club.objects.create(tenant=self.tenant, name='Clube C', slug='clube-c', city='Belo Horizonte', state='MG')
+        self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta API')
+        self.match_played = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_a,
+            away_club=self.club_b,
+            reference_code='API-001',
+            scheduled_at=timezone.now() + timedelta(days=1),
+            status=Match.Status.PLAYED,
+            home_score=3,
+            away_score=2,
+        )
+        self.match_scheduled = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_b,
+            away_club=self.other_club,
+            reference_code='API-002',
+            scheduled_at=timezone.now() + timedelta(days=2),
+            status=Match.Status.SCHEDULED,
+        )
+        self.contract = Contract.objects.create(
+            tenant=self.tenant,
+            person=self.person,
+            club=self.club_a,
+            start_date=timezone.now().date(),
+            status=Contract.Status.ACTIVE,
+        )
+        MatchEvent.objects.create(
+            tenant=self.tenant,
+            match=self.match_played,
+            player=self.person,
+            event_type=MatchEvent.EventType.GOAL,
+            minute=12,
+        )
+
+    def test_public_api_requires_key(self):
+        response = self.client.get(reverse('public-api-overview', args=[self.tenant.slug]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_public_api_overview_and_matches(self):
+        response = self.client.get(
+            reverse('public-api-overview', args=[self.tenant.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-publica-teste',
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['tenant']['slug'], self.tenant.slug)
+        self.assertTrue(any(card['label'] == 'Partidas' for card in payload['summary_cards']))
+        self.assertTrue(any(item['reference_code'] == 'API-001' for item in payload['recent_matches']))
+        self.assertTrue(any(item['type'] == 'Gol' for item in payload['recent_events']))
+
+        matches_response = self.client.get(
+            reverse('public-api-matches', args=[self.tenant.slug]),
+            {'competition': self.competition.slug},
+            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-publica-teste',
+        )
+        self.assertEqual(matches_response.status_code, 200)
+        matches_payload = matches_response.json()
+        self.assertEqual(matches_payload['tenant']['slug'], self.tenant.slug)
+        self.assertTrue(any(item['reference_code'] == 'API-001' for item in matches_payload['results']))
+
+
 from .services import approvals  # noqa: E402
+
+
+class Sprint12ScoutingTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+        self.athlete_a = Person.objects.create(tenant=self.tenant, full_name='Atleta Scout A', kind=Person.Kind.ATHLETE, active=True)
+        self.athlete_b = Person.objects.create(tenant=self.tenant, full_name='Atleta Scout B', kind=Person.Kind.ATHLETE, active=True)
+        self.match_played = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_a,
+            away_club=self.club_b,
+            reference_code='SCOUT-001',
+            scheduled_at=timezone.now() + timedelta(days=1),
+            status=Match.Status.PLAYED,
+            home_score=2,
+            away_score=1,
+        )
+        MatchLineup.objects.create(
+            tenant=self.tenant,
+            match=self.match_played,
+            player=self.athlete_a,
+            club=self.club_a,
+            jersey_number=9,
+            position='Atacante',
+            is_starter=True,
+        )
+        MatchLineup.objects.create(
+            tenant=self.tenant,
+            match=self.match_played,
+            player=self.athlete_b,
+            club=self.club_b,
+            jersey_number=5,
+            position='Meia',
+            is_starter=False,
+        )
+        MatchEvent.objects.create(
+            tenant=self.tenant,
+            match=self.match_played,
+            player=self.athlete_a,
+            event_type=MatchEvent.EventType.GOAL,
+            minute=20,
+        )
+        MatchEvent.objects.create(
+            tenant=self.tenant,
+            match=self.match_played,
+            player=self.athlete_b,
+            event_type=MatchEvent.EventType.YELLOW_CARD,
+            minute=55,
+        )
+
+    def test_scouting_center_renders_tactical_leads(self):
+        response = self.client.get(reverse('scouting-center'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Análise tática e scouting')
+        self.assertContains(response, 'Sprint 12 · Análise tática e scouting')
+        self.assertContains(response, 'Cobertura do elenco')
+        self.assertContains(response, 'Atletas observados')
+        self.assertContains(response, 'Partidas recentes analisadas')
+        self.assertContains(response, 'Atleta Scout A')
+        self.assertContains(response, 'Atacante')
+        self.assertContains(response, 'Meia')
 
 
 class ApprovalEngineTests(TestCase):
@@ -516,3 +755,194 @@ class ApprovalEngineTests(TestCase):
         self.assertEqual(match.status, Match.Status.SCHEDULED)
         self.assertIsNone(match.home_score)
         self.assertEqual(match.events.count(), 0)
+
+
+class Sprint6GovernanceTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+
+    def test_audit_log_records_club_creation_and_is_listed(self):
+        response = self.client.post(
+            reverse('club-create'),
+            {'name': 'Clube Novo', 'slug': 'clube-novo-s6', 'registration_code': '', 'city': 'Curitiba', 'state': 'PR', 'active': 'on'},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Club.objects.filter(tenant=self.tenant, slug='clube-novo-s6').exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                tenant=self.tenant,
+                action='create',
+                content_type=ContentType.objects.get_for_model(Club),
+                object_id__isnull=False,
+            ).exists()
+        )
+        audit_page = self.client.get(reverse('audit-log-list'))
+        self.assertEqual(audit_page.status_code, 200)
+        self.assertContains(audit_page, 'Auditoria')
+
+    def test_auditor_can_read_but_not_write(self):
+        auditor = User.objects.create_user(username='auditor', password='senha12345')
+        TenantMembership.objects.create(user=auditor, tenant=self.tenant, role=TenantMembership.Role.AUDITOR)
+        self.client.logout()
+        self.client.login(username='auditor', password='senha12345')
+        self.assertEqual(self.client.get(reverse('club-create')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('audit-log-list')).status_code, 200)
+
+    def test_import_and_export_are_audited(self):
+        export_csv(self.tenant, 'club')
+        import_payload(self.tenant, 'club', 'name,slug,city,state\nClube S6,clube-s6,Fortaleza,CE\n')
+        actions = list(
+            AuditLog.objects.filter(tenant=self.tenant, content_type=ContentType.objects.get_for_model(Tenant)).values_list('action', flat=True)
+        )
+        self.assertIn('export', actions)
+        self.assertIn('import', actions)
+
+
+class Sprint7TransferTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+        self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta Sprint 7')
+        self.negotiation = Negotiation.objects.create(tenant=self.tenant, club=self.club_a, person=self.person)
+
+    def test_transfer_center_exposes_the_new_workspace(self):
+        response = self.client.get(reverse('transfer-center'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Transferências, contratos e evidências')
+        self.assertContains(response, 'Contratos')
+        self.assertContains(response, 'Evidências')
+
+    def test_contract_and_evidence_create_are_audited(self):
+        contract_response = self.client.post(
+            reverse('contract-create'),
+            {
+                'person': self.person.pk,
+                'club': self.club_a.pk,
+                'start_date': timezone.now().date().isoformat(),
+                'end_date': '',
+                'signed_at': '',
+                'status': Contract.Status.DRAFT,
+                'termination_reason': '',
+            },
+            follow=True,
+        )
+        self.assertEqual(contract_response.status_code, 200)
+        self.assertTrue(Contract.objects.filter(tenant=self.tenant, person=self.person, club=self.club_a).exists())
+        self.assertTrue(
+            AuditLog.objects.filter(
+                tenant=self.tenant,
+                action='create',
+                content_type=ContentType.objects.get_for_model(Contract),
+            ).exists()
+        )
+
+        evidence_response = self.client.post(
+            reverse('evidence-create'),
+            {
+                'content_type': ContentType.objects.get_for_model(Negotiation).pk,
+                'object_id': str(self.negotiation.pk),
+                'url': 'https://example.com/evidence',
+                'note': 'Documento da negociação',
+            },
+            follow=True,
+        )
+        self.assertEqual(evidence_response.status_code, 200)
+        self.assertTrue(
+            Evidence.objects.filter(
+                tenant=self.tenant,
+                uploaded_by=self.user,
+                note='Documento da negociação',
+            ).exists()
+        )
+        self.assertTrue(
+            AuditLog.objects.filter(
+                tenant=self.tenant,
+                action='create',
+                content_type=ContentType.objects.get_for_model(Evidence),
+            ).exists()
+        )
+
+    def test_evidence_validation_blocks_cross_tenant_targets(self):
+        other_tenant = Tenant.objects.create(name='Outro Tenant', slug='outro-tenant')
+        other_club = Club.objects.create(tenant=other_tenant, name='Outro Clube', slug='outro-clube')
+        other_person = Person.objects.create(tenant=other_tenant, full_name='Pessoa Externa')
+        other_contract = Contract.objects.create(
+            tenant=other_tenant,
+            person=other_person,
+            club=other_club,
+            start_date=timezone.now().date(),
+        )
+        evidence = Evidence(
+            tenant=self.tenant,
+            content_type=ContentType.objects.get_for_model(Contract),
+            object_id=str(other_contract.pk),
+            uploaded_by=self.user,
+            note='fora do tenant',
+        )
+        with self.assertRaises(ValidationError):
+            evidence.full_clean()
+
+
+class Sprint8ReportingTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+        self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta Sprint 8')
+        self.contract = Contract.objects.create(
+            tenant=self.tenant,
+            person=self.person,
+            club=self.club_a,
+            start_date=timezone.now().date(),
+            status=Contract.Status.ACTIVE,
+        )
+        self.negotiation = Negotiation.objects.create(
+            tenant=self.tenant,
+            club=self.club_b,
+            person=self.person,
+            status=Negotiation.Status.ACCEPTED,
+        )
+        self.proposal = Proposal.objects.create(
+            tenant=self.tenant,
+            negotiation=self.negotiation,
+            club=self.club_b,
+            amount='5000.00',
+            currency='BRL',
+            status=Proposal.Status.SENT,
+        )
+        self.approval_request = ApprovalRequest.objects.create(
+            tenant=self.tenant,
+            flow=self.flow,
+            requested_by=self.user,
+            content_type=ContentType.objects.get_for_model(Match),
+            object_id='abc-123',
+            reason='Relatório de teste',
+        )
+        self.notification = Notification.objects.create(
+            tenant=self.tenant,
+            recipient=self.user,
+            subject='Notificação Sprint 8',
+            body='Mensagem para o painel de relatórios',
+        )
+        AuditLog.objects.create(
+            tenant=self.tenant,
+            actor=self.user,
+            action=AuditLog.Action.CREATE,
+            content_type=ContentType.objects.get_for_model(Contract),
+            object_id=str(self.contract.pk),
+            before_state={},
+            after_state={'status': Contract.Status.ACTIVE},
+        )
+
+    def test_report_center_renders_metrics_and_recent_records(self):
+        response = self.client.get(reverse('report-center'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Relatórios e indicadores')
+        self.assertContains(response, 'Contratos por status')
+        self.assertContains(response, 'Contratos ativos')
+        self.assertContains(response, 'Últimas solicitações')
+        self.assertContains(response, 'Últimas auditorias')
+        self.assertContains(response, 'Notificação Sprint 8')
+        self.assertContains(response, 'Relatório de teste')
+

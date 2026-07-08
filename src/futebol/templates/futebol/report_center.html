@@ -1,0 +1,147 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="pill">{{ sprint_label|default:'Sprint 11 · API pública' }}</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+    <div class="hero-links">
+      {% for action in actions %}
+        <a href="{{ action.href }}">{{ action.label }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <section class="card stack" style="margin-bottom:16px;">
+    <div class="section-title">
+      <h2>Visão geral</h2>
+      <span class="pill">Consolidado</span>
+    </div>
+    <div class="summary-cards">
+      {% for card in summary_cards %}
+        <div class="summary-card">
+          <span class="muted">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% for breakdown in breakdowns %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>{{ breakdown.title }}</h2>
+        <span class="pill">{{ breakdown.total }} total</span>
+      </div>
+      <div class="summary-cards">
+        {% for row in breakdown.rows %}
+          <div class="summary-card">
+            <span class="muted">{{ row.label }}</span>
+            <strong>{{ row.count }}</strong>
+          </div>
+        {% empty %}
+          <div class="state state-empty">Nenhum dado encontrado para esta visão.</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+
+  <div class="split" style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Últimas solicitações</h2>
+        <span class="pill">{{ recent_approvals|length }} itens</span>
+      </div>
+      {% if recent_approvals %}
+        <table>
+          <thead>
+            <tr>
+              <th>Fluxo</th>
+              <th>Alvo</th>
+              <th>Status</th>
+              <th>Motivo</th>
+              <th>Quando</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for approval in recent_approvals %}
+              <tr>
+                <td>{{ approval.flow.name }}</td>
+                <td>{{ approval.content_type.name }} #{{ approval.object_id }}</td>
+                <td>{{ approval.get_status_display }}</td>
+                <td>{{ approval.reason|default:'-' }}</td>
+                <td>{{ approval.requested_at|date:'d/m/Y H:i' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="state state-empty">Nenhuma solicitação registrada ainda.</div>
+      {% endif %}
+    </section>
+
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Últimas auditorias</h2>
+        <span class="pill">{{ recent_audits|length }} itens</span>
+      </div>
+      {% if recent_audits %}
+        <table>
+          <thead>
+            <tr>
+              <th>Ação</th>
+              <th>Objeto</th>
+              <th>Autor</th>
+              <th>Quando</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for audit in recent_audits %}
+              <tr>
+                <td>{{ audit.get_action_display }}</td>
+                <td>{{ audit.content_type.name }} #{{ audit.object_id }}</td>
+                <td>{{ audit.actor.username|default:'-' }}</td>
+                <td>{{ audit.occurred_at|date:'d/m/Y H:i' }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="state state-empty">Nenhum evento de auditoria encontrado.</div>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card stack" style="margin-top:16px;">
+    <div class="section-title">
+      <h2>Últimas notificações</h2>
+      <span class="pill">{{ recent_notifications|length }} itens</span>
+    </div>
+    {% if recent_notifications %}
+      <table>
+        <thead>
+          <tr>
+            <th>Assunto</th>
+            <th>Canal</th>
+            <th>Status</th>
+            <th>Quando</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for notification in recent_notifications %}
+            <tr>
+              <td>{{ notification.subject }}</td>
+              <td>{{ notification.get_channel_display }}</td>
+              <td>{{ notification.get_status_display }}</td>
+              <td>{{ notification.sent_at|date:'d/m/Y H:i'|default:'-' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="state state-empty">Nenhuma notificação encontrada.</div>
+    {% endif %}
+  </section>
+{% endblock %}

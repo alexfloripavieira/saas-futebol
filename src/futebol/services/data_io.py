@@ -11,6 +11,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
 from futebol.models import Club, Competition, CompetitionEdition, CompetitionPhase, Match, Tenant
+from futebol.services.audit import log_audit_event
 
 
 @dataclass
@@ -109,6 +110,12 @@ def export_csv(tenant: Tenant, model_name: str) -> str:
     writer.writeheader()
     for row in rows:
         writer.writerow(row)
+    log_audit_event(
+        tenant=tenant,
+        action='export',
+        obj=tenant,
+        after_state={'model_name': model_name, 'rows': len(rows)},
+    )
     return buffer.getvalue()
 
 
@@ -183,6 +190,19 @@ def import_payload(tenant: Tenant, model_name: str, raw_payload: str, conflict_p
         except Exception as exc:
             result.failed += 1
             result.errors.append({'row': index, 'error': str(exc), 'data': row})
+    log_audit_event(
+        tenant=tenant,
+        action='import',
+        obj=tenant,
+        after_state={
+            'model_name': model_name,
+            'created': result.created,
+            'updated': result.updated,
+            'skipped': result.skipped,
+            'failed': result.failed,
+            'error_count': len(result.errors or []),
+        },
+    )
     return result
 
 

@@ -4,7 +4,7 @@
 
 {% block content %}
   <div class="hero">
-    <span class="pill">Sprint 5 · Integrações, automações e IA</span>
+    <span class="pill">{{ sprint_name|default:'Sprint 11 · API pública' }}</span>
     <h1>{{ title }}</h1>
     <p class="muted">{{ subtitle }}</p>
     <div class="hero-links">
@@ -13,6 +13,8 @@
       <a href="/partidas/nova/">Nova partida</a>
       <a href="/solicitacoes-aprovacao/nova/">Nova solicitação</a>
       <a href="/notificacoes/nova/">Nova notificação</a>
+      <a href="/relatorios/">Relatórios</a>
+      <a href="/transferencias/">Transferências</a>
     </div>
   </div>
 
@@ -26,6 +28,10 @@
       <div class="summary-card"><span class="muted">Competições</span><strong>{{ competition_count }}</strong></div>
       <div class="summary-card"><span class="muted">Partidas</span><strong>{{ match_count }}</strong></div>
       <div class="summary-card"><span class="muted">Solicitações</span><strong>{{ approval_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Contratos</span><strong>{{ contract_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Negociações</span><strong>{{ negotiation_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Propostas</span><strong>{{ proposal_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Evidências</span><strong>{{ evidence_count }}</strong></div>
     </div>
   </section>
 
@@ -107,9 +113,24 @@
         <a class="button button-secondary" href="/automacoes/">Abrir</a>
       </div>
       <div class="metric">
-        <h3>IA</h3>
-        <p class="muted">Casos de uso e fallback manual.</p>
-        <a class="button button-secondary" href="/ia/">Abrir</a>
+        <h3>Relatórios</h3>
+        <p class="muted">Indicadores consolidados e auditoria.</p>
+        <a class="button button-secondary" href="/relatorios/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>BI self-service</h3>
+        <p class="muted">Filtros analíticos e exportação JSON.</p>
+        <a class="button button-secondary" href="/relatorios/bi/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>API pública</h3>
+        <p class="muted">Leitura externa autenticada por chave.</p>
+        <a class="button button-secondary" href="/api/publica/">Documentação</a>
+      </div>
+      <div class="metric">
+        <h3>Análise tática</h3>
+        <p class="muted">Scouting, escalações e eventos recentes.</p>
+        <a class="button button-secondary" href="/ia/scouting/">Abrir</a>
       </div>
     </div>
   </section>

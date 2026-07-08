@@ -1,0 +1,44 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title|default:'API pública' }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="pill">{{ sprint_label|default:'Sprint 11 · API pública' }}</span>
+    <h1>{{ title|default:'API pública' }}</h1>
+    <p class="muted">{{ subtitle|default:'Leitura externa de dados esportivos, com autenticação por chave e escopo por tenant.' }}</p>
+  </div>
+
+  <section class="card stack" style="margin-bottom:16px;">
+    <div class="section-title">
+      <h2>Autenticação</h2>
+      <span class="pill">Leitura apenas</span>
+    </div>
+    <p class="muted">Envie a chave no header <code>{{ auth_header }}</code> ou na query string <code>{{ auth_query }}</code>.</p>
+    <pre style="white-space:pre-wrap; margin:0;">{{ example_curl }}</pre>
+  </section>
+
+  <section class="card stack" style="margin-bottom:16px;">
+    <div class="section-title">
+      <h2>Endpoints</h2>
+      <span class="pill">JSON</span>
+    </div>
+    <div class="summary-cards">
+      {% for endpoint in endpoints %}
+        <div class="summary-card">
+          <span class="muted">{{ endpoint.method }}</span>
+          <strong>{{ endpoint.label }}</strong>
+          <p class="muted" style="margin:8px 0 0;">{{ endpoint.path }}</p>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card stack">
+    <div class="section-title">
+      <h2>Resposta</h2>
+      <span class="pill">Visão geral</span>
+    </div>
+    <p class="muted">A visão geral retorna tenant, métricas consolidadas, últimas partidas e eventos recentes. A rota de partidas permite filtros por competição e status.</p>
+  </section>
+{% endblock %}

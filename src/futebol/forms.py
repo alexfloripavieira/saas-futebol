@@ -8,11 +8,17 @@ from .models import (
     ApprovalRequest,
     Club,
     Competition,
+    CompetitionEdition,
     CompetitionPhase,
+    Contract,
+    Evidence,
     ExternalSystem,
     IntegrationRecord,
     Match,
+    Negotiation,
     Notification,
+    Person,
+    Proposal,
     Tenant,
 )
 from .services.data_io import MODEL_REGISTRY
@@ -31,6 +37,51 @@ class TenantScopedForm(forms.ModelForm):
                 if candidate not in classes:
                     classes.append(candidate)
             widget.attrs['class'] = ' '.join(classes).strip()
+
+
+class BIExplorerForm(forms.Form):
+    tenant = forms.ModelChoiceField(queryset=Tenant.objects.none(), required=False, label='Tenant')
+    competition = forms.ModelChoiceField(queryset=Competition.objects.none(), required=False, label='Competição')
+    edition = forms.ModelChoiceField(queryset=CompetitionEdition.objects.none(), required=False, label='Edição')
+    match_status = forms.ChoiceField(required=False, choices=[('', 'Todos')] + list(Match.Status.choices), label='Status da partida')
+    contract_status = forms.ChoiceField(required=False, choices=[('', 'Todos')] + list(Contract.Status.choices), label='Status contratual')
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, accessible_tenants=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            attrs = widget.attrs.setdefault('class', '')
+            classes = [c for c in attrs.split() if c]
+            for candidate in ('form-control', 'field-input'):
+                if candidate not in classes:
+                    classes.append(candidate)
+            widget.attrs['class'] = ' '.join(classes).strip()
+        accessible_tenants = accessible_tenants or Tenant.objects.none()
+        if user is not None and getattr(user, 'is_superuser', False):
+            self.fields['tenant'].queryset = Tenant.objects.filter(active=True)
+        else:
+            self.fields['tenant'].queryset = accessible_tenants
+        tenant_value = None
+        if self.is_bound:
+            tenant_value = self.data.get('tenant') or None
+        if tenant_value:
+            selected_tenant = Tenant.objects.filter(pk=tenant_value).first()
+        else:
+            selected_tenant = tenant
+        competition_qs = Competition.objects.none()
+        edition_qs = CompetitionEdition.objects.none()
+        if selected_tenant is not None:
+            competition_qs = Competition.objects.filter(tenant=selected_tenant)
+            edition_qs = CompetitionEdition.objects.filter(tenant=selected_tenant).select_related('competition')
+            competition_value = None
+            if self.is_bound:
+                competition_value = self.data.get('competition') or None
+            if competition_value:
+                edition_qs = edition_qs.filter(competition_id=competition_value)
+        self.fields['competition'].queryset = competition_qs
+        self.fields['edition'].queryset = edition_qs
+        if tenant is not None:
+            self.fields['tenant'].initial = tenant
 
 
 class ClubForm(TenantScopedForm):
@@ -105,6 +156,118 @@ class MatchForm(TenantScopedForm):
             self.fields['phase'].queryset = CompetitionPhase.objects.filter(tenant=tenant).select_related('edition', 'edition__competition')
             self.fields['home_club'].queryset = Club.objects.filter(tenant=tenant)
             self.fields['away_club'].queryset = Club.objects.filter(tenant=tenant)
+
+
+class ContractForm(TenantScopedForm):
+    class Meta:
+        model = Contract
+        fields = ['person', 'club', 'start_date', 'end_date', 'signed_at', 'status', 'termination_reason']
+        labels = {
+            'person': 'Pessoa',
+            'club': 'Clube',
+            'start_date': 'Data de início',
+            'end_date': 'Data de fim',
+            'signed_at': 'Assinado em',
+            'status': 'Status',
+            'termination_reason': 'Motivo do encerramento',
+        }
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'signed_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+            'termination_reason': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, tenant=tenant, user=user, **kwargs)
+        if tenant is not None:
+            self.fields['person'].queryset = Person.objects.filter(tenant=tenant)
+            self.fields['club'].queryset = Club.objects.filter(tenant=tenant)
+
+
+class NegotiationForm(TenantScopedForm):
+    class Meta:
+        model = Negotiation
+        fields = ['club', 'person', 'status', 'closed_at']
+        labels = {
+            'club': 'Clube',
+            'person': 'Pessoa',
+            'status': 'Status',
+            'closed_at': 'Encerrada em',
+        }
+        widgets = {
+            'closed_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, tenant=tenant, user=user, **kwargs)
+        if tenant is not None:
+            self.fields['club'].queryset = Club.objects.filter(tenant=tenant)
+            self.fields['person'].queryset = Person.objects.filter(tenant=tenant)
+
+
+class ProposalForm(TenantScopedForm):
+    class Meta:
+        model = Proposal
+        fields = ['negotiation', 'club', 'amount', 'currency', 'status', 'sent_at']
+        labels = {
+            'negotiation': 'Negociação',
+            'club': 'Clube',
+            'amount': 'Valor',
+            'currency': 'Moeda',
+            'status': 'Status',
+            'sent_at': 'Enviada em',
+        }
+        widgets = {
+            'sent_at': forms.DateTimeInput(attrs={'type': 'datetime-local'}),
+        }
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, tenant=tenant, user=user, **kwargs)
+        if tenant is not None:
+            self.fields['negotiation'].queryset = Negotiation.objects.filter(tenant=tenant).select_related('person', 'club')
+            self.fields['club'].queryset = Club.objects.filter(tenant=tenant)
+
+
+class EvidenceForm(TenantScopedForm):
+    class Meta:
+        model = Evidence
+        fields = ['content_type', 'object_id', 'file', 'url', 'note']
+        labels = {
+            'content_type': 'Tipo de alvo',
+            'object_id': 'ID do alvo',
+            'file': 'Arquivo',
+            'url': 'URL de apoio',
+            'note': 'Observação',
+        }
+        widgets = {
+            'note': forms.Textarea(attrs={'rows': 4}),
+        }
+        help_texts = {
+            'content_type': 'A evidência precisa ficar no mesmo alvo usado na aprovação.',
+            'object_id': 'Use o ID do objeto para localizar o alvo.',
+        }
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, tenant=tenant, user=user, **kwargs)
+        if tenant is not None:
+            from .services import approvals
+            allowed_models = approvals.approvable_models()
+            self.fields['content_type'].queryset = ContentType.objects.filter(
+                app_label='futebol',
+                model__in=[model._meta.model_name for model in allowed_models],
+            )
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.user is not None and not obj.uploaded_by_id:
+            obj.uploaded_by = self.user
+        if self.tenant is not None and not obj.tenant_id:
+            obj.tenant = self.tenant
+        if commit:
+            obj.save()
+            self.save_m2m()
+        return obj
 
 
 class ApprovalRequestForm(TenantScopedForm):

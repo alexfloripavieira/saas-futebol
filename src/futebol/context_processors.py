@@ -11,7 +11,7 @@ def sprint_context(request):
             .order_by('tenant__name')
         )
     return {
-        'sprint_name': 'Sprint 3 — Fluxos operacionais, aprovações e notificações',
+        'sprint_name': 'Sprint 12 — Análise tática e scouting',
         'tenant_memberships': memberships,
         'is_authenticated': request.user.is_authenticated,
     }

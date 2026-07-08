@@ -1,0 +1,84 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    {% if sprint_label %}<span class="pill">{{ sprint_label }}</span>{% endif %}
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+  </div>
+
+  {% if external_system_count is not None or integration_record_count is not None or approval_flow_count is not None %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>Resumo operacional</h2>
+        <span class="pill">Atual</span>
+      </div>
+      <div class="summary-cards">
+        {% if external_system_count is not None %}
+          <div class="summary-card"><span class="muted">Sistemas externos</span><strong>{{ external_system_count }}</strong></div>
+        {% endif %}
+        {% if integration_record_count is not None %}
+          <div class="summary-card"><span class="muted">Registros de integração</span><strong>{{ integration_record_count }}</strong></div>
+        {% endif %}
+        {% if approval_flow_count is not None %}
+          <div class="summary-card"><span class="muted">Fluxos de aprovação</span><strong>{{ approval_flow_count }}</strong></div>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if actions %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>Ações rápidas</h2>
+        <span class="pill">1 clique</span>
+      </div>
+      <div class="hero-links">
+        {% for action in actions %}
+          <a href="{{ action.href }}">{{ action.label }}</a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if summary %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>Mapa da área</h2>
+        <span class="pill">Sprint 5</span>
+      </div>
+      <div class="grid-3">
+        {% for title, description in summary %}
+          <div class="metric">
+            <h3>{{ title }}</h3>
+            <p class="muted">{{ description }}</p>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  {% if sections %}
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Detalhamento</h2>
+        <span class="pill">Operação</span>
+      </div>
+      <div class="grid-3">
+        {% for section in sections %}
+          <div class="metric">
+            <h3>{{ section.title }}</h3>
+            <p class="muted">{{ section.description }}</p>
+            <ul class="muted" style="padding-left:18px; margin: 10px 0 0;">
+              {% for item in section.points %}
+                <li>{{ item }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+{% endblock %}

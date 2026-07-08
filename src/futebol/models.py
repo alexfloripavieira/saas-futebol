@@ -424,82 +424,200 @@ class Proposal(TenantScopedModel):
 
 
 class ApprovalFlow(TenantScopedModel):
+    """Fluxo de Aprovação — per-tenant template: ordered Etapas + target kind."""
+
+    class TargetKind(models.TextChoices):
+        CONTRATO = 'contrato', 'Contrato'
+        NEGOCIACAO = 'negociacao', 'Negociação'
+        PARTIDA = 'partida', 'Partida'
+        ESCALACAO = 'escalacao', 'Escalação'
+        INSCRICAO = 'inscricao', 'Inscrição'
+        TRANSFERENCIA = 'transferencia', 'Transferência'
+
     code = models.SlugField(max_length=64)
     name = models.CharField(max_length=120)
-    target_model = models.CharField(max_length=120)
+    target_kind = models.CharField(max_length=24, choices=TargetKind.choices)
     active = models.BooleanField(default=True)
 
     class Meta:
         ordering = ['name']
         constraints = [
             models.UniqueConstraint(fields=['tenant', 'code'], name='uniq_approval_flow_code_per_tenant'),
+            models.UniqueConstraint(fields=['tenant', 'target_kind'], name='uniq_approval_flow_target_kind_per_tenant'),
         ]
 
     def __str__(self):
         return self.name
 
 
-class ApprovalRequest(TenantScopedModel):
-    class Status(models.TextChoices):
-        PENDING = 'pending', 'Pendente'
-        APPROVED = 'approved', 'Aprovada'
-        REJECTED = 'rejected', 'Rejeitada'
-        CANCELLED = 'cancelled', 'Cancelada'
+class ApprovalFlowStep(TenantScopedModel):
+    """Etapa — one ordered step of a Fluxo; declares its required approver role."""
 
-    flow = models.ForeignKey(ApprovalFlow, on_delete=models.CASCADE, related_name='requests')
-    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='approval_requests')
-    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
-    target_model = models.CharField(max_length=120)
-    target_object_id = models.CharField(max_length=64)
-    reason = models.TextField(blank=True, default='')
-    requested_at = models.DateTimeField(auto_now_add=True)
-    decided_at = models.DateTimeField(null=True, blank=True)
+    flow = models.ForeignKey(ApprovalFlow, on_delete=models.CASCADE, related_name='steps')
+    order = models.PositiveSmallIntegerField()
+    required_role = models.CharField(max_length=32, choices=TenantMembership.Role.choices)
+    requires_evidence = models.BooleanField(default=False)
 
     tenant_bound_fields = ('flow',)
 
     class Meta:
+        verbose_name = 'Etapa de aprovação'
+        verbose_name_plural = 'Etapas de aprovação'
+        ordering = ['flow__name', 'order']
+        constraints = [
+            models.UniqueConstraint(fields=['tenant', 'flow', 'order'], name='uniq_flow_step_order_per_tenant'),
+        ]
+
+    def __str__(self):
+        return f'{self.flow} — etapa {self.order}'
+
+
+class ApprovalRequest(TenantScopedModel):
+    """Solicitação — one in-flight approval case: one target through one Fluxo."""
+
+    class Status(models.TextChoices):
+        OPEN = 'open', 'Aberta'
+        APPROVED = 'approved', 'Aprovada'
+        REJECTED = 'rejected', 'Rejeitada'
+        CANCELLED = 'cancelled', 'Cancelada'
+
+    flow = models.ForeignKey(ApprovalFlow, on_delete=models.PROTECT, related_name='requests')
+    requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='approval_requests')
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.OPEN)
+    content_type = models.ForeignKey(ContentType, on_delete=models.PROTECT)
+    object_id = models.CharField(max_length=64)
+    content_object = GenericForeignKey('content_type', 'object_id')
+    reason = models.TextField(blank=True, default='')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    tenant_bound_fields = ('flow',)
+
+    class Meta:
+        verbose_name = 'Solicitação de aprovação'
+        verbose_name_plural = 'Solicitações de aprovação'
         ordering = ['-requested_at']
 
     def clean(self):
         super().clean()
+        from futebol.services import approvals  # lazy: avoid circular import at load
+
         errors = {}
-        if not self.target_model:
-            errors['target_model'] = 'Informe o modelo de destino.'
-        if not self.target_object_id:
-            errors['target_object_id'] = 'Informe o identificador do objeto de destino.'
-        if self.tenant_id and self.requested_by_id and not self.requested_by.is_superuser:
-            has_membership = TenantMembership.objects.filter(
-                user=self.requested_by,
-                tenant_id=self.tenant_id,
+        if self.requested_by_id and not self.requested_by.is_superuser:
+            has_membership = self.requested_by.tenant_memberships.filter(
+                tenant=self.tenant,
                 active=True,
                 tenant__active=True,
             ).exists()
             if not has_membership:
                 errors['requested_by'] = 'O solicitante precisa ter vínculo ativo com o tenant.'
+        model_class = self.content_type.model_class() if self.content_type_id else None
+        if model_class is not None:
+            if model_class not in approvals.approvable_models():
+                errors['content_type'] = 'Tipo de alvo não é aprovável.'
+            elif self.flow_id:
+                spec = approvals.spec_for_model(model_class)
+                if spec.target_kind != self.flow.target_kind:
+                    errors['flow'] = 'O fluxo não corresponde ao tipo do alvo.'
         if errors:
             raise ValidationError(errors)
 
-    def decide(self, new_status, *, decided_at=None):
-        if self.status != self.Status.PENDING:
-            raise ValidationError('A solicitação já foi decidida.')
-        if new_status not in {self.Status.APPROVED, self.Status.REJECTED, self.Status.CANCELLED}:
-            raise ValidationError('Status de decisão inválido.')
-        self.status = new_status
-        self.decided_at = decided_at or timezone.now()
-        self.save(update_fields=['status', 'decided_at'])
-        return self
+    def __str__(self):
+        return f'{self.flow} — {self.get_status_display()}'
 
-    def approve(self, *, decided_at=None):
-        return self.decide(self.Status.APPROVED, decided_at=decided_at)
 
-    def reject(self, *, decided_at=None):
-        return self.decide(self.Status.REJECTED, decided_at=decided_at)
+class ApprovalDecision(TenantScopedModel):
+    """Decisão — one approver's ruling on one Etapa of one Solicitação."""
 
-    def cancel(self, *, decided_at=None):
-        return self.decide(self.Status.CANCELLED, decided_at=decided_at)
+    class Outcome(models.TextChoices):
+        APPROVED = 'approved', 'Aprovada'
+        REJECTED = 'rejected', 'Rejeitada'
+
+    request = models.ForeignKey(ApprovalRequest, on_delete=models.CASCADE, related_name='decisions')
+    step = models.ForeignKey(ApprovalFlowStep, on_delete=models.PROTECT, related_name='decisions')
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='approval_decisions')
+    outcome = models.CharField(max_length=16, choices=Outcome.choices)
+    decided_at = models.DateTimeField(auto_now_add=True)
+    note = models.TextField(blank=True, default='')
+
+    tenant_bound_fields = ('request', 'step')
+
+    class Meta:
+        verbose_name = 'Decisão de aprovação'
+        verbose_name_plural = 'Decisões de aprovação'
+        ordering = ['decided_at', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['request', 'step'], name='uniq_decision_per_step_per_request'),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+        if self.step_id and self.request_id and self.step.flow_id != self.request.flow_id:
+            errors['step'] = 'A etapa não pertence ao fluxo da solicitação.'
+        if self.request_id and self.request.status != ApprovalRequest.Status.OPEN:
+            errors['request'] = 'A solicitação não está aberta.'
+        if self.request_id and self.decided_by_id and self.request.requested_by_id == self.decided_by_id:
+            errors['decided_by'] = 'O solicitante não pode decidir a própria solicitação.'
+        if self.step_id and self.decided_by_id and not self.decided_by.is_superuser:
+            has_role = TenantMembership.objects.filter(
+                user_id=self.decided_by_id,
+                tenant_id=self.tenant_id,
+                role=self.step.required_role,
+                active=True,
+                tenant__active=True,
+            ).exists()
+            if not has_role:
+                errors['decided_by'] = 'O usuário não possui o papel exigido para esta etapa.'
+        if self.step_id and self.request_id:
+            prior_step_ids = set(
+                ApprovalFlowStep.objects.filter(
+                    flow_id=self.request.flow_id, order__lt=self.step.order
+                ).values_list('id', flat=True)
+            )
+            if prior_step_ids:
+                approved_prior = set(
+                    ApprovalDecision.objects.filter(
+                        request_id=self.request_id,
+                        step_id__in=prior_step_ids,
+                        outcome=ApprovalDecision.Outcome.APPROVED,
+                    ).values_list('step_id', flat=True)
+                )
+                if prior_step_ids - approved_prior:
+                    errors['step'] = 'Há etapas anteriores ainda não aprovadas.'
+        if self.step_id and self.request_id and self.step.requires_evidence:
+            has_evidence = Evidence.objects.filter(
+                tenant_id=self.tenant_id,
+                content_type_id=self.request.content_type_id,
+                object_id=self.request.object_id,
+            ).exists()
+            if not has_evidence:
+                errors['step'] = 'Esta etapa exige ao menos uma evidência anexada ao alvo.'
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
-        return f'{self.flow} — {self.status}'
+        return f'{self.request} — {self.step} — {self.get_outcome_display()}'
+
+
+class Evidence(TenantScopedModel):
+    """Evidência — a document or note attached to a target to justify approving it."""
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.PROTECT)
+    object_id = models.CharField(max_length=64)
+    content_object = GenericForeignKey('content_type', 'object_id')
+    file = models.FileField(upload_to='evidencias/', blank=True)
+    url = models.URLField(blank=True, default='')
+    note = models.TextField(blank=True, default='')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='evidences')
+
+    class Meta:
+        verbose_name = 'Evidência'
+        verbose_name_plural = 'Evidências'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Evidência {self.content_type}:{self.object_id}'
 
 
 class Notification(TenantScopedModel):

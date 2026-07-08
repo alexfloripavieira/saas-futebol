@@ -1,7 +1,9 @@
 from django.contrib import admin
 
 from .models import (
+    ApprovalDecision,
     ApprovalFlow,
+    ApprovalFlowStep,
     ApprovalRequest,
     AuditLog,
     Club,
@@ -10,6 +12,7 @@ from .models import (
     CompetitionPhase,
     CompetitionRuleSet,
     Contract,
+    Evidence,
     ExternalSystem,
     IntegrationRecord,
     Match,
@@ -125,16 +128,48 @@ class ProposalAdmin(admin.ModelAdmin):
     list_filter = ('status', 'currency')
 
 
+class ApprovalFlowStepInline(admin.TabularInline):
+    model = ApprovalFlowStep
+    extra = 1
+
+
 @admin.register(ApprovalFlow)
 class ApprovalFlowAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'tenant', 'target_model', 'active')
-    search_fields = ('name', 'code', 'target_model')
+    list_display = ('name', 'code', 'tenant', 'target_kind', 'active')
+    search_fields = ('name', 'code')
+    list_filter = ('target_kind', 'active')
+    inlines = [ApprovalFlowStepInline]
+
+
+@admin.register(ApprovalFlowStep)
+class ApprovalFlowStepAdmin(admin.ModelAdmin):
+    list_display = ('flow', 'order', 'required_role', 'requires_evidence', 'tenant')
+    list_filter = ('required_role', 'requires_evidence')
+
+
+class ApprovalDecisionInline(admin.TabularInline):
+    model = ApprovalDecision
+    extra = 0
 
 
 @admin.register(ApprovalRequest)
 class ApprovalRequestAdmin(admin.ModelAdmin):
-    list_display = ('flow', 'requested_by', 'status', 'target_model', 'target_object_id')
-    list_filter = ('status',)
+    list_display = ('flow', 'requested_by', 'status', 'content_type', 'object_id', 'requested_at')
+    list_filter = ('status', 'content_type')
+    inlines = [ApprovalDecisionInline]
+
+
+@admin.register(ApprovalDecision)
+class ApprovalDecisionAdmin(admin.ModelAdmin):
+    list_display = ('request', 'step', 'decided_by', 'outcome', 'decided_at')
+    list_filter = ('outcome',)
+
+
+@admin.register(Evidence)
+class EvidenceAdmin(admin.ModelAdmin):
+    list_display = ('content_type', 'object_id', 'uploaded_by', 'tenant', 'created_at')
+    list_filter = ('content_type',)
+    search_fields = ('object_id', 'note')
 
 
 @admin.register(Notification)

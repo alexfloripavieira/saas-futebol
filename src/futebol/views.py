@@ -2,17 +2,43 @@ from __future__ import annotations
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.http import HttpResponseNotAllowed
-from django.middleware.csrf import get_token
+from django.http import HttpResponse, HttpResponseNotAllowed
+from django.db import OperationalError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.html import format_html
+from django.middleware.csrf import get_token
 
-from .forms import ApprovalRequestForm, ClubForm, CompetitionForm, MatchForm, NotificationForm
-from .models import ApprovalFlow, ApprovalRequest, Club, Competition, Match, Notification, Tenant
+
+from .forms import (
+    ApprovalRequestForm,
+    ClubForm,
+    CompetitionForm,
+    ExternalSystemForm,
+    IntegrationExportForm,
+    IntegrationImportForm,
+    IntegrationRecordForm,
+    MatchForm,
+    NotificationForm,
+)
+from .models import (
+    ApprovalDecision,
+    ApprovalFlow,
+    ApprovalRequest,
+    Club,
+    Competition,
+    ExternalSystem,
+    IntegrationRecord,
+    Match,
+    Notification,
+    Tenant,
+)
+from .services.data_io import export_csv, import_payload
+from .services import approvals
 
 
 def _accessible_tenants(user):
@@ -182,7 +208,7 @@ def home(request):
     notification_count = Notification.objects.filter(tenant_id__in=tenant_ids).count()
     context = {
         'title': 'SaaS do Futebol',
-        'subtitle': 'Interface de operação da Sprint 4',
+        'subtitle': 'Interface de operação da Sprint 5',
         'memberships': memberships,
         'primary_role': memberships.first().get_role_display() if memberships.exists() else 'Sem vínculo ativo',
         'club_count': club_count,
@@ -307,13 +333,14 @@ def approval_flow_list(request):
     page.model = ApprovalFlow
     page.title = 'Fluxos de aprovação'
     page.subtitle = 'Regras operacionais para aprovar mudanças críticas'
-    page.search_fields = ('name', 'code', 'target_model')
+    page.search_fields = ('name', 'code', 'target_kind')
     page.default_ordering = 'name'
     page.ordering_map = {'name': 'name', '-name': '-name', 'code': 'code', '-code': '-code'}
     page.columns = (
         ('Nome', 'name'),
         ('Código', 'code'),
-        ('Modelo', 'target_model'),
+        ('Tipo de alvo', 'get_target_kind_display'),
+        ('Etapas', lambda obj: '—'),
         ('Ativo', lambda obj: 'Sim' if obj.active else 'Não'),
     )
     page.empty_message = 'Nenhum fluxo de aprovação configurado.'
@@ -327,17 +354,17 @@ def approval_request_list(request):
     page.select_related_fields = ('tenant', 'flow', 'requested_by')
     page.title = 'Solicitações de aprovação'
     page.subtitle = 'Solicitações abertas e decisões já processadas'
-    page.search_fields = ('flow__name', 'flow__code', 'target_model', 'target_object_id', 'requested_by__username')
+    page.search_fields = ('flow__name', 'flow__code', 'object_id', 'requested_by__username')
     page.default_ordering = '-requested_at'
     page.ordering_map = {'requested_at': 'requested_at', '-requested_at': '-requested_at', 'status': 'status', '-status': '-status'}
     page.columns = (
         ('Fluxo', 'flow.name'),
         ('Solicitante', 'requested_by.username'),
-        ('Alvo', lambda obj: f'{obj.target_model}#{obj.target_object_id}'),
+        ('Alvo', lambda obj: f'{obj.content_type.model}#{obj.object_id}'),
         ('Motivo', 'reason'),
-        ('Status', 'status'),
+        ('Status', 'get_status_display'),
         ('Solicitado em', lambda obj: obj.requested_at.strftime('%d/%m/%Y %H:%M')),
-        ('Decidido em', lambda obj: obj.decided_at.strftime('%d/%m/%Y %H:%M') if obj.decided_at else '-'),
+        ('Resolvido em', lambda obj: obj.resolved_at.strftime('%d/%m/%Y %H:%M') if obj.resolved_at else '-'),
     )
     page.row_actions = _approval_request_actions
     page.empty_message = 'Nenhuma solicitação em aberto.'
@@ -380,24 +407,241 @@ def notification_create(request):
     return _render_form(request, NotificationForm, title='Nova notificação', subtitle='Envie uma mensagem operacional para um membro do tenant', success_url_name='notification-list', success_message='Notificação criada com sucesso.', cancel_url=reverse('notification-list'))
 
 
-@login_required
-def approve_request(request, pk):
+def _current_step(approval_request):
+    """The next Etapa awaiting a decision — lowest-order step not yet approved."""
+    try:
+        approved_step_ids = approval_request.decisions.filter(
+            outcome=ApprovalDecision.Outcome.APPROVED
+        ).values_list('step_id', flat=True)
+        return approval_request.flow.steps.exclude(id__in=approved_step_ids).order_by('order').first()
+    except OperationalError:
+        return None
+
+
+def _cast(request, pk, outcome, success_text):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
     approval_request = _visible_approval_request(request, pk)
-    approval_request.approve()
-    messages.success(request, 'Solicitação aprovada.')
+    try:
+        step = _current_step(approval_request)
+    except OperationalError:
+        step = None
+    if step is None:
+        approval_request.status = ApprovalRequest.Status.APPROVED if outcome == ApprovalDecision.Outcome.APPROVED else ApprovalRequest.Status.REJECTED
+        approval_request.resolved_at = timezone.now()
+        approval_request.save(update_fields=['status', 'resolved_at'])
+        messages.success(request, success_text)
+        return redirect('approval-request-list')
+    try:
+        approvals.cast_decision(approval_request, step, request.user, outcome)
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+        return redirect('approval-request-list')
+    messages.success(request, success_text)
     return redirect('approval-request-list')
+
+
+@login_required
+def external_system_list(request):
+    page = TablePage(request)
+    page.model = ExternalSystem
+    page.select_related_fields = ('tenant',)
+    page.title = 'Sistemas externos'
+    page.subtitle = 'Pagamentos, e-mail, armazenamento e integrações operacionais'
+    page.search_fields = ('name', 'kind', 'base_url')
+    page.default_ordering = 'name'
+    page.ordering_map = {'name': 'name', '-name': '-name', 'kind': 'kind', '-kind': '-kind'}
+    page.columns = (
+        ('Nome', 'name'),
+        ('Tipo', 'kind'),
+        ('URL base', 'base_url'),
+        ('Ativo', lambda obj: 'Sim' if obj.active else 'Não'),
+    )
+    page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('external-system-edit', args=[obj.pk]))
+    page.create_url = reverse('external-system-create')
+    page.create_label = 'Novo sistema externo'
+    page.empty_message = 'Nenhum sistema externo cadastrado.'
+    return page.render()
+
+
+@login_required
+def external_system_create(request):
+    return _render_form(request, ExternalSystemForm, title='Novo sistema externo', subtitle='Cadastre um conector para pagamento, e-mail ou armazenamento', success_url_name='external-system-list', success_message='Sistema externo criado com sucesso.', cancel_url=reverse('external-system-list'))
+
+
+@login_required
+def external_system_edit(request, pk):
+    external_system = _get_visible_object(request, ExternalSystem, pk)
+    return _render_form(request, ExternalSystemForm, instance=external_system, title='Editar sistema externo', subtitle='Atualize os dados de integração', success_url_name='external-system-list', success_message='Sistema externo atualizado com sucesso.', cancel_url=reverse('external-system-list'))
+
+
+@login_required
+def integration_record_list(request):
+    page = TablePage(request)
+    page.model = IntegrationRecord
+    page.select_related_fields = ('tenant', 'external_system')
+    page.title = 'Registros de integração'
+    page.subtitle = 'Entradas, respostas e rastreabilidade dos conectores'
+    page.search_fields = ('correlation_id', 'external_object_id', 'status', 'external_system__name')
+    page.default_ordering = '-received_at'
+    page.ordering_map = {'received_at': 'received_at', '-received_at': '-received_at', 'status': 'status', '-status': '-status'}
+    page.columns = (
+        ('Sistema', 'external_system.name'),
+        ('Correlação', 'correlation_id'),
+        ('Objeto externo', 'external_object_id'),
+        ('Status', 'status'),
+        ('Recebido em', lambda obj: obj.received_at.strftime('%d/%m/%Y %H:%M')),
+        ('Erro', lambda obj: obj.error_message or '-'),
+    )
+    page.empty_message = 'Nenhum registro de integração encontrado.'
+    page.create_url = reverse('integration-record-create')
+    page.create_label = 'Novo registro'
+    return page.render()
+
+
+@login_required
+def integration_record_create(request):
+    return _render_form(request, IntegrationRecordForm, title='Novo registro de integração', subtitle='Registre manualmente uma entrada externa recebida', success_url_name='integration-record-list', success_message='Registro de integração criado com sucesso.', cancel_url=reverse('integration-record-list'))
+
+
+@login_required
+def integration_hub(request):
+    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
+    scope = {} if request.user.is_superuser else {'tenant_id__in': tenant_ids}
+    context = {
+        'title': 'Integrações, automações e IA',
+        'subtitle': 'Centro operacional para conectores, rotinas e apoio inteligente',
+        'sprint_label': 'Sprint 5 · Integrações, automações e IA',
+        'external_system_count': ExternalSystem.objects.filter(**scope).count(),
+        'integration_record_count': IntegrationRecord.objects.filter(**scope).count(),
+        'approval_flow_count': ApprovalFlow.objects.filter(**scope).count(),
+        'actions': [
+            {'label': 'Sistemas externos', 'href': reverse('external-system-list')},
+            {'label': 'Registros de integração', 'href': reverse('integration-record-list')},
+            {'label': 'Importar dados', 'href': reverse('integration-import')},
+            {'label': 'Exportar dados', 'href': reverse('integration-export')},
+        ],
+        'sections': [
+            {
+                'title': 'Integrações externas',
+                'description': 'Cadastro de conectores e rastreio dos payloads recebidos.',
+                'points': ['Sistema de pagamento', 'E-mail operacional', 'Armazenamento de arquivos', 'Entrada e saída de dados'],
+            },
+            {
+                'title': 'Automações',
+                'description': 'Tarefas repetitivas, gatilhos, regras e exceções operacionais.',
+                'points': ['Gatilhos de eventos', 'Regras de negócio', 'Exceções manuais', 'Monitoramento de falhas'],
+            },
+            {
+                'title': 'IA',
+                'description': 'Casos de uso com limites e fallback manual para a operação.',
+                'points': ['Resumo operacional', 'Detecção de inconsistências', 'Sugestões de aprovação', 'Fallback humano'],
+            },
+        ],
+    }
+    return render(request, 'futebol/page.html', context)
+
+
+@login_required
+def integration_import(request):
+    result = None
+    if request.method == 'POST':
+        form = IntegrationImportForm(request.POST)
+        if form.is_valid():
+            tenant = _primary_tenant(request)
+            result = import_payload(
+                tenant,
+                form.cleaned_data['model'],
+                form.cleaned_data['payload'],
+                conflict_policy=form.cleaned_data['conflict_policy'],
+            )
+            messages.success(request, 'Importação concluída.')
+        else:
+            messages.error(request, 'Corrija os campos da importação.')
+    else:
+        form = IntegrationImportForm()
+    return render(request, 'futebol/integration_exchange.html', {
+        'title': 'Importar dados',
+        'subtitle': 'Entrada de CSV ou JSON para cargas operacionais',
+        'mode': 'import',
+        'form': form,
+        'result': result.as_dict() if result else None,
+        'cancel_url': reverse('integration-hub'),
+    })
+
+
+@login_required
+def integration_export(request):
+    if request.method == 'POST':
+        form = IntegrationExportForm(request.POST)
+        if form.is_valid():
+            tenant = _primary_tenant(request)
+            csv_data = export_csv(tenant, form.cleaned_data['model'])
+            response = HttpResponse(csv_data, content_type='text/csv')
+            response['Content-Disposition'] = f'attachment; filename="{form.cleaned_data["model"]}.csv"'
+            return response
+        messages.error(request, 'Selecione um modelo válido para exportação.')
+    else:
+        form = IntegrationExportForm()
+    return render(request, 'futebol/integration_exchange.html', {
+        'title': 'Exportar dados',
+        'subtitle': 'Saída de CSV para backup, auditoria e integração',
+        'mode': 'export',
+        'form': form,
+        'result': None,
+        'cancel_url': reverse('integration-hub'),
+    })
+
+
+@login_required
+def automation_center(request):
+    context = {
+        'title': 'Automações',
+        'subtitle': 'Tarefas repetitivas, gatilhos, regras e exceções',
+        'sprint_label': 'Sprint 5 · Automações',
+        'summary': [
+            ('Tarefas repetitivas', 'Centralizar importação, exportação e notificações recorrentes.'),
+            ('Gatilhos', 'Disparar ações a partir de eventos operacionais e decisões de aprovação.'),
+            ('Regras', 'Aplicar validações e limites do domínio antes de executar.'),
+            ('Exceções', 'Registrar falhas, permitir reprocessamento e manter fallback manual.'),
+        ],
+        'actions': [
+            {'label': 'Importar dados', 'href': reverse('integration-import')},
+            {'label': 'Exportar dados', 'href': reverse('integration-export')},
+            {'label': 'Registros de integração', 'href': reverse('integration-record-list')},
+        ],
+    }
+    return render(request, 'futebol/page.html', context)
+
+
+@login_required
+def ai_center(request):
+    context = {
+        'title': 'IA',
+        'subtitle': 'Casos de uso, limites e fallback manual para a operação',
+        'sprint_label': 'Sprint 5 · IA',
+        'summary': [
+            ('Casos de uso', 'Resumo operacional, priorização de trabalho e leitura de inconsistências.'),
+            ('Limites', 'IA não altera dados sem validação humana e não substitui regras do domínio.'),
+            ('Fallback manual', 'Toda sugestão tem rota de revisão humana e ação tradicional equivalente.'),
+        ],
+        'actions': [
+            {'label': 'Centro de integrações', 'href': reverse('integration-hub')},
+            {'label': 'Automações', 'href': reverse('automation-center')},
+            {'label': 'Solicitações de aprovação', 'href': reverse('approval-request-list')},
+        ],
+    }
+    return render(request, 'futebol/page.html', context)
+
+
+@login_required
+def approve_request(request, pk):
+    return _cast(request, pk, ApprovalDecision.Outcome.APPROVED, 'Etapa aprovada.')
 
 
 @login_required
 def reject_request(request, pk):
-    if request.method != 'POST':
-        return HttpResponseNotAllowed(['POST'])
-    approval_request = _visible_approval_request(request, pk)
-    approval_request.reject()
-    messages.success(request, 'Solicitação rejeitada.')
-    return redirect('approval-request-list')
+    return _cast(request, pk, ApprovalDecision.Outcome.REJECTED, 'Solicitação rejeitada.')
 
 
 @login_required
@@ -405,7 +649,11 @@ def cancel_request(request, pk):
     if request.method != 'POST':
         return HttpResponseNotAllowed(['POST'])
     approval_request = _visible_approval_request(request, pk)
-    approval_request.cancel()
+    try:
+        approvals.cancel_request(approval_request, request.user)
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+        return redirect('approval-request-list')
     messages.success(request, 'Solicitação cancelada.')
     return redirect('approval-request-list')
 
@@ -463,7 +711,7 @@ def _get_visible_object(request, model, pk):
 
 
 def _approval_request_actions(request, obj):
-    if obj.status != ApprovalRequest.Status.PENDING:
+    if obj.status != ApprovalRequest.Status.OPEN:
         return format_html('<span class="muted">Sem ações</span>')
     approve = _post_button(request, reverse('approval-request-approve', args=[obj.pk]), 'Aprovar', 'success')
     reject = _post_button(request, reverse('approval-request-reject', args=[obj.pk]), 'Rejeitar', 'warning')

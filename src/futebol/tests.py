@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.urls import reverse
@@ -14,6 +15,8 @@ from .models import (
     CompetitionEdition,
     CompetitionPhase,
     CompetitionRuleSet,
+    ExternalSystem,
+    IntegrationRecord,
     Match,
     Notification,
     Tenant,
@@ -51,7 +54,7 @@ class Sprint3BaseTestCase(TestCase):
             tenant=self.tenant,
             code='alteracao-partida',
             name='Alteração de partida',
-            target_model='futebol.Match',
+            target_kind=ApprovalFlow.TargetKind.PARTIDA,
         )
 
 
@@ -79,8 +82,8 @@ class HomeAndListingTests(Sprint3BaseTestCase):
             tenant=self.tenant,
             flow=self.flow,
             requested_by=self.user,
-            target_model='futebol.Match',
-            target_object_id='123',
+            content_type=ContentType.objects.get_for_model(Match),
+            object_id='123',
             reason='Ajuste manual',
         )
         notification = Notification.objects.create(
@@ -97,7 +100,7 @@ class HomeAndListingTests(Sprint3BaseTestCase):
         approval_request_response = self.client.get(reverse('approval-request-list'))
         self.assertEqual(approval_request_response.status_code, 200)
         self.assertContains(approval_request_response, 'Ajuste manual')
-        self.assertContains(approval_request_response, 'pending')
+        self.assertContains(approval_request_response, 'Aberta')
 
         notification_response = self.client.get(reverse('notification-list'))
         self.assertEqual(notification_response.status_code, 200)
@@ -107,7 +110,7 @@ class HomeAndListingTests(Sprint3BaseTestCase):
         self.assertEqual(approve_response.status_code, 302)
         approval_request.refresh_from_db()
         self.assertEqual(approval_request.status, ApprovalRequest.Status.APPROVED)
-        self.assertIsNotNone(approval_request.decided_at)
+        self.assertIsNotNone(approval_request.resolved_at)
 
         read_response = self.client.post(reverse('notification-mark-read', args=[notification.pk]))
         self.assertEqual(read_response.status_code, 302)
@@ -147,8 +150,8 @@ class IntegrityTests(Sprint3BaseTestCase):
             tenant=self.tenant,
             flow=self.flow,
             requested_by=outsider,
-            target_model='futebol.Match',
-            target_object_id='123',
+            content_type=ContentType.objects.get_for_model(Match),
+            object_id='123',
         )
         with self.assertRaises(ValidationError):
             request.full_clean()
@@ -221,8 +224,8 @@ class InterfaceSprint4Tests(Sprint3BaseTestCase):
             tenant=self.tenant,
             flow=self.flow,
             requested_by=self.user,
-            target_model='futebol.Match',
-            target_object_id='123',
+            content_type=ContentType.objects.get_for_model(Match),
+            object_id='123',
             reason='Ajuste manual',
         )
         notification = Notification.objects.create(
@@ -259,3 +262,257 @@ class ImportExportTests(Sprint3BaseTestCase):
         overwritten = import_payload(self.tenant, 'club', payload, conflict_policy='overwrite')
         self.assertEqual(overwritten.updated, 1)
         self.assertEqual(Club.objects.get(tenant=self.tenant, slug='clube-a').name, 'Clube A Editado')
+        self.assertEqual(Club.objects.filter(tenant=self.tenant).count(), 3)
+
+
+class Sprint5IntegrationTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+
+    def test_integration_hub_and_static_pages_render(self):
+        hub = self.client.get(reverse('integration-hub'))
+        self.assertEqual(hub.status_code, 200)
+        self.assertContains(hub, 'Integrações, automações e IA')
+        self.assertContains(hub, 'Sistemas externos')
+        self.assertContains(hub, 'Automações')
+        self.assertContains(hub, 'IA')
+
+        automacoes = self.client.get(reverse('automation-center'))
+        self.assertEqual(automacoes.status_code, 200)
+        self.assertContains(automacoes, 'Tarefas repetitivas')
+        self.assertContains(automacoes, 'Gatilhos')
+
+        ia = self.client.get(reverse('ai-center'))
+        self.assertEqual(ia.status_code, 200)
+        self.assertContains(ia, 'Casos de uso')
+        self.assertContains(ia, 'Fallback manual')
+
+    def test_external_system_crud_and_records_list(self):
+        create = self.client.post(
+            reverse('external-system-create'),
+            {'name': 'Webhook Financeiro', 'kind': 'payment', 'base_url': 'https://example.com/webhook', 'active': 'on'},
+            follow=True,
+        )
+        self.assertEqual(create.status_code, 200)
+        self.assertContains(create, 'Sistema externo criado com sucesso.')
+        external = ExternalSystem.objects.get(tenant=self.tenant, name='Webhook Financeiro')
+
+        edit = self.client.post(
+            reverse('external-system-edit', args=[external.pk]),
+            {'name': 'Webhook Financeiro v2', 'kind': 'payment', 'base_url': 'https://example.com/webhook', 'active': 'on'},
+            follow=True,
+        )
+        self.assertEqual(edit.status_code, 200)
+        self.assertContains(edit, 'Sistema externo atualizado com sucesso.')
+        self.assertTrue(ExternalSystem.objects.filter(tenant=self.tenant, name='Webhook Financeiro v2').exists())
+
+        IntegrationRecord.objects.create(
+            tenant=self.tenant,
+            external_system=ExternalSystem.objects.get(tenant=self.tenant, name='Webhook Financeiro v2'),
+            correlation_id='abc-123',
+            external_object_id='obj-7',
+            payload={'status': 'ok'},
+            status='processed',
+        )
+        records = self.client.get(reverse('integration-record-list'))
+        self.assertEqual(records.status_code, 200)
+        self.assertContains(records, 'abc-123')
+        self.assertContains(records, 'processed')
+        self.assertContains(records, 'Webhook Financeiro v2')
+
+    def test_import_and_export_workflow(self):
+        payload = 'name,slug,registration_code,city,state,active\nClube Importado,clube-importado,,Natal,RN,true\n'
+        response = self.client.post(
+            reverse('integration-import'),
+            {'model': 'club', 'payload': payload, 'conflict_policy': 'skip'},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Importação concluída')
+        self.assertTrue(Club.objects.filter(tenant=self.tenant, slug='clube-importado').exists())
+
+        export = self.client.post(reverse('integration-export'), {'model': 'club'})
+        self.assertEqual(export.status_code, 200)
+        self.assertEqual(export['Content-Type'], 'text/csv')
+        self.assertIn('attachment; filename="club.csv"', export['Content-Disposition'])
+        self.assertIn('name,slug,registration_code,city,state,active', export.content.decode())
+
+
+from .models import (  # noqa: E402  (agrupado aqui para não mexer no bloco de imports acima)
+    ApprovalDecision,
+    ApprovalFlowStep,
+    Contract,
+    Evidence,
+    MatchEvent,
+    Negotiation,
+    Person,
+)
+from .services import approvals  # noqa: E402
+
+
+class ApprovalEngineTests(TestCase):
+    """Matriz do motor de aprovações multi-etapas (ADR-0001)."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name='T1', slug='t1')
+        self.tenant2 = Tenant.objects.create(name='T2', slug='t2')
+        self.requester = User.objects.create_user('req', password='x')
+        self.approver = User.objects.create_user('apr', password='x')
+        self.competicao = User.objects.create_user('cmp', password='x')
+        self.approver2 = User.objects.create_user('apr2', password='x')
+        R = TenantMembership.Role
+        TenantMembership.objects.create(user=self.requester, tenant=self.tenant, role=R.GESTOR_CLUBE)
+        TenantMembership.objects.create(user=self.approver, tenant=self.tenant, role=R.APROVADOR)
+        TenantMembership.objects.create(user=self.competicao, tenant=self.tenant, role=R.GESTOR_COMPETICAO)
+        TenantMembership.objects.create(user=self.approver2, tenant=self.tenant2, role=R.APROVADOR)
+        self.club_a = Club.objects.create(tenant=self.tenant, name='A', slug='a')
+        self.club_b = Club.objects.create(tenant=self.tenant, name='B', slug='b')
+        self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta X')
+
+        self.contract_flow = ApprovalFlow.objects.create(
+            tenant=self.tenant, code='contrato', name='Contrato',
+            target_kind=ApprovalFlow.TargetKind.CONTRATO,
+        )
+        ApprovalFlowStep.objects.create(
+            tenant=self.tenant, flow=self.contract_flow, order=1, required_role=R.APROVADOR,
+        )
+
+        self.transfer_flow = ApprovalFlow.objects.create(
+            tenant=self.tenant, code='transferencia', name='Transferência',
+            target_kind=ApprovalFlow.TargetKind.TRANSFERENCIA,
+        )
+        self.t_step1 = ApprovalFlowStep.objects.create(
+            tenant=self.tenant, flow=self.transfer_flow, order=1, required_role=R.GESTOR_COMPETICAO,
+        )
+        self.t_step2 = ApprovalFlowStep.objects.create(
+            tenant=self.tenant, flow=self.transfer_flow, order=2,
+            required_role=R.APROVADOR, requires_evidence=True,
+        )
+
+    def _draft_contract(self):
+        return Contract.objects.create(
+            tenant=self.tenant, person=self.person, club=self.club_a,
+            start_date=timezone.now().date(), status=Contract.Status.DRAFT,
+        )
+
+    def test_single_step_approval_activates_contract(self):
+        contract = self._draft_contract()
+        req = approvals.open_request(contract, self.requester)
+        step = self.contract_flow.steps.get(order=1)
+        approvals.cast_decision(req, step, self.approver, ApprovalDecision.Outcome.APPROVED)
+        contract.refresh_from_db()
+        req.refresh_from_db()
+        self.assertEqual(contract.status, Contract.Status.ACTIVE)
+        self.assertEqual(req.status, ApprovalRequest.Status.APPROVED)
+        self.assertEqual(req.decisions.count(), 1)
+
+    def test_self_approval_forbidden(self):
+        TenantMembership.objects.create(user=self.requester, tenant=self.tenant, role=TenantMembership.Role.APROVADOR)
+        contract = self._draft_contract()
+        req = approvals.open_request(contract, self.requester)
+        step = self.contract_flow.steps.get(order=1)
+        with self.assertRaises(ValidationError):
+            approvals.cast_decision(req, step, self.requester, ApprovalDecision.Outcome.APPROVED)
+
+    def test_role_mismatch_forbidden(self):
+        contract = self._draft_contract()
+        req = approvals.open_request(contract, self.requester)
+        step = self.contract_flow.steps.get(order=1)
+        with self.assertRaises(ValidationError):
+            approvals.cast_decision(req, step, self.competicao, ApprovalDecision.Outcome.APPROVED)
+
+    def test_tenant_isolation(self):
+        contract = self._draft_contract()
+        req = approvals.open_request(contract, self.requester)
+        step = self.contract_flow.steps.get(order=1)
+        with self.assertRaises(ValidationError):
+            approvals.cast_decision(req, step, self.approver2, ApprovalDecision.Outcome.APPROVED)
+
+    def test_terminal_rejection(self):
+        contract = self._draft_contract()
+        req = approvals.open_request(contract, self.requester)
+        step = self.contract_flow.steps.get(order=1)
+        approvals.cast_decision(req, step, self.approver, ApprovalDecision.Outcome.REJECTED)
+        contract.refresh_from_db()
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalRequest.Status.REJECTED)
+        self.assertEqual(contract.status, Contract.Status.TERMINATED)
+
+    def test_cancel_pending_then_cannot_cancel_resolved(self):
+        contract = self._draft_contract()
+        req = approvals.open_request(contract, self.requester)
+        approvals.cancel_request(req, self.requester)
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalRequest.Status.CANCELLED)
+        with self.assertRaises(ValidationError):
+            approvals.cancel_request(req, self.requester)
+
+    def test_two_step_transfer_ordering_evidence_and_effects(self):
+        Contract.objects.create(
+            tenant=self.tenant, person=self.person, club=self.club_a,
+            start_date=timezone.now().date(), status=Contract.Status.ACTIVE,
+        )
+        negotiation = Negotiation.objects.create(tenant=self.tenant, club=self.club_b, person=self.person)
+        req = approvals.open_request(negotiation, self.requester)
+
+        # ordenação: não pode decidir a etapa 2 antes da 1
+        with self.assertRaises(ValidationError):
+            approvals.cast_decision(req, self.t_step2, self.approver, ApprovalDecision.Outcome.APPROVED)
+
+        # etapa 1 aprovada — ainda sem efeito colateral, solicitação segue aberta
+        approvals.cast_decision(req, self.t_step1, self.competicao, ApprovalDecision.Outcome.APPROVED)
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalRequest.Status.OPEN)
+
+        # etapa 2 sem evidência -> bloqueia
+        with self.assertRaises(ValidationError):
+            approvals.cast_decision(req, self.t_step2, self.approver, ApprovalDecision.Outcome.APPROVED)
+
+        Evidence.objects.create(
+            tenant=self.tenant,
+            content_type=ContentType.objects.get_for_model(Negotiation),
+            object_id=str(negotiation.pk),
+            uploaded_by=self.requester,
+            note='documentação',
+        )
+        approvals.cast_decision(req, self.t_step2, self.approver, ApprovalDecision.Outcome.APPROVED)
+        req.refresh_from_db()
+        self.assertEqual(req.status, ApprovalRequest.Status.APPROVED)
+        # efeito atômico: contrato destino ativo em club_b, origem em club_a rescindido
+        self.assertTrue(Contract.objects.filter(
+            tenant=self.tenant, person=self.person, club=self.club_b, status=Contract.Status.ACTIVE,
+        ).exists())
+        self.assertFalse(Contract.objects.filter(
+            tenant=self.tenant, person=self.person, club=self.club_a, status=Contract.Status.ACTIVE,
+        ).exists())
+
+    def test_match_reopen_discards_events(self):
+        flow = ApprovalFlow.objects.create(
+            tenant=self.tenant, code='reabertura', name='Reabertura de partida',
+            target_kind=ApprovalFlow.TargetKind.PARTIDA,
+        )
+        ApprovalFlowStep.objects.create(
+            tenant=self.tenant, flow=flow, order=1, required_role=TenantMembership.Role.APROVADOR,
+        )
+        competition = Competition.objects.create(tenant=self.tenant, name='Liga', slug='liga')
+        edition = CompetitionEdition.objects.create(
+            tenant=self.tenant, competition=competition, slug='2026', name='Liga 2026', season_year=2026,
+        )
+        phase = CompetitionPhase.objects.create(
+            tenant=self.tenant, edition=edition, code='f1', name='Fase 1', order=1,
+        )
+        match = Match.objects.create(
+            tenant=self.tenant, phase=phase, home_club=self.club_a, away_club=self.club_b,
+            reference_code='R1', scheduled_at=timezone.now() - timedelta(days=1),
+            status=Match.Status.PLAYED, home_score=2, away_score=1,
+        )
+        MatchEvent.objects.create(
+            tenant=self.tenant, match=match, event_type=MatchEvent.EventType.GOAL, minute=10,
+        )
+        req = approvals.open_request(match, self.requester)
+        approvals.cast_decision(req, flow.steps.get(order=1), self.approver, ApprovalDecision.Outcome.APPROVED)
+        match.refresh_from_db()
+        self.assertEqual(match.status, Match.Status.SCHEDULED)
+        self.assertIsNone(match.home_score)
+        self.assertEqual(match.events.count(), 0)

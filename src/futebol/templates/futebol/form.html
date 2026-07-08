@@ -1,0 +1,43 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="pill">Formulário operacional</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+  </div>
+
+  <section class="card stack" style="max-width: 920px;">
+    {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <form method="post" class="stack">
+      {% csrf_token %}
+      <div class="form-grid">
+        {% for field in form.visible_fields %}
+          <div class="field {% if field.errors %}state-error{% endif %}">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="form-actions">
+        <button type="submit">Salvar</button>
+        <a class="button button-secondary" href="{{ cancel_url }}">Cancelar</a>
+      </div>
+    </form>
+
+    <div class="grid-3">
+      <div class="state state-loading"><strong>Loading</strong><div class="muted">Campos prontos para preenchimento.</div></div>
+      <div class="state state-empty"><strong>Empty</strong><div class="muted">Sem alterações ainda.</div></div>
+      <div class="state state-success"><strong>Success</strong><div class="muted">Use mensagens do topo para confirmação.</div></div>
+    </div>
+  </section>
+{% endblock %}

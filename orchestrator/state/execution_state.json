@@ -1,8 +1,8 @@
 {
-  "current_sprint": 0,
-  "current_task": "0.5",
-  "current_subtask": "0.5.3",
-  "status": "pending",
+  "current_sprint": "sprint_4",
+  "current_task": "4.5.1",
+  "current_subtask": "3.5.1",
+  "status": "completed",
   "history": [
     {
       "subtask_id": "0.1.2",
@@ -115,10 +115,24 @@
       "sprint": "Fundação, escopo e contratos",
       "timestamp": "2026-06-29T10:35:40.549372",
       "report": "/home/alex/saas-futebol/orchestrator/reports/sprint_0_subtask_0.6.3.md"
+    },
+    {
+      "subtask_id": "2.5.1",
+      "subtask_name": "Consolidar sprint",
+      "sprint": "Núcleo de dados do futebol",
+      "timestamp": "2026-07-07T21:27:39-03:00",
+      "report": "/Users/alexvieira/saas-futebol/orchestrator/reports/sprint_2_subtask_2.5.1.md"
+    },
+    {
+      "subtask_id": "3.5.1",
+      "subtask_name": "Consolidar sprint",
+      "sprint": "Fluxos operacionais",
+      "timestamp": "2026-07-07T21:42:30-03:00",
+      "report": "orchestrator/reports/sprint_3_subtask_3.5.1.md"
     }
   ],
   "review_queue": [],
   "failures": {},
   "started_at": "2026-06-28T21:37:59.744354",
-  "last_updated": "2026-06-28T23:48:01.259732"
+  "last_updated": "2026-07-07T21:42:30-03:00"
 }

@@ -161,79 +161,79 @@
     {
       "id": "sprint_1",
       "name": "Fundação da plataforma",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         {
           "id": "1.1",
           "name": "Shell da aplicação",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "1.1.1",
               "name": "Definir composição geral",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.1.2",
               "name": "Definir áreas persistentes",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.1.3",
               "name": "Definir slots dinâmicos",
-              "status": "pending",
-              "needs_review": true
+              "status": "completed",
+              "needs_review": false
             }
           ]
         },
         {
           "id": "1.2",
           "name": "Autenticação e sessão",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "1.2.1",
               "name": "Definir login",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.2.2",
               "name": "Definir logout",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.2.3",
               "name": "Definir expiração de sessão",
-              "status": "pending",
-              "needs_review": true
+              "status": "completed",
+              "needs_review": false
             }
           ]
         },
         {
           "id": "1.3",
           "name": "Design system mínimo",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "1.3.1",
               "name": "Tokens visuais",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.3.2",
               "name": "Componentes base",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.3.3",
               "name": "Estados base",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -241,24 +241,24 @@
         {
           "id": "1.4",
           "name": "Observabilidade mínima",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "1.4.1",
               "name": "Logging",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.4.2",
               "name": "Erros",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.4.3",
               "name": "Auditoria",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -266,19 +266,19 @@
         {
           "id": "1.5",
           "name": "Consolidação da Sprint 1",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "1.5.1",
               "name": "Fechar lacunas",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "1.5.2",
               "name": "Escrever handoff",
-              "status": "pending",
-              "needs_review": true
+              "status": "completed",
+              "needs_review": false
             }
           ]
         }
@@ -287,29 +287,29 @@
     {
       "id": "sprint_2",
       "name": "Núcleo de dados do futebol",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         {
           "id": "2.1",
           "name": "Entidades centrais",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "2.1.1",
               "name": "Listar entidades primárias",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.1.2",
               "name": "Definir atributos mínimos",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.1.3",
               "name": "Definir chaves e identificadores",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -317,30 +317,30 @@
         {
           "id": "2.2",
           "name": "Regras de integridade",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "2.2.1",
               "name": "Regras de criação",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.2.2",
               "name": "Regras de edição",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.2.3",
               "name": "Regras de exclusão",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.2.4",
               "name": "Transições de estado",
-              "status": "pending",
+              "status": "completed",
               "needs_review": true
             }
           ]
@@ -348,30 +348,30 @@
         {
           "id": "2.3",
           "name": "Padrão de listagem",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "2.3.1",
               "name": "Colunas",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.3.2",
               "name": "Ordenação",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.3.3",
               "name": "Busca",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.3.4",
               "name": "Paginação",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -379,30 +379,30 @@
         {
           "id": "2.4",
           "name": "Importação e exportação",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "2.4.1",
               "name": "Formatos aceitos",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.4.2",
               "name": "Validação de arquivo",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.4.3",
               "name": "Conflitos de dados",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "2.4.4",
               "name": "Relatório de falhas",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -410,12 +410,12 @@
         {
           "id": "2.5",
           "name": "Consolidação da Sprint 2",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "2.5.1",
               "name": "Consolidar sprint",
-              "status": "pending",
+              "status": "completed",
               "needs_review": true
             }
           ]
@@ -425,29 +425,29 @@
     {
       "id": "sprint_3",
       "name": "Fluxos operacionais",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         {
           "id": "3.1",
           "name": "Fluxo principal 1",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "3.1.1",
               "name": "Etapas do fluxo",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.1.2",
               "name": "Estados do fluxo",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.1.3",
               "name": "Exceções e erros",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -455,24 +455,24 @@
         {
           "id": "3.2",
           "name": "Fluxo principal 2",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "3.2.1",
               "name": "Etapas do fluxo",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.2.2",
               "name": "Estados do fluxo",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.2.3",
               "name": "Exceções e erros",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -480,30 +480,30 @@
         {
           "id": "3.3",
           "name": "Aprovações",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "3.3.1",
               "name": "Quem aprova",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.3.2",
               "name": "O que aprova",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.3.3",
               "name": "Evidências necessárias",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.3.4",
               "name": "Rejeição e retorno",
-              "status": "pending",
+              "status": "completed",
               "needs_review": true
             }
           ]
@@ -511,30 +511,30 @@
         {
           "id": "3.4",
           "name": "Notificações",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "3.4.1",
               "name": "Gatilhos",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.4.2",
               "name": "Canal",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.4.3",
               "name": "Prioridade",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "3.4.4",
               "name": "Conteúdo da mensagem",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -542,12 +542,12 @@
         {
           "id": "3.5",
           "name": "Consolidação da Sprint 3",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "3.5.1",
               "name": "Consolidar sprint",
-              "status": "pending",
+              "status": "completed",
               "needs_review": true
             }
           ]
@@ -557,29 +557,29 @@
     {
       "id": "sprint_4",
       "name": "Interface de operação",
-      "status": "pending",
+      "status": "completed",
       "tasks": [
         {
           "id": "4.1",
           "name": "Estrutura visual principal",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "4.1.1",
               "name": "Layout base",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.1.2",
               "name": "Navegação",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.1.3",
               "name": "Conteúdo principal",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -587,30 +587,30 @@
         {
           "id": "4.2",
           "name": "Formulários críticos",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "4.2.1",
               "name": "Campos",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.2.2",
               "name": "Labels",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.2.3",
               "name": "Validação",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.2.4",
               "name": "Mensagens de erro e sucesso",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -618,30 +618,30 @@
         {
           "id": "4.3",
           "name": "Tabelas e cards",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "4.3.1",
               "name": "Tabela",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.3.2",
               "name": "Cards",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.3.3",
               "name": "Empty state",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.3.4",
               "name": "Ações por item",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -649,30 +649,30 @@
         {
           "id": "4.4",
           "name": "Estados de sistema",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "4.4.1",
               "name": "Loading",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.4.2",
               "name": "Empty",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.4.3",
               "name": "Error",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             },
             {
               "id": "4.4.4",
               "name": "Success",
-              "status": "pending",
+              "status": "completed",
               "needs_review": false
             }
           ]
@@ -680,13 +680,13 @@
         {
           "id": "4.5",
           "name": "Consolidação da Sprint 4",
-          "status": "pending",
+          "status": "completed",
           "subtasks": [
             {
               "id": "4.5.1",
               "name": "Consolidar sprint",
-              "status": "pending",
-              "needs_review": true
+              "status": "completed",
+              "needs_review": false
             }
           ]
         }

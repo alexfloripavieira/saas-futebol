@@ -1,0 +1,50 @@
+from django.contrib import admin
+from django.contrib.auth import views as auth_views
+from django.urls import path
+
+from futebol.views import (
+    approval_flow_list,
+    approval_request_create,
+    approval_request_list,
+    approve_request,
+    cancel_request,
+    club_create,
+    club_edit,
+    club_list,
+    competition_create,
+    competition_edit,
+    competition_list,
+    home,
+    mark_notification_read,
+    match_create,
+    match_edit,
+    match_list,
+    notification_create,
+    notification_list,
+    reject_request,
+)
+
+urlpatterns = [
+    path('', home, name='home'),
+    path('clubes/', club_list, name='club-list'),
+    path('clubes/novo/', club_create, name='club-create'),
+    path('clubes/<int:pk>/editar/', club_edit, name='club-edit'),
+    path('competicoes/', competition_list, name='competition-list'),
+    path('competicoes/nova/', competition_create, name='competition-create'),
+    path('competicoes/<int:pk>/editar/', competition_edit, name='competition-edit'),
+    path('partidas/', match_list, name='match-list'),
+    path('partidas/nova/', match_create, name='match-create'),
+    path('partidas/<int:pk>/editar/', match_edit, name='match-edit'),
+    path('aprovacoes/', approval_flow_list, name='approval-flow-list'),
+    path('solicitacoes-aprovacao/', approval_request_list, name='approval-request-list'),
+    path('solicitacoes-aprovacao/nova/', approval_request_create, name='approval-request-create'),
+    path('solicitacoes-aprovacao/<int:pk>/aprovar/', approve_request, name='approval-request-approve'),
+    path('solicitacoes-aprovacao/<int:pk>/rejeitar/', reject_request, name='approval-request-reject'),
+    path('solicitacoes-aprovacao/<int:pk>/cancelar/', cancel_request, name='approval-request-cancel'),
+    path('notificacoes/', notification_list, name='notification-list'),
+    path('notificacoes/nova/', notification_create, name='notification-create'),
+    path('notificacoes/<int:pk>/marcar-lida/', mark_notification_read, name='notification-mark-read'),
+    path('accounts/login/', auth_views.LoginView.as_view(template_name='registration/login.html'), name='login'),
+    path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('admin/', admin.site.urls),
+]

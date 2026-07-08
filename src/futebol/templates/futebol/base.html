@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}SaaS do Futebol{% endblock %}</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --panel-2: #1f2937;
+        --panel-3: #0b1220;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #1d4ed8;
+        --success: #16a34a;
+        --warning: #f59e0b;
+        --danger: #dc2626;
+        --line: rgba(148,163,184,.18);
+      }
+      * { box-sizing: border-box; }
+      body { font-family: Inter, Arial, sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+      a { color: #93c5fd; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .layout { display: grid; grid-template-columns: 290px 1fr; min-height: 100vh; }
+      .sidebar { background: var(--panel); border-right: 1px solid var(--panel-2); padding: 24px; }
+      .content { padding: 32px; }
+      .brand { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
+      .brand strong { font-size: 20px; }
+      .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
+      .badge, .pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; font-size: 12px; width: fit-content; }
+      .badge { background: rgba(29,78,216,.15); color: #bfdbfe; }
+      .pill { background: rgba(255,255,255,.06); color: var(--text); border: 1px solid var(--line); }
+      .nav { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+      .nav a { padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,.02); border: 1px solid transparent; }
+      .nav a:hover { border-color: var(--panel-2); background: rgba(255,255,255,.04); text-decoration: none; }
+      .card { background: var(--panel); border: 1px solid var(--panel-2); border-radius: 18px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,.18); }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+      .metric { background: rgba(255,255,255,.03); border: 1px solid var(--panel-2); border-radius: 16px; padding: 16px; }
+      .metric h3 { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+      .metric strong { font-size: 24px; }
+      .muted { color: var(--muted); }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; border-bottom: 1px solid var(--line); padding: 12px 0; vertical-align: top; }
+      thead th { color: #cbd5e1; font-size: 13px; }
+      .stack { display: flex; flex-direction: column; gap: 16px; }
+      .section-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+      .hero { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+      .hero h1 { margin: 0; }
+      .hero-links { display: flex; gap: 12px; flex-wrap: wrap; }
+      .hero-links a, .action-link { padding: 10px 14px; background: rgba(255,255,255,.04); border: 1px solid var(--panel-2); border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; }
+      .toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; justify-content: space-between; }
+      .toolbar form { display: flex; gap: 8px; flex-wrap: wrap; }
+      input, select, textarea { width: 100%; background: var(--panel-3); border: 1px solid var(--panel-2); color: var(--text); border-radius: 10px; padding: 10px 12px; }
+      label { display: inline-block; margin-bottom: 6px; color: #cbd5e1; font-weight: 600; }
+      button, .button { border: 0; border-radius: 10px; padding: 10px 14px; background: var(--accent); color: white; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+      .button:hover, button:hover { opacity: .92; text-decoration: none; }
+      .button-secondary, .action-secondary { background: rgba(255,255,255,.08); color: var(--text); border: 1px solid var(--panel-2); }
+      .button-success, .action-success { background: rgba(22,163,74,.15); color: #bbf7d0; border: 1px solid rgba(22,163,74,.3); }
+      .button-warning, .action-warning { background: rgba(245,158,11,.15); color: #fde68a; border: 1px solid rgba(245,158,11,.3); }
+      .button-danger, .action-danger { background: rgba(220,38,38,.15); color: #fecaca; border: 1px solid rgba(220,38,38,.3); }
+      .inline-form { display: inline-flex; margin: 0 8px 8px 0; }
+      .inline-form button { padding: 8px 12px; font-size: 13px; }
+      .row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+      .table-wrap { overflow-x: auto; }
+      .pagination { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+      .pagination a, .pagination span { padding: 8px 12px; border: 1px solid var(--panel-2); border-radius: 10px; }
+      .empty { color: var(--muted); padding: 20px 0; }
+      .alert { border-radius: 14px; border: 1px solid transparent; padding: 14px 16px; margin-bottom: 16px; }
+      .alert-success { background: rgba(22,163,74,.1); border-color: rgba(22,163,74,.25); color: #bbf7d0; }
+      .alert-error { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.25); color: #fecaca; }
+      .alert-warning { background: rgba(245,158,11,.1); border-color: rgba(245,158,11,.25); color: #fde68a; }
+      .state { border-radius: 14px; border: 1px solid var(--panel-2); background: rgba(255,255,255,.03); padding: 14px 16px; }
+      .state-loading { border-style: dashed; }
+      .state-empty { opacity: .9; }
+      .state-error { border-color: rgba(220,38,38,.25); }
+      .state-success { border-color: rgba(22,163,74,.25); }
+      .help-text { color: var(--muted); font-size: 13px; margin-top: 6px; }
+      .field { display: flex; flex-direction: column; gap: 4px; }
+      .field-errors { color: #fecaca; font-size: 13px; }
+      .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+      .form-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+      .summary-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      .summary-card { border: 1px solid var(--panel-2); border-radius: 14px; padding: 14px; background: rgba(255,255,255,.03); }
+      .summary-card strong { display: block; margin-top: 6px; font-size: 22px; }
+      @media (max-width: 1100px) {
+        .layout { grid-template-columns: 1fr; }
+        .sidebar { border-right: 0; border-bottom: 1px solid var(--panel-2); }
+        .grid, .grid-3, .form-grid, .summary-cards { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="badge">{{ sprint_name|default:'Sprint da plataforma' }}</span>
+          <strong>SaaS do Futebol</strong>
+          <span class="muted">Operação multi-tenant</span>
+        </div>
+        <div class="nav">
+          <a href="/">Dashboard</a>
+          <a href="/clubes/">Clubes</a>
+          <a href="/competicoes/">Competições</a>
+          <a href="/partidas/">Partidas</a>
+          <a href="/aprovacoes/">Fluxos</a>
+          <a href="/solicitacoes-aprovacao/">Solicitações</a>
+          <a href="/notificacoes/">Notificações</a>
+          <a href="/accounts/login/">Login</a>
+          <a href="/accounts/logout/">Logout</a>
+          <a href="/admin/">Admin</a>
+        </div>
+      </aside>
+      <main class="content">
+        {% if messages %}
+          {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+          {% endfor %}
+        {% endif %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

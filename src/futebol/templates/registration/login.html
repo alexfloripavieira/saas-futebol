@@ -1,0 +1,33 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}Login · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <section class="card" style="max-width: 480px; margin: 0 auto;">
+    <div class="hero">
+      <span class="pill">Autenticação</span>
+      <h1>Entrar</h1>
+      <p class="muted">Acesse a plataforma com seu usuário de operação.</p>
+    </div>
+
+    {% if form.errors %}
+      <div class="metric" style="border-color: var(--danger);">
+        <strong>Não foi possível entrar.</strong>
+        <p class="muted">Verifique usuário e senha.</p>
+      </div>
+    {% endif %}
+
+    <form method="post" class="stack">
+      {% csrf_token %}
+      <div>
+        <label for="id_username">Usuário</label><br>
+        {{ form.username }}
+      </div>
+      <div>
+        <label for="id_password">Senha</label><br>
+        {{ form.password }}
+      </div>
+      <button type="submit" style="padding: 12px 16px; border: 0; border-radius: 12px; background: var(--accent); color: white; cursor: pointer;">Entrar</button>
+    </form>
+  </section>
+{% endblock %}

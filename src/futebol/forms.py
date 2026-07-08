@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from django import forms
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 
 from .models import (
+    AIAgent,
+    AIAgentSourceLink,
+    AIProvider,
     ApprovalFlow,
     ApprovalRequest,
     Club,
@@ -14,6 +19,7 @@ from .models import (
     Evidence,
     ExternalSystem,
     IntegrationRecord,
+    KnowledgeSource,
     Match,
     Negotiation,
     Notification,
@@ -21,7 +27,16 @@ from .models import (
     Proposal,
     Tenant,
 )
+from .services.ai import provider_model_catalog_flat, provider_model_options
 from .services.data_io import MODEL_REGISTRY
+
+MODEL_LABELS = {
+    'club': 'Clube',
+    'competition': 'Competição',
+    'edition': 'Edição',
+    'phase': 'Fase',
+    'match': 'Partida',
+}
 
 
 class TenantScopedForm(forms.ModelForm):
@@ -40,7 +55,7 @@ class TenantScopedForm(forms.ModelForm):
 
 
 class BIExplorerForm(forms.Form):
-    tenant = forms.ModelChoiceField(queryset=Tenant.objects.none(), required=False, label='Tenant')
+    tenant = forms.ModelChoiceField(queryset=Tenant.objects.none(), required=False, label='Unidade')
     competition = forms.ModelChoiceField(queryset=Competition.objects.none(), required=False, label='Competição')
     edition = forms.ModelChoiceField(queryset=CompetitionEdition.objects.none(), required=False, label='Edição')
     match_status = forms.ChoiceField(required=False, choices=[('', 'Todos')] + list(Match.Status.choices), label='Status da partida')
@@ -356,6 +371,198 @@ class ExternalSystemForm(TenantScopedForm):
         }
 
 
+class AIProviderForm(TenantScopedForm):
+    api_key = forms.CharField(
+        required=False,
+        label='Chave da API',
+        widget=forms.PasswordInput(render_value=False),
+        help_text='Opcional. Preencha para gravar a credencial no OpenCode e atualizar o provider local.',
+    )
+    api_base_url = forms.CharField(
+        required=False,
+        label='URL base da API',
+        help_text='Deixe em branco para OpenCode Go; preencha apenas em providers com endpoint HTTP.',
+    )
+
+    class Meta:
+        model = AIProvider
+        fields = ['name', 'kind', 'model_name', 'api_base_url', 'active', 'notes']
+        labels = {
+            'name': 'Nome do provider',
+            'kind': 'Fornecedor',
+            'model_name': 'Modelo padrão',
+            'active': 'Ativo',
+            'notes': 'Observações',
+        }
+        widgets = {
+            'notes': forms.Textarea(attrs={'rows': 4}),
+            'model_name': forms.TextInput(attrs={'list': 'provider-model-suggestions'}),
+            'api_base_url': forms.TextInput(attrs={'placeholder': 'https://...'}),
+        }
+        help_texts = {
+            'notes': 'Guarde aqui o contexto operacional do provider.',
+            'model_name': 'Use uma das sugestões do catálogo; você também pode digitar um modelo customizado.',
+        }
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, tenant=tenant, user=user, **kwargs)
+        kind = None
+        if self.is_bound:
+            kind = self.data.get('kind')
+        elif self.instance and getattr(self.instance, 'kind', None):
+            kind = self.instance.kind
+        self.model_suggestions = provider_model_options(kind or '')
+        self.model_catalog = provider_model_catalog_flat()
+        self.fields['kind'].widget.attrs['data-model-options'] = 'provider-model-map'
+        self.fields['model_name'].widget.attrs['data-model-input'] = 'true'
+        if kind == AIProvider.Kind.OPENCODE:
+            self.fields['api_base_url'].widget.attrs['placeholder'] = 'Não usado no OpenCode Go'
+            self.fields['api_base_url'].widget.attrs['disabled'] = True
+
+    def clean_api_base_url(self):
+        api_base_url = (self.cleaned_data.get('api_base_url') or '').strip()
+        kind = self.cleaned_data.get('kind')
+        if kind == AIProvider.Kind.OPENCODE:
+            return ''
+        if api_base_url:
+            URLValidator()(api_base_url)
+        return api_base_url
+
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get('kind')
+        if kind == AIProvider.Kind.OPENCODE:
+            cleaned['api_base_url'] = ''
+        return cleaned
+
+
+class KnowledgeSourceForm(TenantScopedForm):
+    class Meta:
+        model = KnowledgeSource
+        fields = ['identifier', 'title', 'kind', 'source_path', 'source_url', 'summary', 'content', 'active']
+        labels = {
+            'identifier': 'Identificador',
+            'title': 'Título',
+            'kind': 'Tipo',
+            'source_path': 'Caminho da fonte',
+            'source_url': 'URL da fonte',
+            'summary': 'Resumo',
+            'content': 'Conteúdo',
+            'active': 'Ativo',
+        }
+        widgets = {
+            'summary': forms.Textarea(attrs={'rows': 4}),
+            'content': forms.Textarea(attrs={'rows': 12}),
+        }
+        help_texts = {
+            'identifier': 'Use um identificador estável, como o caminho relativo do arquivo.',
+            'source_path': 'Opcional para rastrear a origem física do documento.',
+            'source_url': 'Preencha quando a fonte vier de uma URL pública.',
+        }
+
+
+class KnowledgeSourceImportForm(forms.Form):
+    url = forms.URLField(label='URL pública', help_text='Cole a URL do artigo, página ou documento que deseja importar.')
+    identifier = forms.CharField(label='Identificador', required=False, max_length=240, help_text='Opcional: se vazio, a aplicação gera um identificador estável a partir da URL.')
+    title = forms.CharField(label='Título', required=False, max_length=255, help_text='Opcional: se vazio, usamos o título encontrado na página.')
+
+    def clean_url(self):
+        url = (self.cleaned_data.get('url') or '').strip()
+        validator = URLValidator(schemes=['http', 'https'])
+        try:
+            validator(url)
+        except ValidationError as exc:
+            raise ValidationError('Informe uma URL pública válida com http ou https.') from exc
+        return url
+
+
+class AIAgentForm(TenantScopedForm):
+    knowledge_sources = forms.ModelMultipleChoiceField(
+        queryset=KnowledgeSource.objects.none(),
+        required=False,
+        label='Fontes de conhecimento',
+        help_text='Selecione os documentos que alimentam este agente.',
+    )
+
+    class Meta:
+        model = AIAgent
+        fields = ['name', 'slug', 'provider', 'purpose', 'system_prompt', 'model_override', 'temperature', 'active']
+        labels = {
+            'name': 'Nome do agente',
+            'slug': 'Slug',
+            'provider': 'Provider',
+            'purpose': 'Objetivo',
+            'system_prompt': 'Prompt do sistema',
+            'model_override': 'Modelo específico',
+            'temperature': 'Temperatura',
+            'active': 'Ativo',
+        }
+        widgets = {
+            'purpose': forms.Textarea(attrs={'rows': 3}),
+            'system_prompt': forms.Textarea(attrs={'rows': 10}),
+        }
+        help_texts = {
+            'model_override': 'Opcional: substitui o modelo padrão do provider.',
+        }
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, tenant=tenant, user=user, **kwargs)
+        if tenant is not None:
+            self.fields['provider'].queryset = AIProvider.objects.filter(tenant=tenant).order_by('name')
+            self.fields['knowledge_sources'].queryset = KnowledgeSource.objects.filter(tenant=tenant, active=True).order_by('title')
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.tenant is not None and not obj.tenant_id:
+            obj.tenant = self.tenant
+        if commit:
+            obj.save()
+            selected_sources = list(self.cleaned_data.get('knowledge_sources', []))
+            existing_source_ids = set(
+                AIAgentSourceLink.objects.filter(tenant=obj.tenant, agent=obj).values_list('source_id', flat=True)
+            )
+            selected_source_ids = set(source.pk for source in selected_sources)
+            AIAgentSourceLink.objects.filter(tenant=obj.tenant, agent=obj, source_id__in=(existing_source_ids - selected_source_ids)).delete()
+            for index, source in enumerate(selected_sources):
+                AIAgentSourceLink.objects.update_or_create(
+                    tenant=obj.tenant,
+                    agent=obj,
+                    source=source,
+                    defaults={'order': index, 'active': True},
+                )
+            self.save_m2m()
+        return obj
+
+
+class AIAgentRunForm(forms.Form):
+    tenant = forms.ModelChoiceField(queryset=Tenant.objects.none(), widget=forms.HiddenInput)
+    agent = forms.ModelChoiceField(queryset=AIAgent.objects.none(), label='Agente')
+    question = forms.CharField(label='Pergunta', widget=forms.Textarea(attrs={'rows': 4}), max_length=2000)
+
+    def __init__(self, *args, tenant: Tenant | None = None, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            attrs = widget.attrs.setdefault('class', '')
+            classes = [c for c in attrs.split() if c]
+            for candidate in ('form-control', 'field-input'):
+                if candidate not in classes:
+                    classes.append(candidate)
+            widget.attrs['class'] = ' '.join(classes).strip()
+        if user is not None and getattr(user, 'is_superuser', False):
+            tenant_qs = Tenant.objects.filter(active=True)
+        else:
+            tenant_qs = Tenant.objects.filter(active=True, pk=tenant.pk) if tenant is not None else Tenant.objects.none()
+        self.fields['tenant'].queryset = tenant_qs
+        if tenant is not None:
+            self.fields['tenant'].initial = tenant
+            self.fields['agent'].queryset = AIAgent.objects.filter(tenant=tenant, active=True).select_related('provider').order_by('name')
+        elif self.is_bound:
+            tenant_id = self.data.get('tenant')
+            if tenant_id:
+                self.fields['agent'].queryset = AIAgent.objects.filter(tenant_id=tenant_id, active=True).select_related('provider').order_by('name')
+
+
 class IntegrationRecordForm(TenantScopedForm):
     status = forms.ChoiceField(
         choices=[
@@ -400,7 +607,7 @@ class IntegrationRecordForm(TenantScopedForm):
 
 class IntegrationImportForm(forms.Form):
     model = forms.ChoiceField(
-        choices=[(key, key.title()) for key in MODEL_REGISTRY],
+        choices=[(key, MODEL_LABELS.get(key, key.title())) for key in MODEL_REGISTRY],
         label='Modelo',
     )
     conflict_policy = forms.ChoiceField(
@@ -420,6 +627,6 @@ class IntegrationImportForm(forms.Form):
 
 class IntegrationExportForm(forms.Form):
     model = forms.ChoiceField(
-        choices=[(key, key.title()) for key in MODEL_REGISTRY],
+        choices=[(key, MODEL_LABELS.get(key, key.title())) for key in MODEL_REGISTRY],
         label='Modelo',
     )

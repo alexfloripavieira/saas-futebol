@@ -1,13 +1,21 @@
 from datetime import timedelta
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+import json
 
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
+    AIAgent,
+    AIAgentSourceLink,
+    AIProvider,
     ApprovalFlow,
     ApprovalFlowStep,
     ApprovalDecision,
@@ -22,6 +30,7 @@ from .models import (
     ExternalSystem,
     Evidence,
     IntegrationRecord,
+    KnowledgeSource,
     Match,
     MatchEvent,
     MatchLineup,
@@ -68,7 +77,181 @@ class Sprint3BaseTestCase(TestCase):
         )
 
 
-class HomeAndListingTests(Sprint3BaseTestCase):
+class AIFeatureTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.provider = AIProvider.objects.create(
+            tenant=self.tenant,
+            name='OpenAI Produção',
+            kind=AIProvider.Kind.OPENAI,
+            model_name='gpt-4.1-mini',
+            active=True,
+        )
+        self.source = KnowledgeSource.objects.create(
+            tenant=self.tenant,
+            identifier='docs/aula-1.md',
+            title='Aula 1',
+            kind=KnowledgeSource.Kind.DOCUMENT,
+            source_path='docs/aula-1.md',
+            content='# Aula 1\nConteúdo base.',
+            summary='Aula 1',
+            active=True,
+        )
+        self.agent = AIAgent.objects.create(
+            tenant=self.tenant,
+            provider=self.provider,
+            name='Scout IA',
+            slug='scout-ia',
+            purpose='Responder perguntas sobre o produto.',
+            system_prompt='Use as fontes vinculadas.',
+            model_override='',
+            temperature='0.20',
+            active=True,
+        )
+        AIAgentSourceLink.objects.create(tenant=self.tenant, agent=self.agent, source=self.source, order=0, active=True)
+
+    def test_ai_pages_render_with_cadastrados(self):
+        self.client.login(username='alex', password='senha12345')
+        for url_name in ['ai-center', 'ai-provider-list', 'ai-agent-list', 'knowledge-source-list']:
+            response = self.client.get(reverse(url_name))
+            self.assertEqual(response.status_code, 200)
+        center = self.client.get(reverse('ai-center'))
+        self.assertContains(center, 'Providers')
+        self.assertContains(center, 'Agentes')
+        self.assertContains(center, 'Fontes')
+        self.assertContains(center, 'Scout IA')
+        self.assertContains(center, 'Aula 1')
+
+    def test_knowledge_source_list_exposes_import_url_tab(self):
+        self.client.login(username='alex', password='senha12345')
+        response = self.client.get(reverse('knowledge-source-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Importar URL')
+        self.assertContains(response, 'Nova fonte manual')
+        self.assertContains(response, 'Documentos, relatórios e páginas públicas')
+
+    @patch('futebol.services.ai.urllib.request.urlopen')
+    def test_knowledge_source_import_url_creates_source_from_public_page(self, urlopen_mock):
+        class FakeHeaders:
+            def get(self, key, default=None):
+                if key.lower() == 'content-type':
+                    return 'text/html; charset=utf-8'
+                return default
+
+            def get_content_charset(self):
+                return 'utf-8'
+
+        class FakeResponse:
+            def __init__(self, body):
+                self._body = body.encode('utf-8')
+                self.headers = FakeHeaders()
+
+            def read(self):
+                return self._body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        urlopen_mock.return_value = FakeResponse(
+            '''
+            <html>
+              <head>
+                <title>FIFA Training Centre Demo</title>
+                <meta name="description" content="Resumo da página">
+              </head>
+              <body>
+                <h1>Página FIFA</h1>
+                <p>Conteúdo principal da fonte.</p>
+              </body>
+            </html>
+            '''
+        )
+        self.client.login(username='alex', password='senha12345')
+        response = self.client.post(
+            reverse('knowledge-source-import-url'),
+            {'url': 'https://fifatrainingcentre.com/en/demo', 'identifier': '', 'title': ''},
+        )
+        self.assertEqual(response.status_code, 302)
+        source = KnowledgeSource.objects.get(tenant=self.tenant, source_url='https://fifatrainingcentre.com/en/demo')
+        self.assertEqual(source.title, 'FIFA Training Centre Demo')
+        self.assertEqual(source.summary, 'Resumo da página')
+        self.assertIn('Conteúdo principal da fonte.', source.content)
+
+    def test_provider_list_shows_model_catalog(self):
+        self.client.login(username='alex', password='senha12345')
+        response = self.client.get(reverse('ai-provider-list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Catálogo de LLMs por provider')
+        self.assertContains(response, 'opencode-go/deepseek-v4-flash')
+        self.assertContains(response, 'DeepSeek V4 Flash')
+        self.assertContains(response, 'OpenAI GPT-4.1 Mini')
+
+    def test_import_ai_sources_command_imports_files_and_seeds_agent(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / 'docs').mkdir(parents=True)
+            (root / 'orchestrator' / 'reports').mkdir(parents=True)
+            (root / 'docs' / 'aula-2.md').write_text('# Aula 2\nTexto da aula 2.', encoding='utf-8')
+            (root / 'orchestrator' / 'reports' / 'relatorio-ia.md').write_text('# Relatório IA\nBase documental.', encoding='utf-8')
+            call_command('import_ai_sources', tenant=self.tenant.slug, root=str(root), seed_agent=True)
+
+        self.assertEqual(KnowledgeSource.objects.filter(tenant=self.tenant).count(), 10)
+        self.assertEqual(AIProvider.objects.filter(tenant=self.tenant).count(), 2)
+        self.assertEqual(AIAgent.objects.filter(tenant=self.tenant).count(), 1)
+        self.assertEqual(AIAgentSourceLink.objects.filter(tenant=self.tenant).count(), 10)
+        self.assertEqual(KnowledgeSource.objects.get(tenant=self.tenant, identifier='external:kaggle').source_url, 'https://www.kaggle.com/')
+
+
+    def test_ai_center_can_run_agent_and_show_result(self):
+        self.client.login(username='alex', password='senha12345')
+        response = self.client.post(
+            reverse('ai-center'),
+            {'tenant': self.tenant.pk, 'agent': self.agent.pk, 'question': 'O que a fonte diz sobre o conteúdo?'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Executar agente')
+        self.assertContains(response, 'Scout IA')
+        self.assertContains(response, 'Aula 1')
+
+
+    def test_ai_center_can_run_opencode_agent_when_cli_is_available(self):
+        self.client.login(username='alex', password='senha12345')
+        opencode_provider = AIProvider.objects.create(
+            tenant=self.tenant,
+            name='OpenCode Go',
+            kind=AIProvider.Kind.OPENCODE,
+            model_name='opencode-go/deepseek-v4-flash',
+            active=True,
+        )
+        opencode_agent = AIAgent.objects.create(
+            tenant=self.tenant,
+            provider=opencode_provider,
+            name='Scout IA OpenCode',
+            slug='scout-ia-opencode',
+            purpose='Responder perguntas sobre o produto.',
+            system_prompt='Use as fontes vinculadas.',
+            model_override='',
+            temperature='0.20',
+            active=True,
+        )
+        AIAgentSourceLink.objects.create(tenant=self.tenant, agent=opencode_agent, source=self.source, order=0, active=True)
+
+        with patch('futebol.services.ai.shutil.which', return_value='/usr/bin/opencode'), patch(
+            'futebol.services.ai.subprocess.run'
+        ) as run_mock:
+            run_mock.return_value = type('R', (), {'stdout': 'Resposta OpenCode', 'stderr': '', 'returncode': 0})()
+            response = self.client.post(
+                reverse('ai-center'),
+                {'tenant': self.tenant.pk, 'agent': opencode_agent.pk, 'question': 'O que a fonte diz sobre o conteúdo?'},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Resposta OpenCode')
+        self.assertContains(response, 'OpenCode Go')
+
     def test_home_requires_login(self):
         response = self.client.get(reverse('home'))
         self.assertEqual(response.status_code, 302)
@@ -210,6 +393,77 @@ class InterfaceSprint4Tests(Sprint3BaseTestCase):
         self.assertContains(valid, 'Clube criado com sucesso.')
         self.assertTrue(Club.objects.filter(tenant=self.tenant, slug='clube-novo').exists())
 
+    def test_ai_provider_form_exposes_api_key_and_syncs_credentials(self):
+        opencode_provider = AIProvider.objects.create(
+            tenant=self.tenant,
+            name='OpenCode Go',
+            kind=AIProvider.Kind.OPENCODE,
+            model_name='opencode-go/deepseek-v4-flash',
+            active=True,
+        )
+
+        response = self.client.get(reverse('ai-provider-edit', args=[opencode_provider.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Chave da API')
+        self.assertContains(response, 'provider-model-suggestions')
+        self.assertContains(response, 'provider-model-catalog')
+        self.assertContains(response, 'Modelos sugeridos por provider')
+
+        with patch('futebol.views.sync_opencode_provider_credentials') as sync_mock:
+            sync_mock.return_value = {'returncode': 0}
+            post = self.client.post(
+                reverse('ai-provider-edit', args=[opencode_provider.pk]),
+                {
+                    'name': 'OpenCode Go',
+                    'kind': AIProvider.Kind.OPENCODE,
+                    'model_name': 'opencode-go/deepseek-v4-flash',
+                    'api_base_url': 'alex',
+                    'active': 'on',
+                    'notes': 'Configuração da credencial',
+                    'api_key': 'sk-teste',
+                },
+                follow=True,
+            )
+
+        self.assertEqual(post.status_code, 200)
+        self.assertContains(post, 'Provider atualizado com sucesso.')
+        sync_mock.assert_called_once_with(
+            api_key='sk-teste',
+            provider_name='OpenCode Go',
+            provider_kind=AIProvider.Kind.OPENCODE,
+            model_name='opencode-go/deepseek-v4-flash',
+        )
+        opencode_provider.refresh_from_db()
+        self.assertEqual(opencode_provider.api_base_url, '')
+
+    def test_sync_opencode_provider_credentials_writes_config_file(self):
+        with TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            config_dir = root / '.config' / 'opencode'
+            config_dir.mkdir(parents=True)
+            (config_dir / 'opencode.json').write_text(
+                json.dumps({'$schema': 'https://opencode.ai/config.json', 'mcp': {'pencil': {'enabled': True}}}, indent=2),
+                encoding='utf-8',
+            )
+
+            with patch('futebol.services.ai.Path.home', return_value=root):
+                from futebol.services.ai import sync_opencode_provider_credentials
+
+                result = sync_opencode_provider_credentials(
+                    api_key='sk-test',
+                    provider_name='OpenCode Go',
+                    provider_kind='opencode',
+                    model_name='opencode-go/deepseek-v4-flash',
+                )
+
+            self.assertEqual(result['returncode'], 0)
+            config = json.loads((config_dir / 'opencode.json').read_text(encoding='utf-8'))
+            self.assertEqual(config['$schema'], 'https://opencode.ai/config.json')
+            self.assertEqual(config['model'], 'opencode-go/deepseek-v4-flash')
+            self.assertEqual(config['provider']['opencode-go']['options']['apiKey'], 'sk-test')
+            self.assertIn('deepseek-v4-flash', config['provider']['opencode-go']['models'])
+            self.assertTrue(config['mcp']['pencil']['enabled'])
+
     def test_match_form_rejects_same_home_and_away(self):
         response = self.client.post(
             reverse('match-create'),
@@ -284,7 +538,7 @@ class Sprint5IntegrationTests(Sprint3BaseTestCase):
         hub = self.client.get(reverse('integration-hub'))
         self.assertEqual(hub.status_code, 200)
         self.assertContains(hub, 'Integrações, automações e IA')
-        self.assertContains(hub, 'Sprint 9 · Integrações resilientes')
+        self.assertContains(hub, 'Integrações externas')
         self.assertContains(hub, 'Sistemas externos')
         self.assertContains(hub, 'Automações')
         self.assertContains(hub, 'IA')
@@ -371,7 +625,7 @@ class Sprint9IntegrationResilienceTests(Sprint5IntegrationTests):
 
         hub = self.client.get(reverse('integration-hub'))
         self.assertEqual(hub.status_code, 200)
-        self.assertContains(hub, 'Sprint 9 · Integrações resilientes')
+        self.assertContains(hub, 'Integrações externas')
         self.assertContains(hub, 'Erros')
         self.assertContains(hub, '1')
 
@@ -439,7 +693,6 @@ class Sprint10BiCenterTests(Sprint3BaseTestCase):
     def test_bi_center_renders_and_exports_json(self):
         response = self.client.get(reverse('bi-center'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Sprint 10')
         self.assertContains(response, 'BI self-service')
         self.assertContains(response, 'Partidas disputadas')
         self.assertContains(response, 'Gol')
@@ -580,8 +833,8 @@ class Sprint12ScoutingTests(Sprint3BaseTestCase):
     def test_scouting_center_renders_tactical_leads(self):
         response = self.client.get(reverse('scouting-center'))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Análise tática e scouting')
-        self.assertContains(response, 'Sprint 12 · Análise tática e scouting')
+        self.assertContains(response, 'Centro de IA e agentes')
+        self.assertContains(response, 'Centro de IA e agentes')
         self.assertContains(response, 'Cobertura do elenco')
         self.assertContains(response, 'Atletas observados')
         self.assertContains(response, 'Partidas recentes analisadas')

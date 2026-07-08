@@ -5,9 +5,9 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import OperationalError, transaction
 from django.db.models import Count, Q
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
-from django.db import OperationalError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -16,6 +16,9 @@ from django.middleware.csrf import get_token
 
 
 from .forms import (
+    AIAgentForm,
+    AIAgentRunForm,
+    AIProviderForm,
     BIExplorerForm,
     ApprovalRequestForm,
     ClubForm,
@@ -26,12 +29,17 @@ from .forms import (
     IntegrationExportForm,
     IntegrationImportForm,
     IntegrationRecordForm,
+    KnowledgeSourceForm,
+    KnowledgeSourceImportForm,
     MatchForm,
     NegotiationForm,
     NotificationForm,
     ProposalForm,
 )
 from .models import (
+    AIAgent,
+    AIProvider,
+    AIAgentSourceLink,
     ApprovalDecision,
     ApprovalFlow,
     ApprovalRequest,
@@ -43,6 +51,7 @@ from .models import (
     Evidence,
     ExternalSystem,
     IntegrationRecord,
+    KnowledgeSource,
     Match,
     MatchEvent,
     MatchLineup,
@@ -52,6 +61,7 @@ from .models import (
     Proposal,
     Tenant,
 )
+from .services.ai import import_knowledge_source_from_url, opencode_auth_configured, provider_catalog_rows, run_ai_agent, sync_opencode_provider_credentials
 from .services.data_io import export_csv, import_payload
 from .services import approvals
 from .services.audit import log_audit_event, snapshot_instance
@@ -177,6 +187,7 @@ class TablePage:
     row_actions = None
     create_url = ''
     create_label = 'Novo registro'
+    extra_actions: tuple[dict[str, str], ...] = ()
     empty_message = 'Nenhum registro encontrado.'
 
     def __init__(self, request):
@@ -221,6 +232,27 @@ class TablePage:
                 'cells': [self.resolve_value(obj, accessor) for _, accessor in self.columns],
                 'actions': self.resolve_actions(obj),
             })
+        def _ordering_label(key: str) -> str:
+            label_map = {
+                'name': 'Nome',
+                'title': 'Título',
+                'kind': 'Tipo',
+                'slug': 'Slug',
+                'status': 'Status',
+                'created_at': 'Criado em',
+                'updated_at': 'Atualizado em',
+                'scheduled_at': 'Agendado em',
+                'requested_at': 'Solicitado em',
+                'sent_at': 'Enviado em',
+                'occurred_at': 'Ocorrido em',
+                'date': 'Data',
+                'start_date': 'Início',
+                'end_date': 'Fim',
+            }
+            raw = key.lstrip('-')
+            label = label_map.get(raw, raw.replace('_', ' ').title())
+            return f'{label} (desc)' if key.startswith('-') else label
+
         return {
             'title': self.title,
             'subtitle': self.subtitle,
@@ -229,9 +261,10 @@ class TablePage:
             'columns': [header for header, _ in self.columns],
             'query': self.request.GET.get('q', ''),
             'ordering': self.request.GET.get('ordering', self.default_ordering),
-            'ordering_options': list(self.ordering_map.items()),
+            'ordering_options': [{'key': key, 'label': _ordering_label(key)} for key in self.ordering_map.keys()],
             'create_url': self.create_url,
             'create_label': self.create_label,
+            'extra_actions': list(self.extra_actions),
             'show_actions': bool(self.row_actions),
             'empty_message': self.empty_message,
         }
@@ -248,11 +281,12 @@ class FormPage:
     success_message = 'Salvo com sucesso.'
     invalid_message = 'Corrija os campos destacados e tente novamente.'
 
-    def __init__(self, request, *, form_class, instance=None, extra_context=None):
+    def __init__(self, request, *, form_class, instance=None, extra_context=None, post_save=None):
         self.request = request
         self.form_class = form_class
         self.instance = instance
         self.extra_context = extra_context or {}
+        self.post_save = post_save
 
     def form_kwargs(self):
         kwargs = {'tenant': _primary_tenant(self.request), 'user': self.request.user}
@@ -280,24 +314,36 @@ class FormPage:
         form = self.get_form()
         if self.request.method == 'POST':
             if form.is_valid():
-                before_state = snapshot_instance(self.instance) if self.instance is not None else {}
-                obj = form.save(commit=False)
-                if hasattr(obj, 'tenant_id') and not obj.tenant_id:
-                    obj.tenant = _primary_tenant(self.request)
-                if hasattr(obj, 'requested_by_id') and not obj.requested_by_id:
-                    obj.requested_by = self.request.user
-                obj.save()
-                if hasattr(form, 'save_m2m'):
-                    form.save_m2m()
-                log_audit_event(
-                    tenant=obj.tenant,
-                    actor=self.request.user,
-                    action='create' if self.instance is None else 'update',
-                    obj=obj,
-                    before_state=before_state,
-                    after_state=snapshot_instance(obj),
-                    correlation_id=getattr(self.request, 'request_id', ''),
-                )
+                try:
+                    with transaction.atomic():
+                        before_state = snapshot_instance(self.instance) if self.instance is not None else {}
+                        obj = form.save(commit=False)
+                        if hasattr(obj, 'tenant_id') and not obj.tenant_id:
+                            obj.tenant = _primary_tenant(self.request)
+                        if hasattr(obj, 'requested_by_id') and not obj.requested_by_id:
+                            obj.requested_by = self.request.user
+                        obj.save()
+                        if hasattr(form, 'save_m2m'):
+                            form.save_m2m()
+                        if self.post_save is not None:
+                            self.post_save(form, obj)
+                        log_audit_event(
+                            tenant=obj.tenant,
+                            actor=self.request.user,
+                            action='create' if self.instance is None else 'update',
+                            obj=obj,
+                            before_state=before_state,
+                            after_state=snapshot_instance(obj),
+                            correlation_id=getattr(self.request, 'request_id', ''),
+                        )
+                except ValidationError as exc:
+                    form.add_error(None, exc)
+                    messages.error(self.request, self.invalid_message)
+                    return render(self.request, self.template_name, self.get_context(form))
+                except Exception as exc:
+                    form.add_error(None, str(exc))
+                    messages.error(self.request, str(exc))
+                    return render(self.request, self.template_name, self.get_context(form))
                 messages.success(self.request, self.success_message)
                 return redirect(self.success_url_name)
             messages.error(self.request, self.invalid_message)
@@ -319,7 +365,7 @@ def home(request):
     evidence_count = Evidence.objects.filter(tenant_id__in=tenant_ids).count()
     context = {
         'title': 'SaaS do Futebol',
-        'subtitle': 'Interface de operação da Sprint 10',
+        'subtitle': 'Interface de operação da plataforma',
         'memberships': memberships,
         'primary_role': memberships.first().get_role_display() if memberships.exists() else 'Sem vínculo ativo',
         'club_count': club_count,
@@ -607,7 +653,7 @@ def transfer_center(request):
     context = {
         'title': 'Transferências, contratos e evidências',
         'subtitle': 'Central operacional para negociações, contratos e documentação de suporte',
-        'sprint_label': 'Sprint 7 · Transferências, contratos e evidências',
+        'sprint_label': 'Transferências, contratos e evidências',
         'contract_count': Contract.objects.filter(**scope).count(),
         'negotiation_count': Negotiation.objects.filter(**scope).count(),
         'proposal_count': Proposal.objects.filter(**scope).count(),
@@ -676,7 +722,7 @@ def report_center(request):
     context = {
         'title': 'Relatórios e indicadores',
         'subtitle': 'Painel consolidado com volumes, estados operacionais e trilha recente de decisões',
-        'sprint_label': 'Sprint 11 · API pública',
+        'sprint_label': 'API pública',
         'summary_cards': [
             {'label': 'Clubes', 'value': Club.objects.filter(**scope).count()},
             {'label': 'Competições', 'value': Competition.objects.filter(**scope).count()},
@@ -802,7 +848,7 @@ def bi_center(request):
     html_payload = {
         'title': 'BI self-service',
         'subtitle': 'Filtros operacionais e exportação JSON para leitura analítica',
-        'sprint_label': 'Sprint 10 · BI self-service',
+        'sprint_label': 'BI self-service',
         'json_url': json_url,
         'selected_tenant': selected_tenant.name,
         'summary_cards': summary_cards,
@@ -828,7 +874,7 @@ def public_api_docs(request):
         {
             'title': 'API pública',
             'subtitle': 'Leitura externa de dados esportivos, com autenticação por chave e escopo por tenant.',
-            'sprint_label': 'Sprint 11 · API pública',
+            'sprint_label': 'API pública',
             'endpoints': [
                 {'label': 'Visão geral', 'method': 'GET', 'path': '/api/publica/<tenant_slug>/visao-geral/'},
                 {'label': 'Partidas', 'method': 'GET', 'path': '/api/publica/<tenant_slug>/partidas/'},
@@ -1249,7 +1295,7 @@ def integration_hub(request):
     context = {
         'title': 'Integrações, automações e IA',
         'subtitle': 'Centro operacional para conectores, rotinas e apoio inteligente',
-        'sprint_label': 'Sprint 9 · Integrações resilientes',
+        'sprint_label': 'Integrações, automações e IA',
         'external_system_count': ExternalSystem.objects.filter(**scope).count(),
         'integration_record_count': IntegrationRecord.objects.filter(**scope).count(),
         'approval_flow_count': ApprovalFlow.objects.filter(**scope).count(),
@@ -1348,7 +1394,7 @@ def automation_center(request):
     context = {
         'title': 'Automações',
         'subtitle': 'Tarefas repetitivas, gatilhos, regras e exceções',
-        'sprint_label': 'Sprint 5 · Automações',
+        'sprint_label': 'Automações',
         'summary': [
             ('Tarefas repetitivas', 'Centralizar importação, exportação e notificações recorrentes.'),
             ('Gatilhos', 'Disparar ações a partir de eventos operacionais e decisões de aprovação.'),
@@ -1364,6 +1410,227 @@ def automation_center(request):
     return render(request, 'futebol/page.html', context)
 
 
+def _sync_ai_provider_credentials(form, provider):
+    api_key = (form.cleaned_data.get('api_key') or '').strip()
+    if provider.kind != AIProvider.Kind.OPENCODE or not api_key:
+        return
+    sync_opencode_provider_credentials(
+        api_key=api_key,
+        provider_name=provider.name,
+        provider_kind=provider.kind,
+        model_name=provider.model_name,
+    )
+
+
+@login_required
+def ai_provider_list(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    page = TablePage(request)
+    page.model = AIProvider
+    page.select_related_fields = ('tenant',)
+    page.title = 'Providers de IA'
+    page.subtitle = 'Cadastros de modelos e fornecedores para os agentes da plataforma'
+    page.search_fields = ('name', 'kind', 'model_name', 'notes')
+    page.default_ordering = 'name'
+    page.ordering_map = {'name': 'name', '-name': '-name', 'kind': 'kind', '-kind': '-kind'}
+    page.columns = (
+        ('Nome', 'name'),
+        ('Fornecedor', 'kind'),
+        ('Modelo', 'model_name'),
+        ('Credencial', lambda obj: 'Configurada' if opencode_auth_configured(provider_name=obj.name) else 'Pendente'),
+        ('Ativo', lambda obj: 'Sim' if obj.active else 'Não'),
+    )
+    page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('ai-provider-edit', args=[obj.pk]))
+    page.create_url = reverse('ai-provider-create')
+    page.create_label = 'Novo provider'
+    page.empty_message = 'Nenhum provider de IA cadastrado.'
+    context = page.context()
+    context.update(
+        {
+            'provider_catalog': provider_catalog_rows(),
+            'provider_catalog_hint': 'Clique em Novo provider para cadastrar vários fornecedores; o catálogo abaixo mostra modelos sugeridos por tipo.',
+        }
+    )
+    return render(request, 'futebol/provider_list.html', context)
+
+
+@login_required
+def ai_provider_create(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    return _render_form(
+        request,
+        AIProviderForm,
+        title='Novo provider de IA',
+        subtitle='Cadastre o fornecedor/modelo que será usado pelo agente',
+        success_url_name='ai-provider-list',
+        success_message='Provider criado com sucesso.',
+        cancel_url=reverse('ai-provider-list'),
+        post_save=_sync_ai_provider_credentials,
+    )
+
+
+@login_required
+def ai_provider_edit(request, pk):
+    provider = _get_visible_object(request, AIProvider, pk)
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ], tenant=provider.tenant)
+    return _render_form(
+        request,
+        AIProviderForm,
+        instance=provider,
+        title='Editar provider de IA',
+        subtitle='Atualize o cadastro do fornecedor/modelo',
+        success_url_name='ai-provider-list',
+        success_message='Provider atualizado com sucesso.',
+        cancel_url=reverse('ai-provider-list'),
+        post_save=_sync_ai_provider_credentials,
+    )
+
+
+@login_required
+def knowledge_source_list(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    page = TablePage(request)
+    page.model = KnowledgeSource
+    page.select_related_fields = ('tenant',)
+    page.title = 'Fontes de conhecimento'
+    page.subtitle = 'Documentos, relatórios e páginas públicas que alimentam os agentes da SaaS'
+    page.search_fields = ('identifier', 'title', 'kind', 'source_path', 'summary')
+    page.default_ordering = 'title'
+    page.ordering_map = {'title': 'title', '-title': '-title', 'kind': 'kind', '-kind': '-kind'}
+    page.columns = (
+        ('Título', 'title'),
+        ('Tipo', 'kind'),
+        ('Identificador', 'identifier'),
+        ('Origem', 'source_path'),
+        ('URL', lambda obj: format_html('<a href="{}" target="_blank" rel="noreferrer">{}</a>', obj.source_url, obj.source_url) if obj.source_url else '—'),
+        ('Ativo', lambda obj: 'Sim' if obj.active else 'Não'),
+    )
+    page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('knowledge-source-edit', args=[obj.pk]))
+    page.create_url = reverse('knowledge-source-create')
+    page.create_label = 'Nova fonte manual'
+    page.extra_actions = (
+        {'href': reverse('knowledge-source-import-url'), 'label': 'Importar URL'},
+    )
+    page.empty_message = 'Nenhuma fonte de conhecimento importada.'
+    return page.render()
+
+
+@login_required
+def knowledge_source_import_url(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    tenant = _primary_tenant(request)
+    form = KnowledgeSourceImportForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        try:
+            result = import_knowledge_source_from_url(
+                tenant=tenant,
+                url=form.cleaned_data['url'],
+                title=form.cleaned_data.get('title') or '',
+                identifier=form.cleaned_data.get('identifier') or '',
+            )
+        except ValueError as exc:
+            form.add_error('url', str(exc))
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f'Fonte {"criada" if result.created else "atualizada"} com sucesso a partir da URL.',
+            )
+            return redirect('knowledge-source-list')
+    return render(
+        request,
+        'futebol/form.html',
+        {
+            'title': 'Importar fonte por URL',
+            'subtitle': 'Cole uma página pública e o sistema vai extrair título, resumo e conteúdo principal.',
+            'form': form,
+            'cancel_url': reverse('knowledge-source-list'),
+            'page_state': 'form',
+        },
+    )
+
+
+@login_required
+def knowledge_source_create(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    return _render_form(request, KnowledgeSourceForm, title='Nova fonte de conhecimento', subtitle='Cadastre manualmente uma documentação ou relatório', success_url_name='knowledge-source-list', success_message='Fonte criada com sucesso.', cancel_url=reverse('knowledge-source-list'))
+
+
+@login_required
+def knowledge_source_edit(request, pk):
+    source = _get_visible_object(request, KnowledgeSource, pk)
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ], tenant=source.tenant)
+    return _render_form(request, KnowledgeSourceForm, instance=source, title='Editar fonte de conhecimento', subtitle='Atualize o documento ou relatório cadastrado', success_url_name='knowledge-source-list', success_message='Fonte atualizada com sucesso.', cancel_url=reverse('knowledge-source-list'))
+
+
+@login_required
+def ai_agent_list(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    page = TablePage(request)
+    page.model = AIAgent
+    page.select_related_fields = ('tenant', 'provider')
+    page.title = 'Agentes de IA'
+    page.subtitle = 'Agentes vinculados a providers e fontes documentais'
+    page.search_fields = ('name', 'slug', 'purpose', 'system_prompt', 'provider__name', 'provider__model_name')
+    page.default_ordering = 'name'
+    page.ordering_map = {'name': 'name', '-name': '-name', 'provider': 'provider__name', '-provider': '-provider__name'}
+    page.columns = (
+        ('Nome', 'name'),
+        ('Provider', 'provider.name'),
+        ('Modelo', lambda obj: obj.model_override or obj.provider.model_name),
+        ('Fontes', lambda obj: obj.source_links.filter(active=True).count()),
+        ('Ativo', lambda obj: 'Sim' if obj.active else 'Não'),
+    )
+    page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('ai-agent-edit', args=[obj.pk]))
+    page.create_url = reverse('ai-agent-create')
+    page.create_label = 'Novo agente'
+    page.empty_message = 'Nenhum agente de IA configurado.'
+    return page.render()
+
+
+@login_required
+def ai_agent_create(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    return _render_form(request, AIAgentForm, title='Novo agente de IA', subtitle='Associe um provider e uma base documental ao agente', success_url_name='ai-agent-list', success_message='Agente criado com sucesso.', cancel_url=reverse('ai-agent-list'))
+
+
+@login_required
+def ai_agent_edit(request, pk):
+    agent = _get_visible_object(request, AIAgent, pk)
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ], tenant=agent.tenant)
+    return _render_form(request, AIAgentForm, instance=agent, title='Editar agente de IA', subtitle='Ajuste provider, prompt e fontes vinculadas', success_url_name='ai-agent-list', success_message='Agente atualizado com sucesso.', cancel_url=reverse('ai-agent-list'))
+
+
 @login_required
 def ai_center(request):
     tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
@@ -1376,6 +1643,11 @@ def ai_center(request):
         default_tenant = accessible_tenants.first()
     if default_tenant is None:
         raise PermissionDenied('Nenhum tenant ativo disponível para análise tática.')
+
+    provider_qs = AIProvider.objects.filter(tenant=default_tenant).order_by('name')
+    agent_qs = AIAgent.objects.filter(tenant=default_tenant).select_related('provider').order_by('name')
+    source_qs = KnowledgeSource.objects.filter(tenant=default_tenant).order_by('title')
+    linked_sources = AIAgentSourceLink.objects.filter(tenant=default_tenant, active=True)
 
     player_qs = (
         Person.objects.filter(tenant=default_tenant, kind=Person.Kind.ATHLETE, active=True)
@@ -1419,44 +1691,101 @@ def ai_center(request):
         for match in played_matches[:5]
     ]
 
+    agent_run_form = AIAgentRunForm(tenant=default_tenant, user=request.user, initial={'tenant': default_tenant.pk})
+    agent_run_result = None
+    agent_run_error = ''
+    if request.method == 'POST':
+        agent_run_form = AIAgentRunForm(request.POST, tenant=default_tenant, user=request.user)
+        if agent_run_form.is_valid():
+            agent = agent_run_form.cleaned_data['agent']
+            question = agent_run_form.cleaned_data['question']
+            try:
+                run_result = run_ai_agent(agent=agent, question=question)
+                agent_run_result = {
+                    'agent_name': run_result.agent_name,
+                    'provider_name': run_result.provider_name,
+                    'provider_kind': run_result.provider_kind,
+                    'model_name': run_result.model_name,
+                    'question': run_result.question,
+                    'answer': run_result.answer,
+                    'source_titles': run_result.source_titles,
+                    'used_fallback': run_result.used_fallback,
+                }
+                messages.success(request, 'Consulta executada com sucesso.')
+            except Exception as exc:
+                agent_run_error = str(exc)
+                messages.error(request, agent_run_error)
+
     context = {
-        'title': 'Análise tática e scouting',
-        'subtitle': 'Leituras simples de elenco, escalações e eventos para apoiar a observação esportiva',
-        'sprint_label': 'Sprint 12 · Análise tática e scouting',
+        'title': 'Centro de IA e agentes',
+        'subtitle': 'Providers, fontes documentais e agentes rastreáveis para apoiar análise e automação',
+        'sprint_label': 'Centro de IA e agentes',
         'summary': [
-            ('Objetivo', 'Consolidar sinais básicos de observação usando escalações, eventos e desempenho recente.'),
-            ('Limite', 'A visão não substitui análise humana nem cria métricas avançadas sem base de dados própria.'),
-            ('Fallback', 'Toda leitura pode ser conferida nos registros de partidas, eventos e contratos.'),
+            ('Providers', f'{provider_qs.count()} cadastrados'),
+            ('Agentes', f'{agent_qs.count()} configurados'),
+            ('Fontes', f'{source_qs.count()} importadas'),
+            ('Vínculos', f'{linked_sources.count()} relações agente→fonte'),
         ],
         'use_cases': [
-            'Análise rápida de elenco por atleta, posição e disciplina.',
-            'Leitura de partidas recentes com escalações e gols.',
-            'Apoio a reuniões de scouting com sinais táticos simples.',
+            'Analisar fontes documentais antes de responder perguntas operacionais.',
+            'Associar cada agente a um provider/modelo específico.',
+            'Manter fallback manual quando a base documental não cobrir a decisão.',
         ],
-        'fallback_manual': 'Fallback manual: revise os registros de partidas, eventos e contratos antes de concluir a avaliação.',
+        'fallback_manual': 'Fallback manual: revise os documentos importados, os providers cadastrados e os registros do domínio antes de confiar numa resposta automatizada.',
         'actions': [
-            {'label': 'Centro de relatórios', 'href': reverse('report-center')},
-            {'label': 'BI self-service', 'href': reverse('bi-center')},
-            {'label': 'Transferências', 'href': reverse('transfer-center')},
+            {'label': 'Providers', 'href': reverse('ai-provider-list')},
+            {'label': 'Agentes', 'href': reverse('ai-agent-list')},
+            {'label': 'Fontes de conhecimento', 'href': reverse('knowledge-source-list')},
+            {'label': 'Relatórios', 'href': reverse('report-center')},
         ],
+        'agent_run_form': agent_run_form,
+        'agent_run_result': agent_run_result,
+        'agent_run_error': agent_run_error,
         'sections': [
             {
                 'title': 'Cobertura do elenco',
-                'description': 'Base de atletas e uso recente em partidas.',
+                'description': 'Resumo rápido dos atletas com participação recente.',
                 'points': [
-                    f"{Person.objects.filter(tenant=default_tenant, kind=Person.Kind.ATHLETE, active=True).count()} atletas ativos",
-                    f"{lineups_qs.count()} escalações registradas",
-                    f"{played_matches.count()} partidas disputadas",
-                ],
+                    f"{len(recent_players)} atletas com eventos ou escalações registradas",
+                    f"{len(recent_matches)} partidas recentes analisadas",
+                ] or ['Sem dados suficientes.'],
             },
             {
-                'title': 'Sinais táticos simples',
-                'description': 'Distribuição por posição e disciplina básica em jogo.',
+                'title': 'Atletas observados',
+                'description': 'Jogadores com mais participação, gols ou cartões.',
                 'points': [
-                    f"{events_qs.filter(event_type=MatchEvent.EventType.GOAL).count()} gols observados",
-                    f"{events_qs.filter(event_type=MatchEvent.EventType.YELLOW_CARD).count()} cartões amarelos",
-                    f"{events_qs.filter(event_type=MatchEvent.EventType.RED_CARD).count()} cartões vermelhos",
-                ],
+                    f"{player['name']} — {player['appearances']} jogos, {player['goals']} gols, {player['cards']} cartões"
+                    for player in recent_players[:5]
+                ] or ['Nenhum atleta observado.'],
+            },
+            {
+                'title': 'Partidas recentes analisadas',
+                'description': 'Últimos jogos concluídos com placar e volume de eventos.',
+                'points': [
+                    f"{match['reference_code']} — {match['pair']} ({match['score']})"
+                    for match in recent_matches[:5]
+                ] or ['Nenhuma partida analisada.'],
+            },
+            {
+                'title': 'Configuração do provider',
+                'description': 'Escolha o fornecedor e o modelo que o agente vai usar.',
+                'points': [
+                    f"{provider.name} — {provider.model_name} ({provider.get_kind_display()})" for provider in provider_qs[:5]
+                ] or ['Nenhum provider configurado.'],
+            },
+            {
+                'title': 'Base documental',
+                'description': 'Fontes importadas do repositório e relatórios locais.',
+                'points': [
+                    f"{source.title} ({source.get_kind_display()})" for source in source_qs[:5]
+                ] or ['Nenhuma fonte importada.'],
+            },
+            {
+                'title': 'Agentes ativos',
+                'description': 'Agentes prontos para se conectar às fontes de conhecimento.',
+                'points': [
+                    f"{agent.name}: {agent.provider.name} / {agent.model_override or agent.provider.model_name}" for agent in agent_qs[:5]
+                ] or ['Nenhum agente configurado.'],
             },
             {
                 'title': 'Posições mais usadas',
@@ -1514,7 +1843,7 @@ def mark_notification_read(request, pk):
     return redirect('notification-list')
 
 
-def _render_form(request, form_class, *, instance=None, title, subtitle, success_url_name, success_message, cancel_url):
+def _render_form(request, form_class, *, instance=None, title, subtitle, success_url_name, success_message, cancel_url, post_save=None):
     page = FormPage(
         request,
         form_class=form_class,
@@ -1526,6 +1855,7 @@ def _render_form(request, form_class, *, instance=None, title, subtitle, success
             'cancel_url': cancel_url,
             'page_state': 'form',
         },
+        post_save=post_save,
     )
     page.success_url_name = success_url_name
     page.success_message = success_message

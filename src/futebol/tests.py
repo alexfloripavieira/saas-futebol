@@ -1291,6 +1291,13 @@ class WhiteLabelPhase1Tests(TestCase):
         response = self.client.get(reverse('onboarding'))
         self.assertRedirects(response, reverse('home'))
 
+    def test_onboarding_does_not_offer_platform_admin_role(self):
+        from .forms import OnboardingForm
+
+        role_values = [value for value, _ in OnboardingForm().fields['role'].choices]
+        self.assertNotIn(TenantMembership.Role.ADMIN_PLATAFORMA, role_values)
+        self.assertIn(TenantMembership.Role.ADMIN_TENANT, role_values)
+
     def test_branding_is_applied_in_base_template(self):
         TenantBranding.objects.create(tenant=self.tenant, primary_color='#abcdef', public_title='Portal Avaí')
         self.client.login(username='gestor', password='senha12345')

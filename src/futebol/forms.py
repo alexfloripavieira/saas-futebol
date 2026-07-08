@@ -61,11 +61,19 @@ class OnboardingForm(forms.Form):
 
     _color_attrs = {'type': 'color', 'class': 'form-control field-input'}
 
+    # Papéis auto-atribuíveis no onboarding: apenas papéis internos ao tenant.
+    # ``admin_plataforma`` é reservado ao fornecedor (ver PRD §4.1 e Risco 2).
+    _self_service_roles = [
+        (value, label)
+        for value, label in TenantMembership.Role.choices
+        if value != TenantMembership.Role.ADMIN_PLATAFORMA
+    ]
+
     tenant_name = forms.CharField(label='Nome do clube', max_length=120)
     tenant_slug = forms.SlugField(label='Identificador (slug)', max_length=120)
     role = forms.ChoiceField(
         label='Seu papel inicial',
-        choices=TenantMembership.Role.choices,
+        choices=_self_service_roles,
         initial=TenantMembership.Role.ADMIN_TENANT,
     )
     modules = forms.MultipleChoiceField(
@@ -82,6 +90,7 @@ class OnboardingForm(forms.Form):
     accent_color = forms.CharField(label='Cor de destaque', max_length=9, initial='#55a7ff', widget=forms.TextInput(attrs=_color_attrs))
     logo_url = forms.URLField(label='URL do logo', required=False)
     favicon_url = forms.URLField(label='URL do favicon', required=False)
+    symbol_url = forms.URLField(label='URL do símbolo', required=False)
 
     def clean_tenant_slug(self):
         slug = self.cleaned_data['tenant_slug']

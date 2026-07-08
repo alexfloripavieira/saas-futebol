@@ -102,6 +102,8 @@ def _module_required(module_code):
     def decorator(view_func):
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
+            if request.user.is_superuser:
+                return view_func(request, *args, **kwargs)
             tenant = _primary_tenant(request)
             if tenant_has_module(tenant, module_code):
                 return view_func(request, *args, **kwargs)
@@ -418,6 +420,7 @@ def onboarding(request):
                     accent_color=data['accent_color'],
                     logo_url=data['logo_url'],
                     favicon_url=data['favicon_url'],
+                    symbol_url=data['symbol_url'],
                     public_title=data['public_title'],
                     public_subtitle=data['public_subtitle'] or '',
                 )

@@ -165,8 +165,6 @@ def build_nav_groups(enabled):
 
     ``enabled`` é um conjunto de códigos ou ``None`` (mostra tudo).
     """
-    groups = []
-    for group in NAV_GROUPS:
-        if enabled is None or group['module'] in enabled or group['module'] == BASE_MODULE:
-            groups.append(group)
-    return groups
+    # ``enabled_module_codes`` já injeta ``BASE_MODULE`` no conjunto; quando
+    # ``enabled`` é ``None`` (tenant não provisionado) exibimos tudo.
+    return [group for group in NAV_GROUPS if enabled is None or group['module'] in enabled]

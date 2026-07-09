@@ -74,6 +74,23 @@
     </section>
   </div>
 
+  {% if ia_enabled %}
+  <section class="card stack" style="margin-top: 16px;">
+    <div class="section-title">
+      <div>
+        <h2 style="margin:0;">Inteligência artificial e fontes</h2>
+        <p class="muted" style="margin:6px 0 0;">Módulo IA contratado — configure providers, agentes e fontes de conhecimento.</p>
+      </div>
+    </div>
+    <div class="hero-links">
+      <a href="{% url 'ai-center' %}">Centro de IA</a>
+      <a href="{% url 'ai-provider-list' %}">Providers</a>
+      <a href="{% url 'ai-agent-list' %}">Agentes</a>
+      <a href="{% url 'knowledge-source-list' %}">Fontes de conhecimento</a>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="card stack" style="margin-top: 16px;">
     <div class="section-title">
       <div>

@@ -1586,3 +1586,65 @@ class PublicLoginJourneyTests(TestCase):
         # E manter o formulário de autenticação.
         self.assertContains(response, 'name="username"')
         self.assertContains(response, 'name="password"')
+
+
+class TenantAdminIALinksTests(TestCase):
+    """Issue #10 (gap) — a central do tenant oferece atalhos para providers,
+    agentes e fontes quando o módulo IA está contratado."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='gestor', password='senha12345')
+        self.tenant = Tenant.objects.create(name='Avaí FC', slug='avai')
+        TenantMembership.objects.create(
+            user=self.user, tenant=self.tenant, role=TenantMembership.Role.ADMIN_TENANT,
+        )
+        self.client.login(username='gestor', password='senha12345')
+
+    def _subscribe(self, code, enabled=True):
+        TenantModuleSubscription.objects.create(
+            tenant=self.tenant, module_code=code, module_name=code.title(), enabled=enabled,
+        )
+
+    def test_ia_paths_shown_when_ia_contracted(self):
+        self._subscribe('operacao')
+        self._subscribe('ia')
+        response = self.client.get(reverse('tenant-admin'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Inteligência artificial e fontes')
+        self.assertContains(response, reverse('ai-provider-list'))
+        self.assertContains(response, reverse('ai-agent-list'))
+        self.assertContains(response, reverse('knowledge-source-list'))
+
+    def test_ia_paths_hidden_when_ia_not_contracted(self):
+        self._subscribe('operacao')  # IA não contratada
+        response = self.client.get(reverse('tenant-admin'))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'Inteligência artificial e fontes')
+
+
+class MainPagesPerformanceTests(TestCase):
+    """Issue #15 (gap) — validação de performance básica: guarda contra N+1 nas
+    páginas principais, limitando o número de queries por request."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='perf', password='senha12345')
+        self.tenant = Tenant.objects.create(name='Perf FC', slug='perf')
+        TenantMembership.objects.create(
+            user=self.user, tenant=self.tenant, role=TenantMembership.Role.ADMIN_TENANT,
+        )
+
+    def _query_count(self, url_name):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get(reverse(url_name))
+        self.assertEqual(response.status_code, 200)
+        return len(ctx.captured_queries)
+
+    def test_landing_stays_within_query_budget(self):
+        self.assertLess(self._query_count('landing'), 12)
+
+    def test_painel_stays_within_query_budget(self):
+        self.client.login(username='perf', password='senha12345')
+        self.assertLess(self._query_count('home'), 40)

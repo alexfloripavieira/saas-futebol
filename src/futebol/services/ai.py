@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 
 from futebol.models import AIAgent, AIAgentSourceLink, AIProvider, KnowledgeSource, Tenant
+from futebol.services.net import UnsafeURLError, ensure_public_http_url, safe_urlopen
 
 
 SOURCE_EXTENSIONS = {'.md', '.txt'}
@@ -247,10 +248,12 @@ def _fetch_web_source(url: str) -> tuple[str, str, str]:
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=45) as response:
+        with safe_urlopen(request, timeout=45) as response:
             raw = response.read()
             content_type = response.headers.get('Content-Type', '')
             charset = response.headers.get_content_charset() or 'utf-8'
+    except UnsafeURLError as exc:
+        raise ValueError(f'URL não permitida: {exc}') from exc
     except (urllib.error.URLError, ValueError) as exc:
         raise ValueError(f'Não foi possível acessar a URL: {exc}') from exc
 
@@ -636,25 +639,63 @@ def _call_opencode_completion(*, model_name: str, messages: list[dict[str, str]]
     return {'text': stdout or stderr, 'raw': {'stdout': stdout, 'stderr': stderr, 'returncode': completed.returncode, 'binary': binary}}
 
 
+# Hosts oficiais permitidos por fornecedor. A credencial compartilhada da
+# plataforma só é enviada para estes hosts (∪ AI_PROVIDER_ALLOWED_HOSTS). Isso
+# impede que uma api_base_url controlada pelo tenant redirecione a chave para um
+# host arbitrário (exfiltração) ou para serviços internos (SSRF).
+_PROVIDER_ALLOWED_HOSTS = {
+    AIProvider.Kind.OPENAI: {'api.openai.com'},
+    AIProvider.Kind.OPENROUTER: {'openrouter.ai'},
+    AIProvider.Kind.ANTHROPIC: {'api.anthropic.com'},
+    AIProvider.Kind.OLLAMA: {'localhost', '127.0.0.1', 'ollama'},
+}
+
+
+def _extra_allowed_hosts() -> set[str]:
+    raw = os.getenv('AI_PROVIDER_ALLOWED_HOSTS', '')
+    return {host.strip().lower() for host in raw.split(',') if host.strip()}
+
+
+def provider_allowed_hosts(kind: str) -> set[str]:
+    return {host.lower() for host in _PROVIDER_ALLOWED_HOSTS.get(kind, set())} | _extra_allowed_hosts()
+
+
+def _ensure_provider_host_allowed(kind: str, base_url: str) -> None:
+    host = (urllib.parse.urlparse(base_url).hostname or '').lower()
+    allowed = provider_allowed_hosts(kind)
+    if host not in allowed:
+        raise RuntimeError(
+            f'Host de provider não permitido: "{host or base_url}". '
+            f'Hosts permitidos para {kind}: {", ".join(sorted(allowed)) or "nenhum"}. '
+            'Configure AI_PROVIDER_ALLOWED_HOSTS para liberar um endpoint próprio confiável.'
+        )
+
+
 def _provider_endpoint(provider: AIProvider) -> tuple[str, str | None, dict[str, str]]:
     kind = provider.kind
     if kind == AIProvider.Kind.OPENCODE:
         raise RuntimeError('OpenCode usa execução local via CLI, não endpoint HTTP.')
     if kind == AIProvider.Kind.OPENAI:
         base_url = provider.api_base_url or 'https://api.openai.com/v1'
-        return base_url.rstrip('/'), os.getenv('OPENAI_API_KEY'), {'Authorization': 'Bearer {api_key}'}
-    if kind == AIProvider.Kind.OPENROUTER:
+        result = base_url.rstrip('/'), os.getenv('OPENAI_API_KEY'), {'Authorization': 'Bearer {api_key}'}
+    elif kind == AIProvider.Kind.OPENROUTER:
         base_url = provider.api_base_url or 'https://openrouter.ai/api/v1'
-        return base_url.rstrip('/'), os.getenv('OPENROUTER_API_KEY'), {'Authorization': 'Bearer {api_key}', 'HTTP-Referer': 'https://saas-futebol.local', 'X-Title': 'SaaS do Futebol'}
-    if kind == AIProvider.Kind.OLLAMA:
+        result = base_url.rstrip('/'), os.getenv('OPENROUTER_API_KEY'), {'Authorization': 'Bearer {api_key}', 'HTTP-Referer': 'https://saas-futebol.local', 'X-Title': 'SaaS do Futebol'}
+    elif kind == AIProvider.Kind.OLLAMA:
         base_url = provider.api_base_url or 'http://localhost:11434/v1'
-        return base_url.rstrip('/'), os.getenv('OLLAMA_API_KEY'), {'Authorization': 'Bearer {api_key}'}
-    if kind == AIProvider.Kind.ANTHROPIC:
+        result = base_url.rstrip('/'), os.getenv('OLLAMA_API_KEY'), {'Authorization': 'Bearer {api_key}'}
+    elif kind == AIProvider.Kind.ANTHROPIC:
         base_url = provider.api_base_url or 'https://api.anthropic.com/v1'
-        return base_url.rstrip('/'), os.getenv('ANTHROPIC_API_KEY'), {'x-api-key': '{api_key}', 'anthropic-version': '2023-06-01'}
-    if provider.api_base_url:
-        return provider.api_base_url.rstrip('/'), os.getenv('AI_PROVIDER_API_KEY'), {'Authorization': 'Bearer {api_key}'}
-    raise RuntimeError('Provider sem api_base_url configurada; use OpenAI, OpenRouter, Ollama ou preencha a URL base.')
+        result = base_url.rstrip('/'), os.getenv('ANTHROPIC_API_KEY'), {'x-api-key': '{api_key}', 'anthropic-version': '2023-06-01'}
+    elif provider.api_base_url:
+        base_url = provider.api_base_url
+        result = base_url.rstrip('/'), os.getenv('AI_PROVIDER_API_KEY'), {'Authorization': 'Bearer {api_key}'}
+    else:
+        raise RuntimeError('Provider sem api_base_url configurada; use OpenAI, OpenRouter, Ollama ou preencha a URL base.')
+
+    # Recusa hosts fora da allowlist ANTES de qualquer credencial ser lida/enviada.
+    _ensure_provider_host_allowed(kind, result[0])
+    return result
 
 
 def _call_chat_completion(provider: AIProvider, *, messages: list[dict[str, str]], temperature: Decimal, model_name: str) -> dict[str, Any]:

@@ -134,7 +134,7 @@ class AIFeatureTests(Sprint3BaseTestCase):
         self.assertContains(response, 'Nova fonte manual')
         self.assertContains(response, 'Documentos, relatórios e páginas públicas')
 
-    @patch('futebol.services.ai.urllib.request.urlopen')
+    @patch('futebol.services.ai.safe_urlopen')
     def test_knowledge_source_import_url_creates_source_from_public_page(self, urlopen_mock):
         class FakeHeaders:
             def get(self, key, default=None):
@@ -1648,3 +1648,78 @@ class MainPagesPerformanceTests(TestCase):
     def test_painel_stays_within_query_budget(self):
         self.client.login(username='perf', password='senha12345')
         self.assertLess(self._query_count('home'), 40)
+
+
+class SsrfHardeningTests(TestCase):
+    """Correções das duas HIGH do security review: SSRF no import de fontes e
+    exfiltração de credencial/SSRF via api_base_url de provider."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name='SSRF FC', slug='ssrf')
+
+    # --- guard genérico (services/net.py) ---
+    def test_ensure_public_http_url_rejects_internal_and_bad_scheme(self):
+        from .services.net import UnsafeURLError, ensure_public_http_url
+
+        for bad in [
+            'http://127.0.0.1/x',
+            'http://10.0.0.5/x',
+            'http://192.168.1.10/x',
+            'http://169.254.169.254/latest/meta-data/',
+            'http://[::1]/x',
+            'ftp://8.8.8.8/x',
+            'file:///etc/passwd',
+        ]:
+            with self.assertRaises(UnsafeURLError):
+                ensure_public_http_url(bad)
+        # IP público literal é aceito
+        ensure_public_http_url('https://8.8.8.8/')
+
+    # --- Vuln 2: import de fonte por URL não alcança rede interna ---
+    def test_url_import_blocks_loopback(self):
+        from .services.ai import import_knowledge_source_from_url
+
+        with self.assertRaises(ValueError):
+            import_knowledge_source_from_url(tenant=self.tenant, url='http://127.0.0.1/segredo')
+
+    def test_url_import_blocks_cloud_metadata(self):
+        from .services.ai import import_knowledge_source_from_url
+
+        with self.assertRaises(ValueError):
+            import_knowledge_source_from_url(
+                tenant=self.tenant, url='http://169.254.169.254/latest/meta-data/iam/security-credentials/'
+            )
+
+    # --- Vuln 1: allowlist de host do provider ---
+    def test_provider_endpoint_rejects_non_allowlisted_host(self):
+        from .services.ai import _provider_endpoint
+
+        provider = AIProvider(
+            tenant=self.tenant, name='evil', kind=AIProvider.Kind.OPENAI,
+            model_name='gpt-4.1-mini', api_base_url='http://attacker.example/v1',
+        )
+        with self.assertRaises(RuntimeError):
+            _provider_endpoint(provider)
+
+    def test_provider_endpoint_allows_official_host(self):
+        from .services.ai import _provider_endpoint
+
+        provider = AIProvider(
+            tenant=self.tenant, name='ok', kind=AIProvider.Kind.OPENAI,
+            model_name='gpt-4.1-mini', api_base_url='',
+        )
+        base_url, _key, _headers = _provider_endpoint(provider)
+        self.assertEqual(base_url, 'https://api.openai.com/v1')
+
+    def test_provider_form_rejects_evil_base_url(self):
+        from .forms import AIProviderForm
+
+        form = AIProviderForm(
+            data={
+                'name': 'x', 'kind': AIProvider.Kind.OPENAI, 'model_name': 'gpt-4.1-mini',
+                'api_base_url': 'http://attacker.example/v1', 'active': 'on', 'notes': '',
+            },
+            tenant=self.tenant,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn('api_base_url', form.errors)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
@@ -32,7 +34,7 @@ from .models import (
     TenantModuleSubscription,
 )
 from .modules import BASE_MODULE, MODULE_CATALOG, MODULE_CODES
-from .services.ai import provider_model_catalog_flat, provider_model_options
+from .services.ai import provider_allowed_hosts, provider_model_catalog_flat, provider_model_options
 from .services.data_io import MODEL_REGISTRY
 
 MODEL_LABELS = {
@@ -669,7 +671,15 @@ class AIProviderForm(TenantScopedForm):
         if kind == AIProvider.Kind.OPENCODE:
             return ''
         if api_base_url:
-            URLValidator()(api_base_url)
+            URLValidator(schemes=['http', 'https'])(api_base_url)
+            host = (urlparse(api_base_url).hostname or '').lower()
+            allowed = provider_allowed_hosts(kind)
+            if host not in allowed:
+                raise ValidationError(
+                    'Host não permitido para este fornecedor. Permitidos: '
+                    f'{", ".join(sorted(allowed)) or "nenhum"}. '
+                    'Fale com o administrador da plataforma para liberar um endpoint próprio.'
+                )
         return api_base_url
 
     def clean(self):

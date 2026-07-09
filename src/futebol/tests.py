@@ -243,7 +243,7 @@ class AIFeatureTests(Sprint3BaseTestCase):
         )
         AIAgentSourceLink.objects.create(tenant=self.tenant, agent=opencode_agent, source=self.source, order=0, active=True)
 
-        with patch('futebol.services.ai.shutil.which', return_value='/usr/bin/opencode'), patch(
+        with patch('futebol.services.ai._find_opencode_binary', return_value='/usr/bin/opencode'), patch(
             'futebol.services.ai.subprocess.run'
         ) as run_mock:
             run_mock.return_value = type('R', (), {'stdout': 'Resposta OpenCode', 'stderr': '', 'returncode': 0})()

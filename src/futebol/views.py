@@ -497,6 +497,7 @@ def tenant_admin(request):
         'branding_form': branding_form,
         'modules_form': modules_form,
         'user_create_url': reverse('tenant-user-create'),
+        'ia_enabled': tenant_has_module(tenant, 'ia'),
     }
     return render(request, 'futebol/tenant_admin.html', context)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from functools import wraps
 
 from django.conf import settings
@@ -141,10 +142,18 @@ def _scope_queryset(request, model, *select_related_fields):
     return qs.filter(tenant_id__in=tenant_ids)
 
 
-def _public_api_authorized(request):
-    expected = getattr(settings, 'PUBLIC_API_KEY', '')
-    provided = request.headers.get('X-SaaS-Futebol-API-Key') or request.GET.get('api_key', '')
-    return bool(expected) and provided == expected
+def _public_api_authorized(request, tenant):
+    """Autoriza a API pública com a chave ESPECÍFICA do tenant requisitado.
+
+    A chave não é global: cada tenant tem a sua (`Tenant.public_api_key`). Uma
+    chave só dá acesso ao próprio tenant — não é possível ler outros tenants
+    trocando o slug na URL.
+    """
+    expected = (tenant.public_api_key or '').strip()
+    provided = (request.headers.get('X-SaaS-Futebol-API-Key') or request.GET.get('api_key', '')).strip()
+    if not expected or not provided:
+        return False
+    return hmac.compare_digest(provided, expected)
 
 
 def _public_api_forbidden():
@@ -1159,16 +1168,16 @@ def public_api_docs(request):
 
 
 def public_api_overview(request, tenant_slug):
-    if not _public_api_authorized(request):
-        return _public_api_forbidden()
     tenant = _public_api_tenant(tenant_slug)
+    if not _public_api_authorized(request, tenant):
+        return _public_api_forbidden()
     return JsonResponse(_public_api_overview_payload(tenant))
 
 
 def public_api_matches(request, tenant_slug):
-    if not _public_api_authorized(request):
-        return _public_api_forbidden()
     tenant = _public_api_tenant(tenant_slug)
+    if not _public_api_authorized(request, tenant):
+        return _public_api_forbidden()
     match_qs = Match.objects.filter(tenant=tenant).select_related('phase', 'phase__edition', 'phase__edition__competition', 'home_club', 'away_club').order_by('-scheduled_at')
     competition_slug = request.GET.get('competition')
     status = request.GET.get('status')

@@ -9,7 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -890,10 +890,11 @@ class Sprint10BiCenterTests(Sprint3BaseTestCase):
         self.assertTrue(any(item['type'] == 'Gol' for item in payload['recent_events']))
 
 
-@override_settings(PUBLIC_API_KEY='chave-publica-teste')
 class Sprint11PublicApiTests(Sprint3BaseTestCase):
     def setUp(self):
         super().setUp()
+        self.tenant.public_api_key = 'chave-publica-teste'
+        self.tenant.save(update_fields=['public_api_key'])
         self.other_club = Club.objects.create(tenant=self.tenant, name='Clube C', slug='clube-c', city='Belo Horizonte', state='MG')
         self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta API')
         self.match_played = Match.objects.create(
@@ -933,6 +934,38 @@ class Sprint11PublicApiTests(Sprint3BaseTestCase):
 
     def test_public_api_requires_key(self):
         response = self.client.get(reverse('public-api-overview', args=[self.tenant.slug]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_public_api_rejects_wrong_key(self):
+        response = self.client.get(
+            reverse('public-api-overview', args=[self.tenant.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-errada',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_public_api_key_is_scoped_per_tenant(self):
+        # Um segundo tenant com a SUA própria chave.
+        other = Tenant.objects.create(name='Outro Clube', slug='outro-clube', public_api_key='chave-do-outro')
+        # A chave do tenant atual NÃO dá acesso ao outro tenant (sem vazamento cross-tenant).
+        cross = self.client.get(
+            reverse('public-api-overview', args=[other.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-publica-teste',
+        )
+        self.assertEqual(cross.status_code, 403)
+        # A chave própria do outro tenant funciona no próprio tenant.
+        own = self.client.get(
+            reverse('public-api-overview', args=[other.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-do-outro',
+        )
+        self.assertEqual(own.status_code, 200)
+
+    def test_public_api_disabled_when_key_blank(self):
+        self.tenant.public_api_key = ''
+        self.tenant.save(update_fields=['public_api_key'])
+        response = self.client.get(
+            reverse('public-api-overview', args=[self.tenant.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY='',
+        )
         self.assertEqual(response.status_code, 403)
 
     def test_public_api_overview_and_matches(self):

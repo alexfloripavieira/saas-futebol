@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import secrets
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -16,6 +17,12 @@ class Tenant(models.Model):
     name = models.CharField(max_length=120, unique=True)
     slug = models.SlugField(max_length=120, unique=True)
     active = models.BooleanField(default=True)
+    public_api_key = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text='Chave da API pública específica deste tenant. Vazio = API desabilitada.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -24,6 +31,13 @@ class Tenant(models.Model):
 
     def __str__(self):
         return self.name
+
+    def rotate_public_api_key(self, *, save=True):
+        """Gera (ou regenera) a chave da API pública deste tenant."""
+        self.public_api_key = secrets.token_urlsafe(32)
+        if save:
+            self.save(update_fields=['public_api_key', 'updated_at'])
+        return self.public_api_key
 
 
 class TenantMembership(models.Model):

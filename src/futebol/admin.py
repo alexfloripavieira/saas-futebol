@@ -36,9 +36,20 @@ from .models import (
 
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'active', 'created_at')
+    list_display = ('name', 'slug', 'active', 'has_public_api_key', 'created_at')
     search_fields = ('name', 'slug')
     list_filter = ('active',)
+    actions = ('gerar_chave_api_publica',)
+
+    @admin.display(boolean=True, description='Chave API pública')
+    def has_public_api_key(self, obj):
+        return bool(obj.public_api_key)
+
+    @admin.action(description='Gerar/rotacionar chave da API pública')
+    def gerar_chave_api_publica(self, request, queryset):
+        for tenant in queryset:
+            tenant.rotate_public_api_key()
+        self.message_user(request, f'Chave da API pública gerada para {queryset.count()} tenant(s).')
 
 
 @admin.register(TenantMembership)

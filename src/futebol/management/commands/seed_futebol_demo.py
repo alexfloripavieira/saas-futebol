@@ -62,6 +62,7 @@ class Command(BaseCommand):
             self._clear_existing_tenant_data(existing_tenant)
             existing_tenant.delete()
         tenant = Tenant.objects.create(name=name, slug=slug, active=True)
+        tenant.rotate_public_api_key()
         if options['avai_pilot']:
             TenantBranding.objects.create(
                 tenant=tenant,
@@ -294,6 +295,7 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS('Seed demo criado com sucesso.'))
         self.stdout.write(f'Tenant: {tenant.slug}')
+        self.stdout.write(f'Chave da API pública: {tenant.public_api_key}')
         self.stdout.write('Usuários demo: demo_admin / demo_gestor / demo_aprovador / demo_auditor')
         self.stdout.write(f'Senha padrão: {password}')
         self.stdout.write(f'Match demo: {match.reference_code}')

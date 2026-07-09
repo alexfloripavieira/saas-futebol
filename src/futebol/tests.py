@@ -616,6 +616,40 @@ class TenantAdminSprint2Tests(Sprint3BaseTestCase):
         self.assertEqual(membership.role, TenantMembership.Role.AUDITOR)
         self.assertFalse(membership.active)
 
+    def test_admin_tenant_can_update_user_profile(self):
+        user = User.objects.create_user(
+            username='analista-antigo',
+            password='senha12345',
+            first_name='Nome',
+            last_name='Antigo',
+            email='antigo@example.com',
+        )
+        TenantMembership.objects.create(
+            user=user,
+            tenant=self.tenant,
+            role=TenantMembership.Role.GESTOR_CLUBE,
+            active=True,
+        )
+
+        response = self.client.post(
+            reverse('tenant-user-edit', args=[user.pk]),
+            {
+                'username': 'analista-novo',
+                'first_name': 'Ana',
+                'last_name': 'Nova',
+                'email': 'nova@example.com',
+                'is_active': 'on',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usuário atualizado com sucesso.')
+        user.refresh_from_db()
+        self.assertEqual(user.username, 'analista-novo')
+        self.assertEqual(user.first_name, 'Ana')
+        self.assertEqual(user.email, 'nova@example.com')
+
     def test_admin_tenant_can_update_branding_and_modules(self):
         response = self.client.post(
             reverse('tenant-admin'),

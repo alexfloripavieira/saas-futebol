@@ -4,6 +4,7 @@ from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
@@ -42,6 +43,7 @@ from .forms import (
     TenantMembershipForm,
     TenantModulesForm,
     TenantUserCreateForm,
+    TenantUserEditForm,
 )
 from .models import (
     AIAgent,
@@ -77,6 +79,8 @@ from .services.data_io import export_csv, import_payload
 from .services import approvals
 from .services.audit import log_audit_event, snapshot_instance
 from .services.permissions import require_any_role, user_has_any_role
+
+User = get_user_model()
 
 
 def _accessible_tenants(user):
@@ -523,6 +527,52 @@ def tenant_user_create(request):
     return render(request, 'futebol/form.html', {
         'title': 'Novo usuário do tenant',
         'subtitle': 'Crie um usuário e associe o primeiro papel neste tenant.',
+        'form': form,
+        'cancel_url': reverse('tenant-admin'),
+        'page_state': 'form',
+    })
+
+
+@login_required
+def tenant_user_edit(request, pk):
+    user = _visible_tenant_user(request, pk)
+    tenant = _primary_tenant(request)
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ], tenant=tenant)
+    form = TenantUserEditForm(request.POST or None, instance=user)
+    if request.method == 'POST':
+        if form.is_valid():
+            before_state = {
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'email': user.email,
+                'is_active': user.is_active,
+            }
+            form.save()
+            log_audit_event(
+                tenant=tenant,
+                actor=request.user,
+                action='update',
+                obj=user,
+                before_state=before_state,
+                after_state={
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'email': user.email,
+                    'is_active': user.is_active,
+                },
+                correlation_id=getattr(request, 'request_id', ''),
+            )
+            messages.success(request, 'Usuário atualizado com sucesso.')
+            return redirect('tenant-admin')
+        messages.error(request, 'Corrija os campos destacados para atualizar o usuário.')
+    return render(request, 'futebol/form.html', {
+        'title': f'Editar usuário {user.username}',
+        'subtitle': 'Atualize os dados cadastrais do usuário vinculado ao tenant.',
         'form': form,
         'cancel_url': reverse('tenant-admin'),
         'page_state': 'form',
@@ -2150,6 +2200,14 @@ def _visible_membership(request, pk):
         return get_object_or_404(qs, pk=pk)
     tenant_ids = list(_accessible_tenants(request.user))
     return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+
+
+def _visible_tenant_user(request, pk):
+    qs = User.objects.filter(tenant_memberships__tenant__active=True).distinct()
+    if request.user.is_superuser:
+        return get_object_or_404(qs, pk=pk)
+    tenant_ids = list(_accessible_tenants(request.user))
+    return get_object_or_404(qs.filter(tenant_memberships__tenant_id__in=tenant_ids), pk=pk)
 
 
 def _get_visible_object(request, model, pk):

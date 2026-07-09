@@ -41,7 +41,12 @@
                 </td>
                 <td>{{ membership.get_role_display }}</td>
                 <td>{% if membership.active %}Ativo{% else %}Inativo{% endif %}</td>
-                <td><a class="action action-secondary" href="{% url 'tenant-membership-edit' membership.pk %}">Editar vínculo</a></td>
+                <td>
+                  <div class="row-actions">
+                    <a class="action action-secondary" href="{% url 'tenant-user-edit' membership.user.pk %}">Editar usuário</a>
+                    <a class="action action-secondary" href="{% url 'tenant-membership-edit' membership.pk %}">Editar vínculo</a>
+                  </div>
+                </td>
               </tr>
             {% empty %}
               <tr><td colspan="4" class="empty">Nenhum usuário vinculado.</td></tr>

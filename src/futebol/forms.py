@@ -242,6 +242,40 @@ class TenantUserCreateForm(forms.Form):
         return user
 
 
+class TenantUserEditForm(forms.ModelForm):
+    class Meta:
+        model = get_user_model()
+        fields = ['username', 'first_name', 'last_name', 'email', 'is_active']
+        labels = {
+            'username': 'Usuário',
+            'first_name': 'Nome',
+            'last_name': 'Sobrenome',
+            'email': 'E-mail',
+            'is_active': 'Usuário ativo',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            attrs = widget.attrs.setdefault('class', '')
+            classes = [c for c in attrs.split() if c]
+            for candidate in ('form-control', 'field-input'):
+                if candidate not in classes:
+                    classes.append(candidate)
+            widget.attrs['class'] = ' '.join(classes).strip()
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        User = get_user_model()
+        qs = User.objects.filter(username=username)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('Já existe um usuário com este login.')
+        return username
+
+
 class TenantMembershipForm(forms.ModelForm):
     class Meta:
         model = TenantMembership

@@ -1570,3 +1570,19 @@ class WhiteLabelPhase1Tests(TestCase):
             TenantModuleSubscription(
                 tenant=self.tenant, module_code='operacao', module_name='Operação', enabled=True,
             ).save()
+
+
+class PublicLoginJourneyTests(TestCase):
+    """Issue #8 — jornada pública e primeiro acesso: a tela de login é pública
+    e não expõe o shell operacional (sidebar/menus)."""
+
+    def test_login_page_is_public_and_not_operational_shell(self):
+        response = self.client.get(reverse('login'))
+        self.assertEqual(response.status_code, 200)
+        # Não deve renderizar o shell operacional (barra lateral de navegação).
+        self.assertNotContains(response, 'class="sidebar"')
+        # Deve oferecer caminho de volta à tela institucional pública.
+        self.assertContains(response, reverse('landing'))
+        # E manter o formulário de autenticação.
+        self.assertContains(response, 'name="username"')
+        self.assertContains(response, 'name="password"')

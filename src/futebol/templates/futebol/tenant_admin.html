@@ -1,0 +1,124 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">Administração do tenant</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+    <div class="hero-links">
+      <a class="button" href="{{ user_create_url }}">Novo usuário</a>
+      <a class="button button-secondary" href="{% url 'home' %}">Voltar ao painel</a>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card stack">
+      <div class="section-title">
+        <div>
+          <h2 style="margin:0;">Usuários e papéis</h2>
+          <p class="muted" style="margin:6px 0 0;">Vínculos ativos e inativos deste tenant.</p>
+        </div>
+        <span class="pill">{{ memberships|length }} vínculo(s)</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th>Papel</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for membership in memberships %}
+              <tr>
+                <td>
+                  <strong>{{ membership.user.username }}</strong>
+                  <div class="muted">{{ membership.user.email|default:'Sem e-mail' }}</div>
+                </td>
+                <td>{{ membership.get_role_display }}</td>
+                <td>{% if membership.active %}Ativo{% else %}Inativo{% endif %}</td>
+                <td><a class="action action-secondary" href="{% url 'tenant-membership-edit' membership.pk %}">Editar vínculo</a></td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="4" class="empty">Nenhum usuário vinculado.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <div class="section-title">
+        <div>
+          <h2 style="margin:0;">Módulos ativos</h2>
+          <p class="muted" style="margin:6px 0 0;">O menu e o acesso direto usam esta contratação.</p>
+        </div>
+      </div>
+      <div class="stack">
+        {% for subscription in subscriptions %}
+          <div class="state {% if subscription.enabled %}state-success{% else %}state-empty{% endif %}">
+            <strong>{{ subscription.module_name }}</strong>
+            <div class="muted">{{ subscription.module_code }} · {% if subscription.enabled %}Ativo{% else %}Inativo{% endif %}</div>
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section class="card stack" style="margin-top: 16px;">
+    <div class="section-title">
+      <div>
+        <h2 style="margin:0;">Configurações do tenant</h2>
+        <p class="muted" style="margin:6px 0 0;">Identidade visual, tela pública e módulos contratados.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <form method="post" class="stack">
+        {% csrf_token %}
+        <input type="hidden" name="form_kind" value="settings">
+        <div class="form-grid">
+          {% for field in branding_form.visible_fields %}
+            <div class="field {% if field.errors %}state-error{% endif %}">
+              {{ field.label_tag }}
+              {{ field }}
+              {% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+
+        <div class="state">
+          <strong>Módulos contratados</strong>
+          <div class="muted">Desmarcar um módulo oculta o menu e bloqueia a URL direta.</div>
+          <div class="grid" style="margin-top: 12px;">
+            {{ modules_form.modules }}
+          </div>
+          {% if modules_form.modules.errors %}<div class="field-errors">{{ modules_form.modules.errors }}</div>{% endif %}
+        </div>
+
+        <div class="form-actions">
+          <button type="submit">Salvar configurações</button>
+        </div>
+      </form>
+
+      <div class="stack">
+        <div class="hero" style="background: linear-gradient(135deg, {{ branding.primary_color }}, {{ branding.secondary_color }});">
+          <span class="ferrari-signal">Prévia do branding</span>
+          <h2 style="margin:0;">{{ branding.public_title }}</h2>
+          <p>{{ branding.public_subtitle }}</p>
+          {% if branding.logo_url %}
+            <img src="{{ branding.logo_url }}" alt="Logo do tenant" style="max-width: 180px; border-radius: 12px;">
+          {% endif %}
+        </div>
+        <div class="state">
+          <strong>{{ tenant.name }}</strong>
+          <div class="muted">Slug: {{ tenant.slug }}</div>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}

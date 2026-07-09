@@ -657,21 +657,21 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
   - [x] Permitir escolha dos módulos comprados.
 
 ### Sprint 2 — Gestão de acesso e operação
-- [ ] Criar gestão de usuários por tenant.
-- [ ] Criar gestão de papéis por tenant.
-- [ ] Criar visão do admin do tenant.
+- [x] Criar gestão de usuários por tenant.
+- [x] Criar gestão de papéis por tenant.
+- [x] Criar visão do admin do tenant.
 - [x] Garantir que só menus contratados apareçam.
-- [ ] Criar telas de configuração do tenant.
-- [ ] Criar tela para ativar/desativar módulos.
+- [x] Criar telas de configuração do tenant.
+- [x] Criar tela para ativar/desativar módulos.
 
 ### Sprint 2.1 — Subtarefas detalhadas
-  - [ ] Criar CRUD de usuários do tenant.
-  - [ ] Criar atribuição de papéis por usuário.
+  - [x] Criar CRUD de usuários do tenant.
+  - [x] Criar atribuição de papéis por usuário.
   - [x] Criar validação de acesso por tenant.
-  - [ ] Criar view para listar módulos ativos.
-  - [ ] Criar view para alterar módulos contratados.
-  - [ ] Criar tela de identidade visual do tenant.
-  - [ ] Criar preview visual do branding.
+  - [x] Criar view para listar módulos ativos.
+  - [x] Criar view para alterar módulos contratados.
+  - [x] Criar tela de identidade visual do tenant.
+  - [x] Criar preview visual do branding.
   - [x] Criar componente de aviso de módulo indisponível.
 
 ### Sprint 3 — Núcleo de IA inteligente
@@ -709,19 +709,19 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
   - [x] Melhorar empty states e feedbacks.
 
 ### Sprint 5 — Dashboards inteligentes e previsões
-- [ ] Criar dashboards inteligentes separados.
+- [x] Criar dashboards inteligentes separados.
 - [ ] Criar módulo de previsões.
 - [ ] Planejar previsões de lesão, próximo adversário e tendência de performance.
 - [ ] Criar alertas e automações.
 
 ### Sprint 5.1 — Subtarefas detalhadas
-  - [ ] Definir visão executiva do dashboard.
-  - [ ] Definir visão do analista.
+  - [x] Definir visão executiva do dashboard.
+  - [x] Definir visão do analista.
   - [ ] Definir visão da comissão técnica.
   - [ ] Estruturar cartões de previsões.
   - [ ] Mapear fontes para previsões.
   - [ ] Definir gatilhos de automação.
-  - [ ] Criar notificações de valor.
+  - [x] Criar notificações de valor.
 
 ### Sprint 6 — Qualidade, segurança e entrega
 - [x] Adicionar cobertura de testes para onboarding.

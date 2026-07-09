@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
@@ -26,9 +27,11 @@ from .models import (
     Person,
     Proposal,
     Tenant,
+    TenantBranding,
     TenantMembership,
+    TenantModuleSubscription,
 )
-from .modules import MODULE_CATALOG, MODULE_CODES
+from .modules import BASE_MODULE, MODULE_CATALOG, MODULE_CODES
 from .services.ai import provider_model_catalog_flat, provider_model_options
 from .services.data_io import MODEL_REGISTRY
 
@@ -103,6 +106,162 @@ class OnboardingForm(forms.Form):
         if Tenant.objects.filter(name=name).exists():
             raise ValidationError('Já existe um tenant com este nome.')
         return name
+
+
+class TenantBrandingForm(forms.ModelForm):
+    class Meta:
+        model = TenantBranding
+        fields = [
+            'primary_color',
+            'secondary_color',
+            'background_color',
+            'accent_color',
+            'logo_url',
+            'favicon_url',
+            'symbol_url',
+            'public_title',
+            'public_subtitle',
+        ]
+        labels = {
+            'primary_color': 'Cor primária',
+            'secondary_color': 'Cor secundária',
+            'background_color': 'Cor de fundo',
+            'accent_color': 'Cor de destaque',
+            'logo_url': 'URL do logo',
+            'favicon_url': 'URL do favicon',
+            'symbol_url': 'URL do símbolo',
+            'public_title': 'Título público',
+            'public_subtitle': 'Subtítulo público',
+        }
+        widgets = {
+            'primary_color': forms.TextInput(attrs={'type': 'color'}),
+            'secondary_color': forms.TextInput(attrs={'type': 'color'}),
+            'background_color': forms.TextInput(attrs={'type': 'color'}),
+            'accent_color': forms.TextInput(attrs={'type': 'color'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            attrs = widget.attrs.setdefault('class', '')
+            classes = [c for c in attrs.split() if c]
+            for candidate in ('form-control', 'field-input'):
+                if candidate not in classes:
+                    classes.append(candidate)
+            widget.attrs['class'] = ' '.join(classes).strip()
+
+
+class TenantModulesForm(forms.Form):
+    modules = forms.MultipleChoiceField(
+        label='Módulos contratados',
+        choices=[(m['code'], m['name']) for m in MODULE_CATALOG],
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+    )
+
+    def __init__(self, *args, tenant: Tenant | None = None, **kwargs):
+        self.tenant = tenant
+        super().__init__(*args, **kwargs)
+        self.fields['modules'].initial = self.initial_codes()
+
+    def initial_codes(self):
+        if self.tenant is None:
+            return []
+        subscriptions = self.tenant.tenantmodulesubscriptions.all()
+        if not subscriptions.exists():
+            return list(MODULE_CODES)
+        return list(subscriptions.filter(enabled=True).values_list('module_code', flat=True))
+
+    def save(self):
+        selected_codes = set(self.cleaned_data.get('modules') or [])
+        selected_codes.add(BASE_MODULE)
+        if self.tenant is None:
+            return
+        for module in MODULE_CATALOG:
+            TenantModuleSubscription.objects.update_or_create(
+                tenant=self.tenant,
+                module_code=module['code'],
+                defaults={
+                    'module_name': module['name'],
+                    'enabled': module['code'] in selected_codes,
+                },
+            )
+
+
+class TenantUserCreateForm(forms.Form):
+    username = forms.CharField(label='Usuário', max_length=150)
+    first_name = forms.CharField(label='Nome', max_length=150, required=False)
+    last_name = forms.CharField(label='Sobrenome', max_length=150, required=False)
+    email = forms.EmailField(label='E-mail', required=False)
+    password1 = forms.CharField(label='Senha', widget=forms.PasswordInput)
+    password2 = forms.CharField(label='Confirmar senha', widget=forms.PasswordInput)
+    role = forms.ChoiceField(label='Papel inicial', choices=OnboardingForm._self_service_roles)
+    active = forms.BooleanField(label='Vínculo ativo', required=False, initial=True)
+
+    def __init__(self, *args, tenant: Tenant | None = None, **kwargs):
+        self.tenant = tenant
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            widget = field.widget
+            attrs = widget.attrs.setdefault('class', '')
+            classes = [c for c in attrs.split() if c]
+            for candidate in ('form-control', 'field-input'):
+                if candidate not in classes:
+                    classes.append(candidate)
+            widget.attrs['class'] = ' '.join(classes).strip()
+
+    def clean_username(self):
+        username = self.cleaned_data['username']
+        User = get_user_model()
+        if User.objects.filter(username=username).exists():
+            raise ValidationError('Já existe um usuário com este login.')
+        return username
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get('password1') != cleaned_data.get('password2'):
+            raise ValidationError('As senhas informadas não conferem.')
+        return cleaned_data
+
+    def save(self):
+        User = get_user_model()
+        user = User.objects.create_user(
+            username=self.cleaned_data['username'],
+            email=self.cleaned_data.get('email') or '',
+            password=self.cleaned_data['password1'],
+            first_name=self.cleaned_data.get('first_name') or '',
+            last_name=self.cleaned_data.get('last_name') or '',
+        )
+        TenantMembership.objects.create(
+            user=user,
+            tenant=self.tenant,
+            role=self.cleaned_data['role'],
+            active=self.cleaned_data.get('active', False),
+        )
+        return user
+
+
+class TenantMembershipForm(forms.ModelForm):
+    class Meta:
+        model = TenantMembership
+        fields = ['role', 'active']
+        labels = {
+            'role': 'Papel',
+            'active': 'Vínculo ativo',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['role'].choices = OnboardingForm._self_service_roles
+        for field in self.fields.values():
+            widget = field.widget
+            attrs = widget.attrs.setdefault('class', '')
+            classes = [c for c in attrs.split() if c]
+            for candidate in ('form-control', 'field-input'):
+                if candidate not in classes:
+                    classes.append(candidate)
+            widget.attrs['class'] = ' '.join(classes).strip()
 
 
 class BIExplorerForm(forms.Form):

@@ -38,6 +38,10 @@ from .forms import (
     NotificationForm,
     OnboardingForm,
     ProposalForm,
+    TenantBrandingForm,
+    TenantMembershipForm,
+    TenantModulesForm,
+    TenantUserCreateForm,
 )
 from .models import (
     AIAgent,
@@ -67,7 +71,7 @@ from .models import (
     TenantMembership,
     TenantModuleSubscription,
 )
-from .modules import MODULE_NAMES, tenant_has_module
+from .modules import MODULE_CATALOG, MODULE_NAMES, tenant_has_module
 from .services.ai import import_knowledge_source_from_url, opencode_auth_configured, provider_catalog_rows, run_ai_agent, sync_opencode_provider_credentials
 from .services.data_io import export_csv, import_payload
 from .services import approvals
@@ -444,6 +448,118 @@ def onboarding(request):
         'form': form,
     }
     return render(request, 'futebol/onboarding.html', context)
+
+
+@login_required
+def tenant_admin(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    tenant = _primary_tenant(request)
+    branding, _ = TenantBranding.objects.get_or_create(tenant=tenant)
+    branding_form = TenantBrandingForm(instance=branding)
+    modules_form = TenantModulesForm(tenant=tenant)
+
+    if request.method == 'POST' and request.POST.get('form_kind') == 'settings':
+        branding_form = TenantBrandingForm(request.POST, instance=branding)
+        modules_form = TenantModulesForm(request.POST, tenant=tenant)
+        if branding_form.is_valid() and modules_form.is_valid():
+            branding_form.save()
+            modules_form.save()
+            messages.success(request, 'Configurações do tenant atualizadas.')
+            return redirect('tenant-admin')
+        messages.error(request, 'Corrija os campos destacados para atualizar o tenant.')
+
+    subscriptions = list(tenant.tenantmodulesubscriptions.order_by('module_name'))
+    if not subscriptions:
+        subscriptions = [
+            TenantModuleSubscription(
+                tenant=tenant,
+                module_code=module['code'],
+                module_name=module['name'],
+                enabled=True,
+            )
+            for module in MODULE_CATALOG
+        ]
+
+    context = {
+        'title': 'Administração do tenant',
+        'subtitle': 'Usuários, papéis, módulos contratados e identidade visual.',
+        'tenant': tenant,
+        'memberships': tenant.memberships.select_related('user').order_by('user__username', 'role'),
+        'subscriptions': subscriptions,
+        'branding': branding,
+        'branding_form': branding_form,
+        'modules_form': modules_form,
+        'user_create_url': reverse('tenant-user-create'),
+    }
+    return render(request, 'futebol/tenant_admin.html', context)
+
+
+@login_required
+def tenant_user_create(request):
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ])
+    tenant = _primary_tenant(request)
+    form = TenantUserCreateForm(request.POST or None, tenant=tenant)
+    if request.method == 'POST':
+        if form.is_valid():
+            user = form.save()
+            log_audit_event(
+                tenant=tenant,
+                actor=request.user,
+                action='create',
+                obj=user,
+                before_state={},
+                after_state={'username': user.username},
+                correlation_id=getattr(request, 'request_id', ''),
+            )
+            messages.success(request, 'Usuário criado com sucesso.')
+            return redirect('tenant-admin')
+        messages.error(request, 'Corrija os campos destacados para criar o usuário.')
+    return render(request, 'futebol/form.html', {
+        'title': 'Novo usuário do tenant',
+        'subtitle': 'Crie um usuário e associe o primeiro papel neste tenant.',
+        'form': form,
+        'cancel_url': reverse('tenant-admin'),
+        'page_state': 'form',
+    })
+
+
+@login_required
+def tenant_membership_edit(request, pk):
+    membership = _visible_membership(request, pk)
+    _require_roles(request, [
+        'admin_tenant',
+        'admin_plataforma',
+    ], tenant=membership.tenant)
+    form = TenantMembershipForm(request.POST or None, instance=membership)
+    if request.method == 'POST':
+        if form.is_valid():
+            before_state = {'role': membership.role, 'active': membership.active}
+            form.save()
+            log_audit_event(
+                tenant=membership.tenant,
+                actor=request.user,
+                action='update',
+                obj=membership,
+                before_state=before_state,
+                after_state={'role': membership.role, 'active': membership.active},
+                correlation_id=getattr(request, 'request_id', ''),
+            )
+            messages.success(request, 'Vínculo atualizado com sucesso.')
+            return redirect('tenant-admin')
+        messages.error(request, 'Corrija os campos destacados para atualizar o vínculo.')
+    return render(request, 'futebol/form.html', {
+        'title': f'Editar vínculo de {membership.user.username}',
+        'subtitle': 'Atualize o papel e o status de acesso deste usuário no tenant.',
+        'form': form,
+        'cancel_url': reverse('tenant-admin'),
+        'page_state': 'form',
+    })
 
 
 @login_required
@@ -2022,6 +2138,14 @@ def _visible_notification(request, pk):
 
 def _visible_integration_record(request, pk):
     qs = IntegrationRecord.objects.select_related('tenant', 'external_system')
+    if request.user.is_superuser:
+        return get_object_or_404(qs, pk=pk)
+    tenant_ids = list(_accessible_tenants(request.user))
+    return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+
+
+def _visible_membership(request, pk):
+    qs = TenantMembership.objects.select_related('tenant', 'user')
     if request.user.is_superuser:
         return get_object_or_404(qs, pk=pk)
     tenant_ids = list(_accessible_tenants(request.user))

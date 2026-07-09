@@ -64,6 +64,9 @@ from futebol.views import (
     reject_request,
     report_center,
     root_dispatch,
+    tenant_admin,
+    tenant_membership_edit,
+    tenant_user_create,
     transfer_center,
 )
 
@@ -72,6 +75,9 @@ urlpatterns = [
     path('institucional/', landing, name='landing'),
     path('onboarding/', onboarding, name='onboarding'),
     path('painel/', home, name='home'),
+    path('tenant/admin/', tenant_admin, name='tenant-admin'),
+    path('tenant/usuarios/novo/', tenant_user_create, name='tenant-user-create'),
+    path('tenant/vinculos/<int:pk>/editar/', tenant_membership_edit, name='tenant-membership-edit'),
     path('clubes/', club_list, name='club-list'),
     path('clubes/novo/', club_create, name='club-create'),
     path('clubes/<int:pk>/editar/', club_edit, name='club-edit'),

@@ -538,6 +538,123 @@ class WhiteLabelModuleGatingTests(Sprint3BaseTestCase):
         self.assertContains(response, 'Clubes')
 
 
+class TenantAdminSprint2Tests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+
+    def test_tenant_admin_page_lists_members_branding_and_modules(self):
+        TenantBranding.objects.create(
+            tenant=self.tenant,
+            primary_color='#123456',
+            public_title='Portal Clube Exemplo',
+        )
+        TenantModuleSubscription.objects.create(
+            tenant=self.tenant,
+            module_code='operacao',
+            module_name='Operação',
+            enabled=True,
+        )
+
+        response = self.client.get(reverse('tenant-admin'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Administração do tenant')
+        self.assertContains(response, 'alex')
+        self.assertContains(response, 'Portal Clube Exemplo')
+        self.assertContains(response, 'Operação')
+        self.assertContains(response, 'Prévia do branding')
+
+    def test_admin_tenant_can_create_user_with_initial_role(self):
+        response = self.client.post(
+            reverse('tenant-user-create'),
+            {
+                'username': 'analista',
+                'first_name': 'Ana',
+                'last_name': 'Lista',
+                'email': 'ana@example.com',
+                'password1': 'senha12345',
+                'password2': 'senha12345',
+                'role': TenantMembership.Role.GESTOR_CLUBE,
+                'active': 'on',
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Usuário criado com sucesso.')
+        created = User.objects.get(username='analista')
+        self.assertTrue(
+            TenantMembership.objects.filter(
+                user=created,
+                tenant=self.tenant,
+                role=TenantMembership.Role.GESTOR_CLUBE,
+                active=True,
+            ).exists()
+        )
+
+    def test_admin_tenant_can_update_membership_role_and_status(self):
+        user = User.objects.create_user(username='operador', password='senha12345')
+        membership = TenantMembership.objects.create(
+            user=user,
+            tenant=self.tenant,
+            role=TenantMembership.Role.GESTOR_CLUBE,
+            active=True,
+        )
+
+        response = self.client.post(
+            reverse('tenant-membership-edit', args=[membership.pk]),
+            {
+                'role': TenantMembership.Role.AUDITOR,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Vínculo atualizado com sucesso.')
+        membership.refresh_from_db()
+        self.assertEqual(membership.role, TenantMembership.Role.AUDITOR)
+        self.assertFalse(membership.active)
+
+    def test_admin_tenant_can_update_branding_and_modules(self):
+        response = self.client.post(
+            reverse('tenant-admin'),
+            {
+                'form_kind': 'settings',
+                'primary_color': '#001f5b',
+                'secondary_color': '#002f7a',
+                'background_color': '#031225',
+                'accent_color': '#66b2ff',
+                'logo_url': 'https://example.com/logo.png',
+                'favicon_url': '',
+                'symbol_url': '',
+                'public_title': 'Portal Atualizado',
+                'public_subtitle': 'Gestão do clube',
+                'modules': ['ia'],
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Configurações do tenant atualizadas.')
+        branding = self.tenant.branding
+        self.assertEqual(branding.primary_color, '#001f5b')
+        self.assertEqual(branding.logo_url, 'https://example.com/logo.png')
+        self.assertTrue(TenantModuleSubscription.objects.get(tenant=self.tenant, module_code='operacao').enabled)
+        self.assertTrue(TenantModuleSubscription.objects.get(tenant=self.tenant, module_code='ia').enabled)
+        self.assertFalse(TenantModuleSubscription.objects.get(tenant=self.tenant, module_code='aprovacoes').enabled)
+
+    def test_non_admin_tenant_cannot_open_tenant_admin(self):
+        user = User.objects.create_user(username='auditor-s2', password='senha12345')
+        TenantMembership.objects.create(user=user, tenant=self.tenant, role=TenantMembership.Role.AUDITOR)
+        self.client.logout()
+        self.client.login(username='auditor-s2', password='senha12345')
+
+        response = self.client.get(reverse('tenant-admin'))
+
+        self.assertEqual(response.status_code, 403)
+
+
 class ImportExportTests(Sprint3BaseTestCase):
     def test_export_clubs_to_csv(self):
         csv_data = export_csv(self.tenant, 'club')

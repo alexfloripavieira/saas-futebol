@@ -127,6 +127,7 @@ ACCOUNT_GROUP = {
     'icon': '👤',
     'open': False,
     'items': (
+        {'label': 'Administração do tenant', 'url_name': 'tenant-admin', 'icon': '🏛️'},
         {'label': 'Logout', 'url_name': 'logout', 'icon': '🚪'},
         {'label': 'Admin', 'url_name': 'admin:index', 'icon': '🛠️'},
     ),

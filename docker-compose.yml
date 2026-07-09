@@ -39,6 +39,10 @@ services:
   ai-sync:
     build:
       context: .
+    # Watcher opcional de fontes de IA. Não sobe no `up` padrão; ative sob
+    # demanda com `docker compose --profile watchers up ai-sync`.
+    profiles:
+      - watchers
     command: python scripts/watch_ai_sources.py --project-root /app --vault-root /vault --interval 300 --seed-agent
     env_file:
       - .env

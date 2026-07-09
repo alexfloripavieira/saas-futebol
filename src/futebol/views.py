@@ -1684,6 +1684,11 @@ def integration_export(request):
 @login_required
 @_module_required('automacoes')
 def automation_center(request):
+    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
+    scope = {} if request.user.is_superuser else {'tenant_id__in': tenant_ids}
+    open_approvals = ApprovalRequest.objects.filter(**scope, status=ApprovalRequest.Status.OPEN).count()
+    integration_errors = IntegrationRecord.objects.filter(**scope, status='error').count()
+    card_events = MatchEvent.objects.filter(**scope, event_type__in=[MatchEvent.EventType.YELLOW_CARD, MatchEvent.EventType.RED_CARD]).count()
     context = {
         'title': 'Automações',
         'subtitle': 'Tarefas repetitivas, gatilhos, regras e exceções',
@@ -1698,6 +1703,102 @@ def automation_center(request):
             {'label': 'Importar dados', 'href': reverse('integration-import')},
             {'label': 'Exportar dados', 'href': reverse('integration-export')},
             {'label': 'Registros de integração', 'href': reverse('integration-record-list')},
+            {'label': 'Previsões inteligentes', 'href': reverse('prediction-center')},
+        ],
+        'sections': [
+            {
+                'title': 'Gatilhos de automação',
+                'description': 'Eventos que devem gerar alerta operacional ou fila de revisão.',
+                'points': [
+                    f'Previsão de suspensão: {card_events} cartão(ões) observados',
+                    f'Próximo adversário: revisar agenda de partidas futuras',
+                    f'Aprovações abertas: {open_approvals} solicitação(ões)',
+                    f'Falhas de integração: {integration_errors} registro(s) com erro',
+                ],
+            },
+            {
+                'title': 'Alertas operacionais',
+                'description': 'Sinais que ajudam o gestor a agir antes de virar incidente.',
+                'points': [
+                    'Abrir revisão quando uma partida disputada não tiver eventos',
+                    'Avisar comissão técnica sobre acúmulo de cartões',
+                    'Reenfileirar integrações com erro para reprocessamento manual',
+                ],
+            },
+        ],
+    }
+    return render(request, 'futebol/page.html', context)
+
+
+@login_required
+@_module_required('previsoes')
+def prediction_center(request):
+    tenant = _primary_tenant(request)
+    matches_qs = Match.objects.filter(tenant=tenant).select_related('home_club', 'away_club', 'phase', 'phase__edition', 'phase__edition__competition')
+    played_matches = list(matches_qs.filter(status=Match.Status.PLAYED).order_by('-scheduled_at')[:5])
+    next_match = matches_qs.filter(scheduled_at__gte=timezone.now(), status__in=[Match.Status.SCHEDULED, Match.Status.CONFIRMED]).order_by('scheduled_at').first()
+    event_qs = MatchEvent.objects.filter(tenant=tenant).select_related('player', 'match')
+    card_count = event_qs.filter(event_type__in=[MatchEvent.EventType.YELLOW_CARD, MatchEvent.EventType.RED_CARD]).count()
+    goals_for = sum(match.home_score or 0 for match in played_matches)
+    goals_against = sum(match.away_score or 0 for match in played_matches)
+    balance = goals_for - goals_against
+    sources = list(KnowledgeSource.objects.filter(tenant=tenant, active=True).order_by('title')[:5])
+
+    prediction_cards = [
+        ('Próximo adversário', f'{next_match.home_club.name} x {next_match.away_club.name}' if next_match else 'Sem partida futura agendada.'),
+        ('Tendência de performance', f'Saldo recente {balance:+d} em {len(played_matches)} partida(s) disputadas.'),
+        ('Risco de suspensão', f'{card_count} cartão(ões) no histórico recente monitorado.'),
+    ]
+    recent_match_points = [
+        f'{match.reference_code}: {match.home_club.name} {match.home_score or 0} x {match.away_score or 0} {match.away_club.name}'
+        for match in played_matches
+    ] or ['Ainda não há partidas disputadas para previsão.']
+    source_points = [f'{source.title}: {source.summary or source.get_kind_display()}' for source in sources] or ['Nenhuma fonte ativa vinculada às previsões.']
+
+    context = {
+        'title': 'Previsões inteligentes',
+        'subtitle': 'Leitura preditiva de próximo adversário, tendência de performance e riscos operacionais.',
+        'sprint_label': 'Previsões',
+        'summary': prediction_cards,
+        'actions': [
+            {'label': 'BI self-service', 'href': reverse('bi-center')},
+            {'label': 'Centro de IA', 'href': reverse('ai-center')},
+            {'label': 'Automações', 'href': reverse('automation-center')},
+        ],
+        'sections': [
+            {
+                'title': 'Visão da comissão técnica',
+                'description': 'Prioridades para treino, escalação e preparação de jogo.',
+                'points': [
+                    'Revisar próximo adversário antes da convocação',
+                    'Observar atletas com cartões ou queda de participação',
+                    'Usar fontes de scouting antes de decidir ajustes táticos',
+                ],
+            },
+            {
+                'title': 'Cartões de previsões',
+                'description': 'Sinais derivados dos dados operacionais já cadastrados.',
+                'points': [f'{title}: {description}' for title, description in prediction_cards],
+            },
+            {
+                'title': 'Fontes mapeadas para previsões',
+                'description': 'Bases documentais usadas pela análise assistiva e pela comissão técnica.',
+                'points': source_points,
+            },
+            {
+                'title': 'Gatilhos de automação',
+                'description': 'Eventos que podem gerar alertas ou tarefas recorrentes.',
+                'points': [
+                    'Partida disputada gera revisão de tendência de performance',
+                    'Cartão vermelho gera alerta de suspensão',
+                    'Nova fonte importada atualiza a base de scouting',
+                ],
+            },
+            {
+                'title': 'Partidas recentes',
+                'description': 'Base esportiva usada na tendência de performance.',
+                'points': recent_match_points,
+            },
         ],
     }
     return render(request, 'futebol/page.html', context)

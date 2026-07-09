@@ -642,7 +642,7 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 - [x] Criar o onboarding inicial do tenant.
 - [x] Adicionar menu dinâmico por módulos contratados.
 - [x] Aplicar branding por tenant no layout base.
-- [ ] Criar a primeira experiência do Avaí como tenant piloto.
+- [x] Criar a primeira experiência do Avaí como tenant piloto.
 
 ### Sprint 1.1 — Subtarefas detalhadas
   - [x] Criar o conceito de módulo contratado no banco.
@@ -710,17 +710,17 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 
 ### Sprint 5 — Dashboards inteligentes e previsões
 - [x] Criar dashboards inteligentes separados.
-- [ ] Criar módulo de previsões.
-- [ ] Planejar previsões de lesão, próximo adversário e tendência de performance.
-- [ ] Criar alertas e automações.
+- [x] Criar módulo de previsões.
+- [x] Planejar previsões de lesão, próximo adversário e tendência de performance.
+- [x] Criar alertas e automações.
 
 ### Sprint 5.1 — Subtarefas detalhadas
   - [x] Definir visão executiva do dashboard.
   - [x] Definir visão do analista.
-  - [ ] Definir visão da comissão técnica.
-  - [ ] Estruturar cartões de previsões.
-  - [ ] Mapear fontes para previsões.
-  - [ ] Definir gatilhos de automação.
+  - [x] Definir visão da comissão técnica.
+  - [x] Estruturar cartões de previsões.
+  - [x] Mapear fontes para previsões.
+  - [x] Definir gatilhos de automação.
   - [x] Criar notificações de valor.
 
 ### Sprint 6 — Qualidade, segurança e entrega
@@ -729,7 +729,7 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 - [x] Adicionar cobertura de testes para menu dinâmico.
 - [x] Adicionar cobertura de testes para IA e importação.
 - [x] Revisar segurança por tenant.
-- [ ] Validar performance em páginas principais.
+- [x] Validar performance em páginas principais.
 
 ### Sprint 6.1 — Subtarefas detalhadas
   - [x] Testar criação de tenant com branding.

@@ -19,6 +19,7 @@ MODULE_CATALOG = (
     {'code': 'transferencias', 'name': 'Transferências', 'icon': '↔️'},
     {'code': 'ia', 'name': 'IA', 'icon': '🧠'},
     {'code': 'relatorios', 'name': 'Relatórios', 'icon': '📊'},
+    {'code': 'previsoes', 'name': 'Previsões', 'icon': '🔮'},
     {'code': 'integracoes', 'name': 'Integrações', 'icon': '🔗'},
     {'code': 'auditoria', 'name': 'Auditoria', 'icon': '🕵️'},
     {'code': 'automacoes', 'name': 'Automações', 'icon': '⚙️'},
@@ -90,6 +91,15 @@ NAV_GROUPS = (
         'items': (
             {'label': 'Relatórios', 'url_name': 'report-center', 'icon': '📈'},
             {'label': 'BI', 'url_name': 'bi-center', 'icon': '📊'},
+        ),
+    },
+    {
+        'module': 'previsoes',
+        'label': 'Previsões',
+        'icon': '🔮',
+        'open': False,
+        'items': (
+            {'label': 'Previsões inteligentes', 'url_name': 'prediction-center', 'icon': '🔮'},
         ),
     },
     {

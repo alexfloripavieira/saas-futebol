@@ -33,8 +33,11 @@ from futebol.models import (
     Person,
     TeamCategory,
     Tenant,
+    TenantBranding,
     TenantMembership,
+    TenantModuleSubscription,
 )
+from futebol.modules import MODULE_CATALOG
 from futebol.services.ai import seed_demo_ai_stack
 from futebol.services.approvals import cast_decision, open_request
 
@@ -46,11 +49,12 @@ class Command(BaseCommand):
         parser.add_argument('--tenant-slug', default='demo-local')
         parser.add_argument('--tenant-name', default='Demo Local')
         parser.add_argument('--password', default='demo1234')
+        parser.add_argument('--avai-pilot', action='store_true', help='Cria a experiência piloto Avaí FC.')
 
     @transaction.atomic
     def handle(self, *args, **options):
-        slug = options['tenant_slug']
-        name = options['tenant_name']
+        slug = 'avai' if options['avai_pilot'] else options['tenant_slug']
+        name = 'Avaí FC' if options['avai_pilot'] else options['tenant_name']
         password = options['password']
 
         existing_tenant = Tenant.objects.filter(slug=slug).first()
@@ -58,6 +62,24 @@ class Command(BaseCommand):
             self._clear_existing_tenant_data(existing_tenant)
             existing_tenant.delete()
         tenant = Tenant.objects.create(name=name, slug=slug, active=True)
+        if options['avai_pilot']:
+            TenantBranding.objects.create(
+                tenant=tenant,
+                primary_color='#0057b8',
+                secondary_color='#003b7a',
+                background_color='#031225',
+                accent_color='#66b2ff',
+                public_title='Avaí FC Intelligence',
+                public_subtitle='Operação esportiva white-label do Leão da Ilha',
+            )
+            for module in MODULE_CATALOG:
+                TenantModuleSubscription.objects.create(
+                    tenant=tenant,
+                    module_code=module['code'],
+                    module_name=module['name'],
+                    enabled=True,
+                    plan_name='Piloto Avaí',
+                )
 
         User = get_user_model()
         users = {
@@ -300,6 +322,8 @@ class Command(BaseCommand):
             'AIAgent',
             'AIProvider',
             'KnowledgeSource',
+            'TenantModuleSubscription',
+            'TenantBranding',
             'Person',
             'Club',
             'TenantMembership',

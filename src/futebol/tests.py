@@ -8,7 +8,9 @@ from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -1020,6 +1022,93 @@ class Sprint12ScoutingTests(Sprint3BaseTestCase):
         self.assertContains(response, 'Atleta Scout A')
         self.assertContains(response, 'Atacante')
         self.assertContains(response, 'Meia')
+
+
+class RemainingPrdSprintTests(Sprint3BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.login(username='alex', password='senha12345')
+        self.athlete = Person.objects.create(tenant=self.tenant, full_name='Atleta Previsão', kind=Person.Kind.ATHLETE, active=True)
+        self.played_match = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_a,
+            away_club=self.club_b,
+            reference_code='PREV-001',
+            scheduled_at=timezone.now() - timedelta(days=2),
+            status=Match.Status.PLAYED,
+            home_score=2,
+            away_score=0,
+        )
+        self.next_match = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_b,
+            away_club=self.club_a,
+            reference_code='PREV-002',
+            scheduled_at=timezone.now() + timedelta(days=7),
+            status=Match.Status.SCHEDULED,
+        )
+        MatchLineup.objects.create(
+            tenant=self.tenant,
+            match=self.played_match,
+            player=self.athlete,
+            club=self.club_a,
+            position='Atacante',
+            is_starter=True,
+        )
+        MatchEvent.objects.create(
+            tenant=self.tenant,
+            match=self.played_match,
+            player=self.athlete,
+            event_type=MatchEvent.EventType.YELLOW_CARD,
+            minute=72,
+        )
+        KnowledgeSource.objects.create(
+            tenant=self.tenant,
+            identifier='previsoes/scouting.md',
+            title='Relatório de scouting',
+            kind=KnowledgeSource.Kind.REPORT,
+            content='Base para próximo adversário e tendência de performance.',
+            summary='Scouting',
+            active=True,
+        )
+
+    def test_prediction_center_renders_forecasts_commission_view_sources_and_triggers(self):
+        response = self.client.get(reverse('prediction-center'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Previsões inteligentes')
+        self.assertContains(response, 'Próximo adversário')
+        self.assertContains(response, 'Tendência de performance')
+        self.assertContains(response, 'Risco de suspensão')
+        self.assertContains(response, 'Visão da comissão técnica')
+        self.assertContains(response, 'Relatório de scouting')
+        self.assertContains(response, 'Gatilhos de automação')
+
+    def test_automation_center_exposes_prediction_alert_triggers(self):
+        response = self.client.get(reverse('automation-center'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Gatilhos de automação')
+        self.assertContains(response, 'Previsão de suspensão')
+        self.assertContains(response, 'Próximo adversário')
+
+    def test_main_pages_stay_under_query_budget(self):
+        for url_name in ['home', 'tenant-admin', 'report-center', 'bi-center', 'prediction-center']:
+            with self.subTest(url_name=url_name):
+                with CaptureQueriesContext(connection) as captured:
+                    response = self.client.get(reverse(url_name))
+                self.assertEqual(response.status_code, 200)
+                self.assertLessEqual(len(captured), 80)
+
+    def test_avai_pilot_seed_creates_branded_tenant_and_modules(self):
+        call_command('seed_futebol_demo', avai_pilot=True, password='demo1234')
+
+        tenant = Tenant.objects.get(slug='avai')
+        self.assertEqual(tenant.name, 'Avaí FC')
+        self.assertEqual(tenant.branding.public_title, 'Avaí FC Intelligence')
+        self.assertTrue(TenantModuleSubscription.objects.filter(tenant=tenant, module_code='previsoes', enabled=True).exists())
 
 
 class ApprovalEngineTests(TestCase):

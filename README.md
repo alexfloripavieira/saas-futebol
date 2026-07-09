@@ -33,6 +33,53 @@ saas-futebol/
 
 ## Tech Stack
 
-- Modelo: GLM 5.2 (OpenCode Go)
+- Modelo: DeepSeek V4 Flash (OpenCode Go)
 - Orquestrador: Python 3
 - Notificações: Evolution API (WhatsApp)
+
+## Fontes de IA / atualização automática
+
+O projeto mantém as fontes de conhecimento do agente como registros persistidos em `KnowledgeSource`, com URLs rastreáveis e vínculo ao agente principal.
+
+### Como sincronizar manualmente
+
+```bash
+make sync-ai-sources
+```
+
+### Como deixar automático
+
+```bash
+make watch-ai-sources
+```
+
+Esse watcher:
+- monta o Segundo Cérebro em `/vault` dentro do container;
+- monitora mudanças em:
+  - `Areas/CBF Academy`
+  - `📚 Relatórios`
+  - `🚀 Projetos`
+  - `docs/`
+  - `orchestrator/reports/`
+- reexecuta a importação quando encontra alterações.
+
+### O que o sync faz
+
+- cria fontes novas;
+- atualiza fontes existentes;
+- religa o agente às fontes;
+- mantém os dados alinhados com o Segundo Cérebro e as fontes de referência do sistema.
+
+### Dependência do vault local
+
+Por padrão, o serviço `ai-sync` monta:
+
+```bash
+/Users/alexvieira/segundo-cerebro:/vault:ro
+```
+
+Se o vault estiver em outro caminho, ajuste a variável:
+
+```bash
+SECOND_CEREBRO_ROOT=/caminho/para/segundo-cerebro
+```

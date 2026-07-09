@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ branding.public_title|default:'SaaS do Futebol' }} — Plataforma white-label para clubes</title>
+    <style>
+      :root {
+        --bg: {{ branding.background_color|default:'#06162d' }};
+        --panel: {{ branding.secondary_color|default:'#0c274a' }};
+        --accent: {{ branding.primary_color|default:'#1d6fe8' }};
+        --accent-2: {{ branding.accent_color|default:'#55a7ff' }};
+        --text: #f5fbff;
+        --muted: #a7c4e8;
+        --line: rgba(123,180,255,.16);
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: Inter, Arial, sans-serif;
+        margin: 0;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(29,111,232,.25), transparent 40%),
+          radial-gradient(circle at bottom right, rgba(85,167,255,.12), transparent 35%),
+          var(--bg);
+        min-height: 100vh;
+      }
+      a { color: inherit; }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+      header.top { display: flex; align-items: center; justify-content: space-between; padding: 8px 0 40px; }
+      .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.15rem; }
+      .brand img { max-height: 40px; width: auto; }
+      .btn {
+        display: inline-block; padding: 12px 22px; border-radius: 10px; text-decoration: none;
+        font-weight: 600; transition: filter .15s ease;
+      }
+      .btn:hover { filter: brightness(1.08); }
+      .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+      .btn-ghost { border: 1px solid var(--line); color: var(--text); }
+      .hero { display: grid; gap: 20px; padding: 40px 0 48px; }
+      .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.05; margin: 0; }
+      .hero p.lead { font-size: 1.15rem; color: var(--muted); max-width: 620px; margin: 0; }
+      .cta-row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-top: 40px; }
+      .card { background: rgba(11,31,63,.7); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+      .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+      .card p { margin: 0; color: var(--muted); font-size: .95rem; }
+      .modules { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+      .chip { border: 1px solid var(--line); border-radius: 999px; padding: 8px 16px; color: var(--muted); font-size: .9rem; }
+      .section-title { margin: 56px 0 4px; font-size: 1.4rem; }
+      footer { color: var(--muted); font-size: .85rem; margin-top: 56px; border-top: 1px solid var(--line); padding-top: 20px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="top">
+        <div class="brand">
+          {% if branding.logo_url %}<img src="{{ branding.logo_url }}" alt="{{ branding.public_title }}">{% endif %}
+          <span>{{ branding.public_title|default:'SaaS do Futebol' }}</span>
+        </div>
+        <a class="btn btn-ghost" href="{% url 'login' %}">Entrar</a>
+      </header>
+
+      <section class="hero">
+        <h1>A plataforma inteligente e white-label para clubes de futebol</h1>
+        <p class="lead">
+          Operação esportiva, governança, dados e IA em um único ecossistema — com a
+          identidade visual do seu clube e apenas os módulos que você contratar.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="{% url 'login' %}">Acessar minha conta</a>
+          <a class="btn btn-ghost" href="mailto:comercial@saasdofutebol.com">Falar com o comercial</a>
+        </div>
+      </section>
+
+      <div class="grid">
+        <div class="card">
+          <h3>White-label por clube</h3>
+          <p>Cada tenant com logo, cores e identidade próprios, aplicados em toda a interface.</p>
+        </div>
+        <div class="card">
+          <h3>Módulos contratados</h3>
+          <p>Menu dinâmico que exibe somente as áreas efetivamente contratadas pelo clube.</p>
+        </div>
+        <div class="card">
+          <h3>IA e fontes de conhecimento</h3>
+          <p>Providers, agentes e importação de fontes por URL como núcleo do produto inteligente.</p>
+        </div>
+        <div class="card">
+          <h3>Isolamento total</h3>
+          <p>Dados de cada clube isolados por tenant em toda consulta, do ORM à interface.</p>
+        </div>
+      </div>
+
+      <h2 class="section-title">Módulos disponíveis</h2>
+      <div class="modules">
+        {% for module in modules %}<span class="chip">{{ module }}</span>{% endfor %}
+      </div>
+
+      <footer>
+        © {{ branding.public_title|default:'SaaS do Futebol' }} — Plataforma multi-tenant para operação de clubes.
+        Já é cliente? <a href="{% url 'login' %}">Faça login</a>.
+      </footer>
+    </div>
+  </body>
+</html>

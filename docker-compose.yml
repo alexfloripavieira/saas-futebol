@@ -1,0 +1,66 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-saas_futebol}
+      POSTGRES_USER: ${DB_USER:-saas_futebol}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-saas_futebol}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-saas_futebol} -d ${DB_NAME:-saas_futebol}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+    entrypoint: ["/bin/sh", "/app/entrypoint.sh"]
+    command: python src/manage.py runserver 0.0.0.0:8000
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,192.168.1.25,testserver
+    volumes:
+      - .:/app
+      - ${HOME}/.config/opencode:/root/.config/opencode
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  ai-sync:
+    build:
+      context: .
+    # Watcher opcional de fontes de IA. Não sobe no `up` padrão; ative sob
+    # demanda com `docker compose --profile watchers up ai-sync`.
+    profiles:
+      - watchers
+    command: python scripts/watch_ai_sources.py --project-root /app --vault-root /vault --interval 300 --seed-agent
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      AI_SYNC_PROJECT_ROOT: /app
+      AI_SYNC_VAULT_ROOT: /vault
+      AI_SYNC_INTERVAL_SECONDS: 300
+      AI_SYNC_SEED_AGENT: "1"
+    volumes:
+      - .:/app
+      - ${SECOND_CEREBRO_ROOT:-/Users/alexvieira/segundo-cerebro}:/vault:ro
+      - ${HOME}/.config/opencode:/root/.config/opencode
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

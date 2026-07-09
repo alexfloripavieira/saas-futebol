@@ -1,0 +1,140 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title|default:'BI self-service' }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">{{ sprint_label|default:'BI self-service' }}</span>
+    <h1>{{ title|default:'BI self-service' }}</h1>
+    <p class="muted">{{ subtitle|default:'Filtros operacionais e exportação JSON para leitura analítica' }}</p>
+    <div class="hero-links">
+      <a href="/relatorios/">Relatórios</a>
+      <a href="{{ json_url }}">JSON atual</a>
+      <a href="/integracoes/">Integrações</a>
+    </div>
+  </div>
+
+  <section class="card stack" style="margin-bottom:16px;">
+    <div class="section-title">
+      <h2>Filtros</h2>
+      <span class="ferrari-signal">{{ selected_tenant }}</span>
+    </div>
+    <form method="get" class="stack" style="gap:12px;">
+      <div class="grid-3">
+        {% for field in form.visible_fields %}
+          <div class="stack">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}
+              <small class="text-danger">{{ field.errors|join:', ' }}</small>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="hero-links">
+        <button type="submit" class="button button-primary">Aplicar filtros</button>
+        <a class="button button-secondary" href="{{ json_url }}">Exportar JSON</a>
+      </div>
+    </form>
+  </section>
+
+  <section class="card stack" style="margin-bottom:16px;">
+    <div class="section-title">
+      <h2>Visão geral analítica</h2>
+      <span class="ferrari-signal">{{ summary_cards|length }} indicadores</span>
+    </div>
+    <div class="summary-cards">
+      {% for card in summary_cards %}
+        <div class="summary-card">
+          <span class="muted">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% for breakdown in breakdowns %}
+    <section class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <h2>{{ breakdown.title }}</h2>
+        <span class="pill">{{ breakdown.total }} total</span>
+      </div>
+      <div class="summary-cards">
+        {% for row in breakdown.rows %}
+          <div class="summary-card">
+            <span class="muted">{{ row.label }}</span>
+            <strong>{{ row.count }}</strong>
+          </div>
+        {% empty %}
+          <div class="state state-empty">Nenhum dado encontrado para este filtro.</div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+
+  <div class="split" style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Últimas partidas</h2>
+        <span class="pill">{{ recent_matches|length }} itens</span>
+      </div>
+      {% if recent_matches %}
+        <table>
+          <thead>
+            <tr>
+              <th>Partida</th>
+              <th>Competição</th>
+              <th>Jogo</th>
+              <th>Status</th>
+              <th>Placar</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for match in recent_matches %}
+              <tr>
+                <td>{{ match.reference_code }}</td>
+                <td>{{ match.competition }}</td>
+                <td>{{ match.pair }}</td>
+                <td>{{ match.status }}</td>
+                <td>{{ match.score }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="state state-empty">Nenhuma partida encontrada.</div>
+      {% endif %}
+    </section>
+
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Últimos eventos</h2>
+        <span class="pill">{{ recent_events|length }} itens</span>
+      </div>
+      {% if recent_events %}
+        <table>
+          <thead>
+            <tr>
+              <th>Partida</th>
+              <th>Tipo</th>
+              <th>Minuto</th>
+              <th>Atleta</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for event in recent_events %}
+              <tr>
+                <td>{{ event.match }}</td>
+                <td>{{ event.type }}</td>
+                <td>{{ event.minute }}</td>
+                <td>{{ event.player }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="state state-empty">Nenhum evento encontrado.</div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}

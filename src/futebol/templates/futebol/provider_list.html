@@ -1,0 +1,126 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">Avaí FC control room</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+    <div class="hero-links">
+      {% if create_url %}
+        <a href="{{ create_url }}">{{ create_label|default:'Novo provider' }}</a>
+      {% endif %}
+      <a href="#catalogo">Ver catálogo</a>
+      <a href="#lista">Ir para lista</a>
+    </div>
+  </div>
+
+  <section class="summary-cards" style="margin-bottom:16px;">
+    <div class="summary-card">
+      <span class="muted">Providers cadastrados</span>
+      <strong>{{ page_obj.paginator.count }}</strong>
+    </div>
+    <div class="summary-card">
+      <span class="muted">Catálogo ativo</span>
+      <strong>{{ provider_catalog|length }}</strong>
+    </div>
+    <div class="summary-card">
+      <span class="muted">Foco</span>
+      <strong>OpenCode Go</strong>
+    </div>
+    <div class="summary-card">
+      <span class="muted">Estilo</span>
+      <strong>Race-grade</strong>
+    </div>
+  </section>
+
+  {% if provider_catalog %}
+    <section id="catalogo" class="card stack" style="margin-bottom:16px;">
+      <div class="section-title">
+        <div>
+          <span class="ferrari-signal">Catálogo por garage</span>
+          <h2 style="margin:10px 0 0;">Modelos sugeridos por provider</h2>
+        </div>
+        <span class="pill">Modelos disponíveis</span>
+      </div>
+      <p class="muted">Catálogo de LLMs por provider — {{ provider_catalog_hint }}</p>
+      <div class="grid-3">
+        {% for provider in provider_catalog %}
+          <div class="metric">
+            <h3>{{ provider.label }}</h3>
+            {% if provider.models %}
+              <ul class="muted" style="padding-left:18px; margin: 10px 0 0;">
+                {% for model in provider.models %}
+                  <li><strong>{{ model.value }}</strong><br><span class="muted">{{ model.label }}</span></li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <p class="muted">Sem catálogo interno; use um modelo customizado.</p>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section id="lista" class="card">
+    <div class="toolbar">
+      <form method="get">
+        <input type="search" name="q" value="{{ query }}" placeholder="Buscar provider, modelo ou observação">
+        <select name="ordering">
+          {% for option in ordering_options %}
+            <option value="{{ option.key }}" {% if ordering == option.key %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Aplicar</button>
+      </form>
+      {% if create_url %}
+        <a class="button" href="{{ create_url }}">{{ create_label|default:'Novo provider' }}</a>
+      {% endif %}
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% for column in columns %}
+              <th>{{ column }}</th>
+            {% endfor %}
+            {% if show_actions %}
+              <th>Ações</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for cell in row.cells %}
+                <td>{{ cell }}</td>
+              {% endfor %}
+              {% if show_actions %}
+                <td>{{ row.actions|safe }}</td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="{% if show_actions %}{{ columns|length|add:1 }}{% else %}{{ columns|length }}{% endif %}" class="empty">
+                <div class="state state-empty">{{ empty_message }}</div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      {% if page_obj.has_previous %}
+        <a href="?q={{ query }}&ordering={{ ordering }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+      {% endif %}
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?q={{ query }}&ordering={{ ordering }}&page={{ page_obj.next_page_number }}">Próxima</a>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

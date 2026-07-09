@@ -1,0 +1,137 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">{{ sprint_name|default:'Painel principal' }}</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+    <div class="hero-links">
+      <a href="/clubes/novo/">Novo clube</a>
+      <a href="/competicoes/nova/">Nova competição</a>
+      <a href="/partidas/nova/">Nova partida</a>
+      <a href="/solicitacoes-aprovacao/nova/">Nova solicitação</a>
+      <a href="/notificacoes/nova/">Nova notificação</a>
+      <a href="/relatorios/">Relatórios</a>
+      <a href="/transferencias/">Transferências</a>
+    </div>
+  </div>
+
+  <section class="card stack">
+    <div class="section-title">
+      <h2>Painel operacional</h2>
+      <span class="ferrari-signal">{{ primary_role }}</span>
+    </div>
+    <div class="summary-cards">
+      <div class="summary-card"><span class="muted">Clubes</span><strong>{{ club_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Competições</span><strong>{{ competition_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Partidas</span><strong>{{ match_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Solicitações</span><strong>{{ approval_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Contratos</span><strong>{{ contract_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Negociações</span><strong>{{ negotiation_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Propostas</span><strong>{{ proposal_count }}</strong></div>
+      <div class="summary-card"><span class="muted">Evidências</span><strong>{{ evidence_count }}</strong></div>
+    </div>
+  </section>
+
+  <div class="split" style="display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; margin-top:16px;">
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Unidade ativa</h2>
+        <span class="pill">{{ tenant_count }} vínculo(s)</span>
+      </div>
+      {% if memberships %}
+        <table>
+          <thead>
+            <tr>
+              <th>Unidade</th>
+              <th>Perfil</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for membership in memberships %}
+              <tr>
+                <td>{{ membership.tenant.name }}</td>
+                <td>{{ membership.get_role_display }}</td>
+                <td>{% if membership.active %}Ativo{% else %}Inativo{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <div class="state state-empty">
+          Nenhum tenant ativo vinculado ao usuário.
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card stack">
+      <div class="section-title">
+        <h2>Estados do sistema</h2>
+        <span class="pill">UI pronta</span>
+      </div>
+      <div class="stack">
+        <div class="state state-loading"><strong>Carregando</strong><div class="muted">Preparando dados da operação.</div></div>
+        <div class="state state-empty"><strong>Sem dados</strong><div class="muted">Nenhum registro para esta visão.</div></div>
+        <div class="state state-error"><strong>Erro</strong><div class="muted">Falha ao validar ou salvar.</div></div>
+        <div class="state state-success"><strong>Concluído</strong><div class="muted">Operação concluída com sucesso.</div></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card stack" style="margin-top:16px;">
+    <div class="section-title">
+      <h2>Fluxo rápido</h2>
+      <span class="ferrari-signal">Ações por item</span>
+    </div>
+    <div class="grid-3">
+      <div class="metric">
+        <h3>Clubes</h3>
+        <p class="muted">Cadastro, edição e listagem.</p>
+        <a class="button button-secondary" href="/clubes/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>Partidas</h3>
+        <p class="muted">Programação, placar e edição.</p>
+        <a class="button button-secondary" href="/partidas/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>Aprovações</h3>
+        <p class="muted">Solicitações pendentes e decisão.</p>
+        <a class="button button-secondary" href="/solicitacoes-aprovacao/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>Integrações</h3>
+        <p class="muted">Sistemas externos e cargas de dados.</p>
+        <a class="button button-secondary" href="/integracoes/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>Automações</h3>
+        <p class="muted">Gatilhos, regras e exceções.</p>
+        <a class="button button-secondary" href="/automacoes/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>Relatórios</h3>
+        <p class="muted">Indicadores consolidados e auditoria.</p>
+        <a class="button button-secondary" href="/relatorios/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>BI self-service</h3>
+        <p class="muted">Filtros analíticos e exportação JSON.</p>
+        <a class="button button-secondary" href="/relatorios/bi/">Abrir</a>
+      </div>
+      <div class="metric">
+        <h3>API pública</h3>
+        <p class="muted">Leitura externa autenticada por chave.</p>
+        <a class="button button-secondary" href="/api/publica/">Documentação</a>
+      </div>
+      <div class="metric">
+        <h3>Análise tática</h3>
+        <p class="muted">Scouting, escalações e eventos recentes.</p>
+        <a class="button button-secondary" href="/ia/scouting/">Abrir</a>
+      </div>
+    </div>
+  </section>
+{% endblock %}

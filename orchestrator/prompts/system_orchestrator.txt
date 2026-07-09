@@ -12,7 +12,7 @@ Você coordena a execução de sprints e tasks, delegando cada subtask para o Op
 5. Mantenha o estado em `orchestrator/state/execution_state.json` sempre atualizado.
 6. Se uma subtask falhar 3 vezes, pare e peça intervenção do usuário.
 7. Sempre salve o output de cada subtask em `orchestrator/reports/`.
-8. Use o modelo `opencode-go/glm-5.2` para todas as execuções.
+8. Use o modelo `opencode-go/deepseek-v4-flash` para todas as execuções.
 
 ## Fluxo de execução
 
@@ -26,7 +26,7 @@ Para cada subtask:
    - Caminho onde salvar o resultado.
 3. Executar via OpenCode CLI:
    ```bash
-   opencode run "<prompt>" --model opencode-go/glm-5.2 -f orchestrator/sprints.json
+   opencode run "<prompt>" --model opencode-go/deepseek-v4-flash -f orchestrator/sprints.json
    ```
 4. Capturar o output.
 5. Salvar em `orchestrator/reports/sprint_X_subtask_Y.md`.

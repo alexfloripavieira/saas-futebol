@@ -1,0 +1,76 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">Listagem operacional</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+  </div>
+
+  <section class="card">
+    <div class="toolbar">
+      <form method="get">
+        <input type="search" name="q" value="{{ query }}" placeholder="Buscar">
+        <select name="ordering">
+          {% for option in ordering_options %}
+            <option value="{{ option.key }}" {% if ordering == option.key %}selected{% endif %}>{{ option.label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Aplicar</button>
+      </form>
+      <div class="toolbar-actions">
+        {% for action in extra_actions %}
+          <a class="button button-secondary" href="{{ action.href }}">{{ action.label }}</a>
+        {% endfor %}
+        {% if create_url %}
+          <a class="button" href="{{ create_url }}">{{ create_label|default:'Novo registro' }}</a>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            {% for column in columns %}
+              <th>{{ column }}</th>
+            {% endfor %}
+            {% if show_actions %}
+              <th>Ações</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              {% for cell in row.cells %}
+                <td>{{ cell }}</td>
+              {% endfor %}
+              {% if show_actions %}
+                <td>{{ row.actions|safe }}</td>
+              {% endif %}
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="{% if show_actions %}{{ columns|length|add:1 }}{% else %}{{ columns|length }}{% endif %}" class="empty">
+                <div class="state state-empty">{{ empty_message }}</div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      {% if page_obj.has_previous %}
+        <a href="?q={{ query }}&ordering={{ ordering }}&page={{ page_obj.previous_page_number }}">Anterior</a>
+      {% endif %}
+      <span>Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?q={{ query }}&ordering={{ ordering }}&page={{ page_obj.next_page_number }}">Próxima</a>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}

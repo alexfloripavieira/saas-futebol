@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Entrar · {{ branding.public_title|default:'SaaS do Futebol' }}</title>
+    {% if branding.favicon_url %}<link rel="icon" href="{{ branding.favicon_url }}">{% endif %}
+    <style>
+      :root {
+        --bg: {{ branding.background_color|default:'#06162d' }};
+        --panel: {{ branding.secondary_color|default:'#0c274a' }};
+        --accent: {{ branding.primary_color|default:'#1d6fe8' }};
+        --accent-2: {{ branding.accent_color|default:'#55a7ff' }};
+        --text: #f5fbff;
+        --muted: #a7c4e8;
+        --line: rgba(123,180,255,.16);
+        --danger: #dc2626;
+      }
+      * { box-sizing: border-box; }
+      body {
+        font-family: Inter, Arial, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        display: flex;
+        flex-direction: column;
+        background:
+          radial-gradient(circle at top left, rgba(29,111,232,.25), transparent 40%),
+          radial-gradient(circle at bottom right, rgba(85,167,255,.12), transparent 35%),
+          var(--bg);
+      }
+      a { color: inherit; }
+      header.top { display: flex; align-items: center; justify-content: space-between; max-width: 1080px; width: 100%; margin: 0 auto; padding: 24px; }
+      .brand { display: flex; align-items: center; gap: 12px; font-weight: 700; }
+      .brand img { max-height: 36px; width: auto; }
+      main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+      .card {
+        background: rgba(11,31,63,.72);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 32px;
+        width: 100%;
+        max-width: 420px;
+      }
+      .card .pill { display: inline-block; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+      .card h1 { margin: 14px 0 4px; font-size: 1.6rem; }
+      .card p.muted { margin: 0 0 20px; color: var(--muted); }
+      .field { margin-bottom: 16px; }
+      .field label { display: block; font-size: .9rem; margin-bottom: 6px; color: var(--muted); }
+      .field input {
+        width: 100%; padding: 11px 12px; border-radius: 10px;
+        border: 1px solid var(--line); background: rgba(6,22,45,.6); color: var(--text);
+      }
+      .field input:focus { outline: none; border-color: var(--accent-2); box-shadow: 0 0 0 3px rgba(85,167,255,.25); }
+      button {
+        width: 100%; padding: 12px 16px; border: 0; border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff;
+        font-weight: 600; cursor: pointer;
+      }
+      button:hover { filter: brightness(1.08); }
+      .alert { border: 1px solid var(--danger); border-radius: 10px; padding: 12px; margin-bottom: 18px; }
+      .alert strong { display: block; }
+      .alert p { margin: 4px 0 0; color: var(--muted); }
+      .back { margin-top: 18px; font-size: .9rem; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="{% url 'landing' %}">
+        {% if branding.logo_url %}<img src="{{ branding.logo_url }}" alt="{{ branding.public_title }}">{% endif %}
+        <span>{{ branding.public_title|default:'SaaS do Futebol' }}</span>
+      </a>
+      <a href="{% url 'landing' %}">← Voltar ao site</a>
+    </header>
+
+    <main>
+      <section class="card">
+        <span class="pill">Autenticação</span>
+        <h1>Entrar</h1>
+        <p class="muted">Acesse a plataforma com seu usuário de operação.</p>
+
+        {% if form.errors %}
+          <div class="alert">
+            <strong>Não foi possível entrar.</strong>
+            <p>Verifique usuário e senha.</p>
+          </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="field">
+            <label for="id_username">Usuário</label>
+            {{ form.username }}
+          </div>
+          <div class="field">
+            <label for="id_password">Senha</label>
+            {{ form.password }}
+          </div>
+          <button type="submit">Entrar</button>
+          <input type="hidden" name="next" value="{{ next }}">
+        </form>
+
+        <div class="back">Ainda não é cliente? <a href="{% url 'landing' %}">Conheça a plataforma</a>.</div>
+      </section>
+    </main>
+  </body>
+</html>

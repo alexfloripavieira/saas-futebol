@@ -1,0 +1,76 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="pill">{{ mode|capfirst }}</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+    <div class="hero-links">
+      <a href="{% url 'integration-hub' %}">Voltar ao centro</a>
+      <a href="{% url 'external-system-list' %}">Sistemas externos</a>
+      <a href="{% url 'integration-record-list' %}">Registros</a>
+    </div>
+  </div>
+
+  <section class="card stack">
+    <form method="post" class="stack">
+      {% csrf_token %}
+      <div class="form-grid">
+        {% for field in form %}
+          <div class="field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}
+              <div class="field-errors">{{ error }}</div>
+            {% endfor %}
+          </div>
+        {% endfor %}
+      </div>
+      <div class="form-actions">
+        <button type="submit">{% if mode == 'export' %}Exportar CSV{% else %}Importar{% endif %}</button>
+        <a class="button button-secondary" href="{{ cancel_url }}">Cancelar</a>
+      </div>
+    </form>
+  </section>
+
+  {% if result %}
+    <section class="card stack" style="margin-top:16px;">
+      <div class="section-title">
+        <h2>Importação concluída</h2>
+        <span class="pill">Resultado</span>
+      </div>
+      <div class="summary-cards">
+        <div class="summary-card"><span class="muted">Criados</span><strong>{{ result.created }}</strong></div>
+        <div class="summary-card"><span class="muted">Atualizados</span><strong>{{ result.updated }}</strong></div>
+        <div class="summary-card"><span class="muted">Ignorados</span><strong>{{ result.skipped }}</strong></div>
+        <div class="summary-card"><span class="muted">Falhas</span><strong>{{ result.failed }}</strong></div>
+      </div>
+      {% if result.errors %}
+        <div class="stack">
+          <h3>Erros</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>Linha</th>
+                <th>Campo</th>
+                <th>Mensagem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for error in result.errors %}
+                <tr>
+                  <td>{{ error.line|default:'-' }}</td>
+                  <td>{{ error.field|default:'-' }}</td>
+                  <td>{{ error.message|default:error }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endblock %}

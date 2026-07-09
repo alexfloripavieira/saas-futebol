@@ -1,0 +1,114 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">Formulário operacional</span>
+    <h1>{{ title }}</h1>
+    <p class="muted">{{ subtitle }}</p>
+  </div>
+
+  <section class="card stack" style="max-width: 980px;">
+    {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <form method="post" class="stack">
+      {% csrf_token %}
+      <div class="form-grid">
+        {% for field in form.visible_fields %}
+          <div class="field {% if field.errors %}state-error{% endif %}">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<div class="help-text">{{ field.help_text }}</div>{% endif %}
+            {% if field.errors %}<div class="field-errors">{{ field.errors }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+
+      {% if form.model_suggestions %}
+        <datalist id="provider-model-suggestions">
+          {% for value, label in form.model_suggestions %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </datalist>
+      {% endif %}
+
+      {% if form.model_catalog %}
+        {{ form.model_catalog|json_script:"provider-model-catalog" }}
+        <div class="stack" style="margin-top: 4px;">
+          <div class="section-title">
+            <h2 style="margin:0;">Modelos sugeridos por provider</h2>
+            <span class="ferrari-signal">Clique para preencher o campo</span>
+          </div>
+          <p class="muted" style="margin-top:-4px;">Escolha o provider acima para carregar os modelos recomendados. Se nenhum catálogo existir, mantenha um modelo customizado.</p>
+          <div id="provider-model-picker" class="grid-3"></div>
+        </div>
+      {% endif %}
+
+      <div class="form-actions">
+        <button type="submit">Salvar</button>
+        <a class="button button-secondary" href="{{ cancel_url }}">Cancelar</a>
+      </div>
+    </form>
+
+    <div class="grid-3">
+      <div class="state state-loading"><strong>Carregando</strong><div class="muted">Campos prontos para preenchimento.</div></div>
+      <div class="state state-empty"><strong>Sem alterações</strong><div class="muted">Ainda não há mudanças para salvar.</div></div>
+      <div class="state state-success"><strong>Concluído</strong><div class="muted">Use as mensagens do topo para confirmação.</div></div>
+    </div>
+  </section>
+
+  {% if form.model_catalog %}
+    <script>
+      (() => {
+        const kindField = document.getElementById('id_kind');
+        const modelField = document.getElementById('id_model_name');
+        const picker = document.getElementById('provider-model-picker');
+        const dataEl = document.getElementById('provider-model-catalog');
+        if (!kindField || !modelField || !picker || !dataEl) return;
+
+        const catalog = JSON.parse(dataEl.textContent || '[]');
+        const emptyState = `
+          <div class="state state-empty">
+            <strong>Sem catálogo interno</strong>
+            <div class="muted">Digite um modelo customizado ou mantenha o valor atual.</div>
+          </div>`;
+
+        const render = () => {
+          const selected = kindField.value;
+          const provider = catalog.find((entry) => entry.kind === selected);
+          picker.innerHTML = '';
+
+          if (!provider || !provider.models || !provider.models.length) {
+            picker.innerHTML = emptyState;
+            return;
+          }
+
+          provider.models.forEach((model) => {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.className = 'metric';
+            card.style.textAlign = 'left';
+            card.innerHTML = `
+              <h3 style="margin-bottom:8px;">${provider.label}</h3>
+              <strong style="display:block; margin-bottom:6px;">${model.value}</strong>
+              <div class="muted">${model.label}</div>
+            `;
+            card.addEventListener('click', () => {
+              modelField.value = model.value;
+              modelField.focus();
+            });
+            picker.appendChild(card);
+          });
+        };
+
+        kindField.addEventListener('change', render);
+        render();
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

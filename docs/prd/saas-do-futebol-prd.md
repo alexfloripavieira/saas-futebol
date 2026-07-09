@@ -637,76 +637,76 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 ## 18. Lista de tarefas
 
 ### Sprint 1 — Base de produto white-label
-- [ ] Definir o modelo canônico de tenant, branding e módulos contratados.
-- [ ] Criar a tela institucional pública.
-- [ ] Criar o onboarding inicial do tenant.
-- [ ] Adicionar menu dinâmico por módulos contratados.
-- [ ] Aplicar branding por tenant no layout base.
+- [x] Definir o modelo canônico de tenant, branding e módulos contratados.
+- [x] Criar a tela institucional pública.
+- [x] Criar o onboarding inicial do tenant.
+- [x] Adicionar menu dinâmico por módulos contratados.
+- [x] Aplicar branding por tenant no layout base.
 - [ ] Criar a primeira experiência do Avaí como tenant piloto.
 
 ### Sprint 1.1 — Subtarefas detalhadas
-  - [ ] Criar o conceito de módulo contratado no banco.
-  - [ ] Definir a estrutura de branding do tenant.
-  - [ ] Implementar carregamento do branding no template base.
-  - [ ] Criar componente de menu lateral com submenus.
-  - [ ] Habilitar ícones e estados visuais por item de menu.
-  - [ ] Criar página institucional com marketing e login.
-  - [ ] Implementar redirecionamento para onboarding quando não houver tenant.
-  - [ ] Criar formulário de onboarding inicial.
-  - [ ] Permitir seleção do primeiro papel do usuário.
-  - [ ] Permitir escolha dos módulos comprados.
+  - [x] Criar o conceito de módulo contratado no banco.
+  - [x] Definir a estrutura de branding do tenant.
+  - [x] Implementar carregamento do branding no template base.
+  - [x] Criar componente de menu lateral com submenus.
+  - [x] Habilitar ícones e estados visuais por item de menu.
+  - [x] Criar página institucional com marketing e login.
+  - [x] Implementar redirecionamento para onboarding quando não houver tenant.
+  - [x] Criar formulário de onboarding inicial.
+  - [x] Permitir seleção do primeiro papel do usuário.
+  - [x] Permitir escolha dos módulos comprados.
 
 ### Sprint 2 — Gestão de acesso e operação
 - [ ] Criar gestão de usuários por tenant.
 - [ ] Criar gestão de papéis por tenant.
 - [ ] Criar visão do admin do tenant.
-- [ ] Garantir que só menus contratados apareçam.
+- [x] Garantir que só menus contratados apareçam.
 - [ ] Criar telas de configuração do tenant.
 - [ ] Criar tela para ativar/desativar módulos.
 
 ### Sprint 2.1 — Subtarefas detalhadas
   - [ ] Criar CRUD de usuários do tenant.
   - [ ] Criar atribuição de papéis por usuário.
-  - [ ] Criar validação de acesso por tenant.
+  - [x] Criar validação de acesso por tenant.
   - [ ] Criar view para listar módulos ativos.
   - [ ] Criar view para alterar módulos contratados.
   - [ ] Criar tela de identidade visual do tenant.
   - [ ] Criar preview visual do branding.
-  - [ ] Criar componente de aviso de módulo indisponível.
+  - [x] Criar componente de aviso de módulo indisponível.
 
 ### Sprint 3 — Núcleo de IA inteligente
-- [ ] Criar gestão de providers por tenant.
-- [ ] Criar catálogo de modelos por provider.
-- [ ] Criar agentes de IA por tenant.
-- [ ] Criar vínculo entre agente e fontes.
-- [ ] Criar importação de fontes por URL.
-- [ ] Criar listagem de fontes de conhecimento.
+- [x] Criar gestão de providers por tenant.
+- [x] Criar catálogo de modelos por provider.
+- [x] Criar agentes de IA por tenant.
+- [x] Criar vínculo entre agente e fontes.
+- [x] Criar importação de fontes por URL.
+- [x] Criar listagem de fontes de conhecimento.
 
 ### Sprint 3.1 — Subtarefas detalhadas
-  - [ ] Criar formulário de provider com chave e modelo.
-  - [ ] Criar tela para listar providers.
-  - [ ] Criar tela para editar provider.
-  - [ ] Criar catálogo de modelos por provider.
-  - [ ] Criar formulário de agente com provider vinculado.
-  - [ ] Criar fluxo de importação de URL pública.
-  - [ ] Extrair título, resumo e conteúdo principal da URL.
-  - [ ] Salvar fonte importada como conhecimento do tenant.
-  - [ ] Criar associação de fontes ao agente.
-  - [ ] Criar execução de perguntas ao agente.
+  - [x] Criar formulário de provider com chave e modelo.
+  - [x] Criar tela para listar providers.
+  - [x] Criar tela para editar provider.
+  - [x] Criar catálogo de modelos por provider.
+  - [x] Criar formulário de agente com provider vinculado.
+  - [x] Criar fluxo de importação de URL pública.
+  - [x] Extrair título, resumo e conteúdo principal da URL.
+  - [x] Salvar fonte importada como conhecimento do tenant.
+  - [x] Criar associação de fontes ao agente.
+  - [x] Criar execução de perguntas ao agente.
 
 ### Sprint 4 — Operação esportiva
-- [ ] Consolidar clubes, competições, partidas e eventos.
-- [ ] Exibir relatórios e indicadores.
-- [ ] Melhorar navegação operacional.
-- [ ] Garantir isolamento total por tenant.
+- [x] Consolidar clubes, competições, partidas e eventos.
+- [x] Exibir relatórios e indicadores.
+- [x] Melhorar navegação operacional.
+- [x] Garantir isolamento total por tenant.
 
 ### Sprint 4.1 — Subtarefas detalhadas
-  - [ ] Revisar telas de listagem por tenant.
-  - [ ] Revisar filtros e buscas.
-  - [ ] Criar cards de indicadores.
-  - [ ] Criar visão de partidas recentes.
-  - [ ] Criar caminho de análise operacional.
-  - [ ] Melhorar empty states e feedbacks.
+  - [x] Revisar telas de listagem por tenant.
+  - [x] Revisar filtros e buscas.
+  - [x] Criar cards de indicadores.
+  - [x] Criar visão de partidas recentes.
+  - [x] Criar caminho de análise operacional.
+  - [x] Melhorar empty states e feedbacks.
 
 ### Sprint 5 — Dashboards inteligentes e previsões
 - [ ] Criar dashboards inteligentes separados.
@@ -724,22 +724,22 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
   - [ ] Criar notificações de valor.
 
 ### Sprint 6 — Qualidade, segurança e entrega
-- [ ] Adicionar cobertura de testes para onboarding.
-- [ ] Adicionar cobertura de testes para branding.
-- [ ] Adicionar cobertura de testes para menu dinâmico.
-- [ ] Adicionar cobertura de testes para IA e importação.
-- [ ] Revisar segurança por tenant.
+- [x] Adicionar cobertura de testes para onboarding.
+- [x] Adicionar cobertura de testes para branding.
+- [x] Adicionar cobertura de testes para menu dinâmico.
+- [x] Adicionar cobertura de testes para IA e importação.
+- [x] Revisar segurança por tenant.
 - [ ] Validar performance em páginas principais.
 
 ### Sprint 6.1 — Subtarefas detalhadas
-  - [ ] Testar criação de tenant com branding.
-  - [ ] Testar ocultação de menus não contratados.
-  - [ ] Testar tela institucional sem acesso.
-  - [ ] Testar onboarding inicial.
-  - [ ] Testar importação de URL pública.
-  - [ ] Testar isolamento entre tenants.
-  - [ ] Testar permissões por papel.
-  - [ ] Testar respostas da IA por tenant.
+  - [x] Testar criação de tenant com branding.
+  - [x] Testar ocultação de menus não contratados.
+  - [x] Testar tela institucional sem acesso.
+  - [x] Testar onboarding inicial.
+  - [x] Testar importação de URL pública.
+  - [x] Testar isolamento entre tenants.
+  - [x] Testar permissões por papel.
+  - [x] Testar respostas da IA por tenant.
 
 ---
 

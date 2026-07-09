@@ -12,6 +12,9 @@ venv/
 env/
 .venv
 
+# Django — arquivos coletados por collectstatic (gerados no boot do container)
+src/staticfiles/
+
 # OS
 .DS_Store
 Thumbs.db

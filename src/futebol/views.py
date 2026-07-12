@@ -83,6 +83,7 @@ from .services import approvals
 from .services.audit import log_audit_event, snapshot_instance
 from .services.permissions import require_any_role, user_has_any_role
 from .services.tenancy import accessible_tenants, active_tenant, select_active_tenant
+from .services.sports_data_providers import provision_provider_catalog
 
 User = get_user_model()
 
@@ -352,6 +353,7 @@ def onboarding(request):
             data = form.cleaned_data
             with transaction.atomic():
                 tenant = Tenant.objects.create(name=data['tenant_name'], slug=data['tenant_slug'])
+                provision_provider_catalog(tenant=tenant)
                 TenantBranding.objects.create(
                     tenant=tenant,
                     primary_color=data['primary_color'],

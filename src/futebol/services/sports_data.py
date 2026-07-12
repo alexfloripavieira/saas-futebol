@@ -18,7 +18,15 @@ SAFE_DATASET_ID = re.compile(r'^[a-z0-9][a-z0-9-]{0,119}$')
 MAX_MANIFEST_BYTES = 64 * 1024
 MAX_DATA_FILE_BYTES = 2 * 1024 * 1024
 MAX_RECORDS = 10_000
-ALLOWED_CAPABILITIES = {'fixtures_results', 'standings_form'}
+ALLOWED_CAPABILITIES = {
+    'fixtures_results',
+    'standings_form',
+    'lineups_events',
+    'event_stream',
+    'xg',
+    'tracking_frames',
+    'physical_metrics',
+}
 
 
 def _read_json(path: Path, *, max_bytes: int):

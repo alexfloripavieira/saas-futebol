@@ -829,6 +829,19 @@ class SportsDataSource(TenantScopedModel):
         LOCAL_DATASET = 'local_dataset', 'Dataset local'
         FOOTBALL_DATA_ORG = 'football_data_org', 'football-data.org'
         CLUB_INTERNAL = 'club_internal', 'Dados internos do clube'
+        STATSBOMB_OPEN = 'statsbomb_open', 'StatsBomb Open Data'
+        SKILLCORNER_OPEN = 'skillcorner_open', 'SkillCorner Open Data'
+        LICENSED_PROVIDER = 'licensed_provider', 'Provider licenciado'
+
+    class OperationalStatus(models.TextChoices):
+        DRAFT = 'draft', 'Rascunho'
+        TESTING = 'testing', 'Em teste'
+        ACTIVE = 'active', 'Ativa'
+        DEGRADED = 'degraded', 'Degradada'
+        DISABLED = 'disabled', 'Desabilitada'
+        REVOKED = 'revoked', 'Revogada'
+        RESEARCH_ONLY = 'research_only', 'Somente P&D'
+        CONTRACT_REQUIRED = 'contract_required', 'Contrato necessário'
 
     code = models.SlugField(max_length=80)
     name = models.CharField(max_length=160)
@@ -839,6 +852,13 @@ class SportsDataSource(TenantScopedModel):
     attribution = models.CharField(max_length=240)
     quality = models.CharField(max_length=40)
     active = models.BooleanField(default=True)
+    operational_status = models.CharField(
+        max_length=24, choices=OperationalStatus.choices, default=OperationalStatus.DRAFT
+    )
+    adapter_version = models.CharField(max_length=32, blank=True, default='')
+    schema_version = models.CharField(max_length=32, blank=True, default='')
+    last_sync_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True, default='')
 
     class Meta:
         ordering = ['name']
@@ -892,6 +912,7 @@ class SportsDataRecord(TenantScopedModel):
     provider_record_id = models.CharField(max_length=160)
     observed_at = models.DateTimeField(null=True, blank=True)
     payload = models.JSONField(default=dict)
+    raw_payload = models.JSONField(default=dict, blank=True)
     source_url = models.URLField(blank=True, default='')
     content_hash = models.CharField(max_length=64)
     expires_at = models.DateTimeField(null=True, blank=True)

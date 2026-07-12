@@ -177,3 +177,25 @@ A ordem segura permanece: dados internos autorizados; football-data.org para
 agenda/tabela/resultados; StatsBomb Open Data em laboratório; depois negociação
 de feeds comerciais. A análise detalhada e as fontes oficiais estão no relatório
 “Validação das fontes públicas mostradas na imagem”.
+
+### Implementação do catálogo e primeiro conector — 12 de julho de 2026
+
+- Catálogo provisionável por tenant: dados internos, football-data.org,
+  StatsBomb Open Data, SkillCorner Open Data, Hudl Wyscout, Opta e FMDB Pro.
+- Estados operacionais explícitos impedem apresentar P&D ou contrato pendente
+  como fonte ativa. Fontes comerciais permanecem bloqueadas até contratação.
+- football-data.org possui adaptador v1 para partidas e classificação do código
+  de competição configurado, com credencial exclusiva em variável de ambiente.
+- Cada sincronização bem-sucedida preserva payload bruto e normalizado, hash,
+  validade, licença, atribuição, lote, auditoria e Registro de Integração.
+- Falhas geram estado degradado e Registro de Integração sanitizado, sem chave.
+- O Treinador aceita apenas qualidades produtivas; amostras `research_sample`
+  não sustentam recomendações comerciais, mesmo que sejam importadas no lab.
+- O painel “Fontes esportivas” mostra cobertura, frescor, licença, estado e
+  histórico por tenant. A sincronização exige o módulo Integrações e papel de
+  administrador/gestor.
+- Comandos: `provision_sports_providers` e `sync_sports_provider`.
+
+Pendências deliberadas: paginação/rate-limit avançado, mapeamento canônico de
+entidades e adaptadores comerciais só avançam com credenciais, fixtures e
+contratos reais fornecidos pelo responsável do produto.

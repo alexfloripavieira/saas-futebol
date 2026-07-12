@@ -74,6 +74,9 @@ def _external_evidence(match, club):
         SportsDataRecord.objects.filter(
             tenant=match.tenant,
             source__active=True,
+            # Amostras abertas servem para desenvolver algoritmos, nunca para
+            # sustentar silenciosamente uma recomendação comercial ao clube.
+            source__quality__in=('production_primary', 'production_basic', 'licensed_production', 'synthetic'),
             batch__status='completed',
         )
         .select_related('source', 'batch')

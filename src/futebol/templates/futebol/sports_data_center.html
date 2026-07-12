@@ -1,0 +1,41 @@
+{% extends 'futebol/base.html' %}
+
+{% block content %}
+<section class="hero">
+  <span class="eyebrow">Treinador Inteligente · Dados</span>
+  <h1>Fontes Esportivas</h1>
+  <p>Veja quais dados estão ativos, quando foram atualizados e de onde veio cada evidência usada nas análises.</p>
+  <div class="hero-links"><a href="{% url 'intelligent-coach-center' %}">Abrir Treinador Inteligente</a></div>
+</section>
+
+<div class="summary-cards">
+  <div class="summary-card"><span>Fontes ativas</span><strong>{{ active_count }}</strong></div>
+  <div class="summary-card"><span>Registros</span><strong>{{ record_count }}</strong></div>
+  <div class="summary-card"><span>Registros vencidos</span><strong>{{ expired_count }}</strong></div>
+</div>
+
+{% if rows %}
+<div class="grid-3" style="margin-top:20px">
+  {% for row in rows %}
+  <article class="card">
+    <span class="pill">{{ row.source.get_operational_status_display }} · {{ row.source.get_kind_display }}</span>
+    <h2>{{ row.source.name }}</h2>
+    <p class="muted">{{ row.source.capabilities|join:', '|default:'Sem capacidades declaradas' }}</p>
+    <div class="stack">
+      <div><strong>{{ row.valid_record_count }}</strong> registros válidos · <strong>{{ row.expired_record_count }}</strong> vencidos</div>
+      {% if row.latest_batch %}
+      <div class="state"><strong>Última importação</strong><br>Dataset {{ row.latest_batch.dataset_id }} v{{ row.latest_batch.dataset_version }}<br><span class="muted">{{ row.latest_batch.imported_at|date:'d/m/Y H:i'|default:'Em processamento' }} · {{ row.latest_batch.get_status_display }}</span></div>
+      {% else %}<div class="state state-empty">Nenhuma importação registrada.</div>{% endif %}
+      <div class="muted">Qualidade: {{ row.source.quality }} · licença {{ row.source.license_id }}</div>
+      <a class="button button-secondary" href="{% url 'sports-data-source-detail' row.source.pk %}">Ver histórico e licença</a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card state-empty">
+  <h2>Nenhuma fonte esportiva configurada</h2>
+  <p>Quando uma fonte for importada, sua cobertura e proveniência aparecerão aqui.</p>
+</div>
+{% endif %}
+{% endblock %}

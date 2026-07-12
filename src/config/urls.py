@@ -3,6 +3,11 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from futebol.operational_views import evidence_download, health
+from futebol.sports_data_views import (
+    sports_data_source_detail,
+    sports_data_source_list,
+    sports_data_source_sync,
+)
 from futebol.intelligent_coach_views import (
     intelligent_coach_apply_draft,
     intelligent_coach_center,
@@ -112,6 +117,17 @@ urlpatterns = [
     path('partidas/nova/', match_create, name='match-create'),
     path('partidas/<int:pk>/editar/', match_edit, name='match-edit'),
     path('ia/treinador/', intelligent_coach_center, name='intelligent-coach-center'),
+    path('ia/fontes-esportivas/', sports_data_source_list, name='sports-data-source-list'),
+    path(
+        'ia/fontes-esportivas/<int:pk>/',
+        sports_data_source_detail,
+        name='sports-data-source-detail',
+    ),
+    path(
+        'ia/fontes-esportivas/<int:pk>/sincronizar/',
+        sports_data_source_sync,
+        name='sports-data-source-sync',
+    ),
     path(
         'ia/treinador/partidas/<int:pk>/gerar/',
         intelligent_coach_generate,

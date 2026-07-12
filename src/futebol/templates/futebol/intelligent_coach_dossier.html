@@ -47,7 +47,7 @@
     <h3>{{ opinion.summary }}</h3>
     <div class="confidence-bar" title="Confiança {{ opinion.confidence }}%"><span style="width:{{ opinion.confidence }}%"></span></div>
     <ul>{% for item in opinion.recommendations %}<li>{{ item }}</li>{% endfor %}</ul>
-    {% if opinion.evidence %}<p class="evidence">Evidências: {% for item in opinion.evidence %}{{ item.record_id|default:item.description }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    {% if opinion.evidence %}<p class="evidence">Evidências: {% for item in opinion.evidence %}{% if item.record_id %}{{ item.record_id }}{% elif item.description %}{{ item.description }}{% else %}{{ item }}{% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
     {% if opinion.limitations %}<p class="evidence">Limitações: {{ opinion.limitations|join:', ' }}</p>{% endif %}
   </article>
   {% endfor %}

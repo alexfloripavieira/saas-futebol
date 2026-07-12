@@ -438,6 +438,25 @@ class IntelligentCoachHTTPTests(IntelligentCoachServiceTests):
             'Rascunho de escalação',
         )
 
+    def test_dossie_renderiza_evidencia_canonica_sem_descricao(self):
+        dossier = generate_match_dossier(
+            match=self.match, club=self.our_club, requested_by=self.user,
+        )
+        opinion = dossier.opinions.first()
+        opinion.evidence = [{
+            'record_id': 'demo-match-002',
+            'capability': 'fixtures_results',
+            'source_name': 'Fonte canônica',
+        }]
+        opinion.save(update_fields=['evidence', 'updated_at'])
+
+        response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'demo-match-002')
+
     def test_dossie_de_outro_tenant_nao_e_visivel(self):
         dossier = generate_match_dossier(
             match=self.match,

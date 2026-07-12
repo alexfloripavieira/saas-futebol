@@ -861,6 +861,14 @@ class SportsDataSource(TenantScopedModel):
     schema_version = models.CharField(max_length=32, blank=True, default='')
     last_sync_at = models.DateTimeField(null=True, blank=True)
     last_error = models.CharField(max_length=240, blank=True, default='')
+    external_ai_processing_allowed = models.BooleanField(default=False)
+    external_ai_provider_scope = models.CharField(max_length=32, blank=True, default='')
+    external_ai_authorization_note = models.CharField(max_length=500, blank=True, default='')
+    external_ai_authorized_at = models.DateTimeField(null=True, blank=True)
+    external_ai_authorized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='authorized_sports_ai_sources',
+    )
 
     class Meta:
         ordering = ['name']
@@ -1031,6 +1039,57 @@ class TacticalInsightReview(TenantScopedModel):
             models.UniqueConstraint(
                 fields=['tenant', 'artifact', 'evidence_id'],
                 name='uniq_tactical_review_per_evidence',
+            ),
+        ]
+
+
+class TacticalAgentOpinion(TenantScopedModel):
+    class ExecutionMode(models.TextChoices):
+        PROVIDER = 'provider', 'Provider de IA'
+        FALLBACK = 'fallback', 'Fallback determinístico'
+
+    artifact = models.ForeignKey(
+        SportsDataArtifact, on_delete=models.CASCADE, related_name='agent_opinions',
+    )
+    agent = models.ForeignKey(
+        'AIAgent', on_delete=models.PROTECT, related_name='tactical_opinions',
+    )
+    specialty = models.CharField(max_length=32)
+    summary = models.TextField()
+    recommendations = models.JSONField(default=list, blank=True)
+    limitations = models.JSONField(default=list, blank=True)
+    confidence = models.PositiveSmallIntegerField(default=0)
+    evidence_ids = models.JSONField(default=list, blank=True)
+    execution_mode = models.CharField(max_length=16, choices=ExecutionMode.choices)
+    provider_name = models.CharField(max_length=160)
+    model_name = models.CharField(max_length=120)
+    prompt_version = models.CharField(max_length=32, default='tactical-agent-v1')
+    prompt_hash = models.CharField(max_length=64)
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='generated_tactical_opinions',
+    )
+    generated_at = models.DateTimeField(default=timezone.now)
+    requires_human_review = models.BooleanField(default=True)
+    eligible_for_operational_use = models.BooleanField(default=False)
+    review_decision = models.CharField(
+        max_length=24, choices=TacticalInsightReview.Decision.choices,
+        blank=True, default='',
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='reviewed_tactical_agent_opinions',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    tenant_bound_fields = ('artifact', 'agent')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'artifact', 'agent', 'prompt_hash'],
+                condition=Q(execution_mode='provider'),
+                name='uniq_provider_tactical_opinion',
             ),
         ]
 

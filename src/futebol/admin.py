@@ -41,6 +41,7 @@ from .models import (
     SportsDataSource,
     TeamCategory,
     TacticalInsightReview,
+    TacticalAgentOpinion,
     Tenant,
     TenantBranding,
     TenantMembership,
@@ -217,8 +218,16 @@ class LineupDraftAdmin(admin.ModelAdmin):
 
 @admin.register(SportsDataSource)
 class SportsDataSourceAdmin(admin.ModelAdmin):
-    list_display = ('name', 'kind', 'quality', 'license_id', 'tenant', 'active')
+    list_display = (
+        'name', 'kind', 'quality', 'license_id', 'tenant', 'active',
+        'external_ai_processing_allowed',
+    )
     list_filter = ('kind', 'quality', 'active')
+    readonly_fields = (
+        'external_ai_processing_allowed', 'external_ai_provider_scope',
+        'external_ai_authorization_note', 'external_ai_authorized_at',
+        'external_ai_authorized_by',
+    )
 
 
 @admin.register(SportsDataImportBatch)
@@ -245,6 +254,15 @@ class SportsDataArtifactAdmin(admin.ModelAdmin):
 class TacticalInsightReviewAdmin(admin.ModelAdmin):
     list_display = ('evidence_id', 'decision', 'artifact', 'reviewed_by', 'reviewed_at')
     list_filter = ('decision',)
+
+
+@admin.register(TacticalAgentOpinion)
+class TacticalAgentOpinionAdmin(admin.ModelAdmin):
+    list_display = (
+        'agent', 'specialty', 'execution_mode', 'provider_name', 'model_name',
+        'confidence', 'generated_at',
+    )
+    list_filter = ('execution_mode', 'specialty', 'requires_human_review')
 
 
 @admin.register(Contract)

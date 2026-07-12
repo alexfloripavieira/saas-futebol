@@ -3,16 +3,20 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from futebol.models import (
     SportsDataArtifact, SportsDataImportBatch, SportsDataRecord, TacticalInsightReview,
+    TenantMembership,
 )
 from futebol.modules import tenant_has_module
 from futebol.services.spatial_analytics import build_event_analysis
 from futebol.services.tactical_engine import (
     build_agent_training_insights, detect_tactical_moments,
 )
+from futebol.services.tactical_ai import generate_tactical_agent_opinions
 from futebol.services.tracking_analytics import build_tracking_context
 from futebol.services.tenancy import active_tenant
 
@@ -148,6 +152,46 @@ def tracking_analysis_lab(request, batch_pk):
     agent_insights = build_agent_training_insights(engine)
     evidence_ids = {moment['evidence_id'] for moment in engine.get('moments', [])}
     if request.method == 'POST':
+        if request.POST.get('action') == 'review_ai':
+            opinion = get_object_or_404(
+                artifact.agent_opinions, tenant=tenant,
+                pk=request.POST.get('opinion_id'),
+            )
+            decision = request.POST.get('decision', '')
+            if decision not in TacticalInsightReview.Decision.values:
+                messages.error(request, 'Decisão humana inválida.')
+            else:
+                opinion.review_decision = decision
+                opinion.reviewed_by = request.user
+                opinion.reviewed_at = timezone.now()
+                opinion.save(update_fields=[
+                    'review_decision', 'reviewed_by', 'reviewed_at', 'updated_at',
+                ])
+                messages.success(request, 'Parecer da IA revisado por decisão humana.')
+            return redirect(request.get_full_path())
+        if request.POST.get('action') == 'generate_ai':
+            try:
+                specialty = request.POST.get('specialty', '')
+                allowed_specialties = {item['agent'] for item in agent_insights}
+                if specialty not in allowed_specialties:
+                    raise ValidationError('Selecione uma persona válida para executar.')
+                opinions = generate_tactical_agent_opinions(
+                    artifact=artifact, actor=request.user, specialties=[specialty],
+                )
+                messages.success(
+                    request,
+                    f'{len(opinions)} parecer(es) processado(s) pelo provider configurado.',
+                )
+            except ValidationError as exc:
+                messages.error(request, '; '.join(exc.messages))
+            except Exception:
+                messages.error(request, 'Falha interna ao executar os agentes de IA.')
+            query = urlencode({
+                key: value for key, value in {
+                    'team': selected_team, 'period': selected_period,
+                }.items() if value
+            })
+            return redirect(request.path + (f'?{query}' if query else ''))
         evidence_id = request.POST.get('evidence_id', '')
         decision = request.POST.get('decision', '')
         if evidence_id not in evidence_ids or decision not in TacticalInsightReview.Decision.values:
@@ -196,6 +240,23 @@ def tracking_analysis_lab(request, batch_pk):
             'research_only': batch.quality == 'research_sample',
         },
     }
+    provider_opinions = artifact.agent_opinions.select_related(
+        'agent', 'agent__provider',
+    ).filter(tenant=tenant).order_by('-generated_at')
+    latest_provider_opinions = []
+    seen_agents = set()
+    for opinion in provider_opinions:
+        if opinion.agent_id not in seen_agents:
+            latest_provider_opinions.append(opinion)
+            seen_agents.add(opinion.agent_id)
+    can_execute_provider = request.user.is_superuser or TenantMembership.objects.filter(
+        tenant=tenant, user=request.user, active=True,
+        role__in=[
+            TenantMembership.Role.ADMIN_TENANT,
+            TenantMembership.Role.GESTOR_CLUBE,
+            TenantMembership.Role.ADMIN_PLATAFORMA,
+        ],
+    ).exists()
     return render(request, 'futebol/tracking_analysis_lab.html', {
         'title': 'Tracking posicional', 'batch': batch, 'artifact': artifact,
         'analysis': analysis, 'preview': preview, 'teams': teams,
@@ -203,4 +264,7 @@ def tracking_analysis_lab(request, batch_pk):
         'periods': periods, 'playback': playback, 'engine': engine,
         'player_context': context.get('players', {}),
         'agent_insights': agent_insights,
+        'provider_opinions': latest_provider_opinions,
+        'external_ai_processing_allowed': batch.source.external_ai_processing_allowed,
+        'can_execute_provider': can_execute_provider,
     })

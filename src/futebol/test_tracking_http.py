@@ -3,8 +3,9 @@ from django.test import TestCase
 from django.urls import reverse
 
 from futebol.models import (
-    SportsDataArtifact, SportsDataImportBatch, SportsDataSource, Tenant,
-    TacticalInsightReview, TenantMembership, TenantModuleSubscription,
+    AIAgent, AIProvider, SportsDataArtifact, SportsDataImportBatch, SportsDataSource,
+    TacticalAgentOpinion, TacticalInsightReview, Tenant, TenantMembership,
+    TenantModuleSubscription,
 )
 
 
@@ -77,6 +78,33 @@ class TrackingAnalysisLabHTTPTests(TestCase):
         review = TacticalInsightReview.objects.get(artifact=self.artifact)
         self.assertEqual(review.decision, 'approved_training')
         self.assertEqual(review.reviewed_by, self.user)
+
+    def test_registra_revisao_humana_do_parecer_do_provider(self):
+        provider = AIProvider.objects.create(
+            tenant=self.tenant, name='Provider teste', kind=AIProvider.Kind.OPENCODE,
+            model_name='modelo', active=True,
+        )
+        agent = AIAgent.objects.create(
+            tenant=self.tenant, provider=provider, name='Agente teste', slug='agente-teste',
+            system_prompt='Teste', temperature='0.20', active=True,
+        )
+        opinion = TacticalAgentOpinion.objects.create(
+            tenant=self.tenant, artifact=self.artifact, agent=agent, specialty='tactical',
+            summary='Parecer', recommendations=['Recomendação'], limitations=[],
+            confidence=50, evidence_ids=['d' * 64], execution_mode='provider',
+            provider_name=provider.name, model_name=provider.model_name,
+            prompt_hash='f' * 64, generated_by=self.user,
+        )
+
+        response = self.client.post(
+            reverse('tracking-analysis-lab', args=[self.batch.pk]),
+            {'action': 'review_ai', 'opinion_id': opinion.pk, 'decision': 'rejected'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        opinion.refresh_from_db()
+        self.assertEqual(opinion.review_decision, 'rejected')
+        self.assertEqual(opinion.reviewed_by, self.user)
 
     def test_nao_expoe_tracking_de_outro_tenant(self):
         other = Tenant.objects.create(name='Outro Tracking', slug='outro-tracking')

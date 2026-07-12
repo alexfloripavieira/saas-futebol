@@ -8,7 +8,11 @@ from futebol.sports_data_views import (
     sports_data_source_list,
     sports_data_source_sync,
 )
-from futebol.tactical_analysis_views import tactical_analysis_lab, tracking_analysis_lab
+from futebol.tactical_analysis_views import (
+    tactical_analysis_lab, tactical_commission_cancel, tactical_commission_retry,
+    tactical_commission_review, tactical_commission_start, tactical_commission_status,
+    tracking_analysis_lab,
+)
 from futebol.intelligent_coach_views import (
     intelligent_coach_apply_draft,
     intelligent_coach_center,
@@ -126,6 +130,26 @@ urlpatterns = [
     path(
         'ia/treinador/tracking/<int:batch_pk>/', tracking_analysis_lab,
         name='tracking-analysis-lab',
+    ),
+    path(
+        'ia/treinador/tracking/<int:batch_pk>/comissao/iniciar/',
+        tactical_commission_start, name='tactical-commission-start',
+    ),
+    path(
+        'ia/treinador/comissao/<int:pk>/status/',
+        tactical_commission_status, name='tactical-commission-status',
+    ),
+    path(
+        'ia/treinador/comissao/<int:pk>/cancelar/',
+        tactical_commission_cancel, name='tactical-commission-cancel',
+    ),
+    path(
+        'ia/treinador/comissao/tarefas/<int:task_pk>/repetir/',
+        tactical_commission_retry, name='tactical-commission-retry',
+    ),
+    path(
+        'ia/treinador/comissao/<int:pk>/revisar/',
+        tactical_commission_review, name='tactical-commission-review',
     ),
     path('ia/fontes-esportivas/', sports_data_source_list, name='sports-data-source-list'),
     path(

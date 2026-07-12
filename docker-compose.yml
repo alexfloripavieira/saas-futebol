@@ -38,6 +38,25 @@ services:
       db:
         condition: service_healthy
 
+  tactical-worker:
+    build:
+      context: .
+    command: python src/manage.py run_tactical_commission_worker
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DJANGO_MEDIA_ROOT: /app/var/media
+    volumes:
+      - .:/app
+      - media_data:/app/var/media
+      - ${HOME}/.config/opencode:/root/.config/opencode
+      - ${HOME}/.local/share/opencode:/root/.local/share/opencode
+    depends_on:
+      db:
+        condition: service_healthy
+
   ai-sync:
     build:
       context: .

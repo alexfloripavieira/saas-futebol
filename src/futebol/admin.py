@@ -42,6 +42,8 @@ from .models import (
     TeamCategory,
     TacticalInsightReview,
     TacticalAgentOpinion,
+    TacticalCommissionRun,
+    TacticalCommissionTask,
     Tenant,
     TenantBranding,
     TenantMembership,
@@ -190,6 +192,42 @@ class MatchDossierAdmin(admin.ModelAdmin):
 class SpecialistOpinionAdmin(admin.ModelAdmin):
     list_display = ('dossier', 'specialty', 'confidence')
     list_filter = ('specialty',)
+
+
+class TacticalCommissionTaskInline(admin.TabularInline):
+    model = TacticalCommissionTask
+    extra = 0
+    readonly_fields = (
+        'specialty', 'status', 'attempt', 'max_attempts', 'available_at',
+        'lease_owner', 'lease_expires_at', 'started_at', 'finished_at',
+        'opinion', 'execution_mode', 'error_code',
+    )
+
+
+@admin.register(TacticalCommissionRun)
+class TacticalCommissionRunAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'artifact', 'status', 'requested_by', 'provider_calls_used',
+        'max_provider_calls', 'review_decision', 'created_at',
+    )
+    list_filter = ('status', 'review_decision', 'notification_sent')
+    search_fields = ('idempotency_key', 'correlation_id', 'requested_by__username')
+    readonly_fields = (
+        'provider_calls_used', 'started_at', 'finished_at', 'cancelled_at',
+        'cancelled_by', 'notification_sent', 'correlation_id',
+        'review_decision', 'review_note', 'reviewed_by', 'reviewed_at',
+    )
+    inlines = [TacticalCommissionTaskInline]
+
+
+@admin.register(TacticalCommissionTask)
+class TacticalCommissionTaskAdmin(admin.ModelAdmin):
+    list_display = (
+        'run', 'specialty', 'status', 'attempt', 'lease_owner', 'available_at',
+        'execution_mode',
+    )
+    list_filter = ('status', 'specialty', 'execution_mode')
+    search_fields = ('run__idempotency_key', 'lease_owner', 'error_code')
 
 
 class GamePlanPlayerInline(admin.TabularInline):

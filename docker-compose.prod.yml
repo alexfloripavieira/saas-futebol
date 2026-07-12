@@ -47,6 +47,24 @@ services:
       retries: 3
       start_period: 30s
 
+  tactical-worker:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-.env.production}
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings_production
+      DJANGO_MEDIA_ROOT: /app/var/media
+      DB_HOST: db
+      DB_PORT: 5432
+    command: python src/manage.py run_tactical_commission_worker
+    volumes:
+      - media_data:/app/var/media
+    depends_on:
+      db:
+        condition: service_healthy
+
   backup:
     image: postgres:16-alpine
     profiles: ["ops"]

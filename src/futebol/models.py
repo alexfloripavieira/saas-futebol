@@ -1094,6 +1094,123 @@ class TacticalAgentOpinion(TenantScopedModel):
         ]
 
 
+class TacticalCommissionRun(TenantScopedModel):
+    class Status(models.TextChoices):
+        QUEUED = 'queued', 'Na fila'
+        RUNNING = 'running', 'Em execução'
+        PARTIAL = 'partial', 'Concluída parcialmente'
+        COMPLETED = 'completed', 'Concluída'
+        FAILED = 'failed', 'Falhou'
+        CANCELLED = 'cancelled', 'Cancelada'
+
+    artifact = models.ForeignKey(
+        SportsDataArtifact, on_delete=models.CASCADE, related_name='commission_runs',
+    )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='requested_tactical_commission_runs',
+    )
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
+    idempotency_key = models.CharField(max_length=120)
+    requested_specialties = models.JSONField(default=list)
+    max_provider_calls = models.PositiveSmallIntegerField(default=8)
+    provider_calls_used = models.PositiveSmallIntegerField(default=0)
+    synthesis = models.JSONField(default=dict, blank=True)
+    conflicts = models.JSONField(default=list, blank=True)
+    plan_variants = models.JSONField(default=list, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cancelled_tactical_commission_runs',
+    )
+    notification_sent = models.BooleanField(default=False)
+    correlation_id = models.CharField(max_length=80, blank=True, default='')
+    review_decision = models.CharField(
+        max_length=24, choices=TacticalInsightReview.Decision.choices,
+        blank=True, default='',
+    )
+    review_note = models.CharField(max_length=500, blank=True, default='')
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+        related_name='reviewed_tactical_commission_runs',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    tenant_bound_fields = ('artifact',)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'idempotency_key'],
+                name='uniq_tactical_commission_idempotency',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['tenant', 'status', 'created_at'],
+                name='commission_run_status_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Comissão #{self.pk or "nova"} — {self.get_status_display()}'
+
+
+class TacticalCommissionTask(TenantScopedModel):
+    class Status(models.TextChoices):
+        QUEUED = 'queued', 'Na fila'
+        RUNNING = 'running', 'Em execução'
+        COMPLETED = 'completed', 'Concluída'
+        FAILED = 'failed', 'Falhou'
+        CANCELLED = 'cancelled', 'Cancelada'
+
+    run = models.ForeignKey(
+        TacticalCommissionRun, on_delete=models.CASCADE, related_name='tasks',
+    )
+    specialty = models.CharField(max_length=24, choices=SpecialistOpinion.Specialty.choices)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.QUEUED)
+    attempt = models.PositiveSmallIntegerField(default=1)
+    max_attempts = models.PositiveSmallIntegerField(default=2)
+    available_at = models.DateTimeField(default=timezone.now)
+    lease_owner = models.CharField(max_length=120, blank=True, default='')
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    opinion = models.ForeignKey(
+        TacticalAgentOpinion, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='commission_tasks',
+    )
+    execution_mode = models.CharField(max_length=24, blank=True, default='')
+    error_code = models.CharField(max_length=64, blank=True, default='')
+
+    tenant_bound_fields = ('run', 'opinion')
+
+    class Meta:
+        ordering = ['run', 'specialty', 'attempt']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'run', 'specialty', 'attempt'],
+                name='uniq_tactical_commission_task_attempt',
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=['tenant', 'status', 'available_at'],
+                name='commission_task_queue_idx',
+            ),
+            models.Index(
+                fields=['run', 'status'],
+                name='commission_task_run_idx',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.run} — {self.get_specialty_display()} ({self.attempt})'
+
+
 class Contract(TenantScopedModel):
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Rascunho'

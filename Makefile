@@ -1,7 +1,7 @@
 COMPOSE ?= docker compose
 PROJECT ?= saas-futebol
 
-.PHONY: help build up down restart logs shell bash migrate makemigrations createsuperuser test ps clean seed-demo watch-sports-sources
+.PHONY: help build up down restart logs shell bash migrate makemigrations createsuperuser test ps clean seed-demo watch-sports-sources worker-once
 
 help:
 	@echo "Comandos disponíveis:"
@@ -20,6 +20,7 @@ help:
 	@echo "  make sync-ai-sources  # sincroniza as fontes de IA uma vez"
 	@echo "  make watch-ai-sources # sobe o watcher automático de fontes"
 	@echo "  make watch-sports-sources # sincroniza fontes esportivas periodicamente"
+	@echo "  make worker-once      # processa no máximo uma tarefa da comissão tática"
 	@echo "  make ps               # status dos containers"
 	@echo "  make clean            # remove containers e volumes"
 
@@ -68,6 +69,9 @@ watch-ai-sources:
 
 watch-sports-sources:
 	$(COMPOSE) --profile watchers up -d sports-sync
+
+worker-once:
+	$(COMPOSE) run --rm tactical-worker python src/manage.py run_tactical_commission_worker --once
 
 ps:
 	$(COMPOSE) ps

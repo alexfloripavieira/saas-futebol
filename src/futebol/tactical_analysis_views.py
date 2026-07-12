@@ -1,15 +1,17 @@
 from functools import wraps
 from urllib.parse import urlencode
+import uuid
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
+from django.http import HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from futebol.models import (
-    SportsDataArtifact, SportsDataImportBatch, SportsDataRecord, TacticalInsightReview,
-    TenantMembership,
+    SportsDataArtifact, SportsDataImportBatch, SportsDataRecord,
+    TacticalCommissionRun, TacticalCommissionTask, TacticalInsightReview, TenantMembership,
 )
 from futebol.modules import tenant_has_module
 from futebol.services.spatial_analytics import build_event_analysis
@@ -17,6 +19,10 @@ from futebol.services.tactical_engine import (
     build_agent_training_insights, detect_tactical_moments,
 )
 from futebol.services.tactical_ai import generate_tactical_agent_opinions
+from futebol.services.tactical_commission import (
+    cancel_commission, enqueue_commission, retry_task, review_commission,
+    serialize_run_status,
+)
 from futebol.services.tracking_analytics import build_tracking_context
 from futebol.services.tenancy import active_tenant
 
@@ -32,6 +38,105 @@ def _ia_required(view):
             {'title': 'Módulo não contratado', 'module_name': 'IA'}, status=403,
         )
     return wrapped
+
+
+def _commission_redirect(run):
+    return redirect(
+        f'/ia/treinador/tracking/{run.artifact.batch_id}/?commission={run.pk}',
+    )
+
+
+@login_required
+@_ia_required
+def tactical_commission_start(request, batch_pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    artifact = get_object_or_404(
+        SportsDataArtifact.objects.select_related('batch__source'),
+        tenant=tenant, batch_id=batch_pk, status=SportsDataArtifact.Status.READY,
+        capability='tracking_frames',
+    )
+    try:
+        run = enqueue_commission(
+            artifact=artifact, actor=request.user,
+            idempotency_key=request.POST.get('idempotency_key', ''),
+            max_provider_calls=int(request.POST.get('max_provider_calls') or 8),
+        )
+        messages.success(request, 'Comissão Técnica Digital colocada na fila.')
+        return _commission_redirect(run)
+    except (ValidationError, ValueError) as exc:
+        message = '; '.join(exc.messages) if isinstance(exc, ValidationError) else 'Limite inválido.'
+        messages.error(request, message)
+        return redirect('tracking-analysis-lab', batch_pk=batch_pk)
+
+
+@login_required
+@_ia_required
+def tactical_commission_status(request, pk):
+    if request.method != 'GET':
+        return HttpResponseNotAllowed(['GET'])
+    tenant = active_tenant(request)
+    run = get_object_or_404(
+        TacticalCommissionRun.objects.prefetch_related('tasks'),
+        tenant=tenant, pk=pk,
+    )
+    return JsonResponse(serialize_run_status(run))
+
+
+@login_required
+@_ia_required
+def tactical_commission_cancel(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    run = get_object_or_404(TacticalCommissionRun, tenant=tenant, pk=pk)
+    try:
+        cancel_commission(run=run, actor=request.user)
+        messages.success(request, 'Execução da comissão cancelada.')
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+    return _commission_redirect(run)
+
+
+@login_required
+@_ia_required
+def tactical_commission_retry(request, task_pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    task = get_object_or_404(
+        TacticalCommissionTask.objects.select_related('run__artifact__batch'),
+        tenant=tenant, pk=task_pk,
+    )
+    try:
+        retry_task(task=task, actor=request.user)
+        messages.success(request, 'Persona recolocada na fila sem apagar o histórico.')
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+    return _commission_redirect(task.run)
+
+
+@login_required
+@_ia_required
+def tactical_commission_review(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    run = get_object_or_404(
+        TacticalCommissionRun.objects.select_related('artifact__batch'),
+        tenant=tenant, pk=pk,
+    )
+    try:
+        review_commission(
+            run=run, actor=request.user,
+            decision=request.POST.get('decision', ''),
+            note=request.POST.get('note', ''),
+        )
+        messages.success(request, 'Revisão humana da comissão registrada.')
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+    return _commission_redirect(run)
 
 
 @login_required
@@ -257,6 +362,16 @@ def tracking_analysis_lab(request, batch_pk):
             TenantMembership.Role.ADMIN_PLATAFORMA,
         ],
     ).exists()
+    selected_commission = None
+    commission_id = request.GET.get('commission')
+    if commission_id:
+        selected_commission = TacticalCommissionRun.objects.prefetch_related(
+            'tasks', 'tasks__opinion',
+        ).filter(tenant=tenant, artifact=artifact, pk=commission_id).first()
+    if selected_commission is None:
+        selected_commission = artifact.commission_runs.prefetch_related(
+            'tasks', 'tasks__opinion',
+        ).filter(tenant=tenant).order_by('-created_at').first()
     return render(request, 'futebol/tracking_analysis_lab.html', {
         'title': 'Tracking posicional', 'batch': batch, 'artifact': artifact,
         'analysis': analysis, 'preview': preview, 'teams': teams,
@@ -267,4 +382,9 @@ def tracking_analysis_lab(request, batch_pk):
         'provider_opinions': latest_provider_opinions,
         'external_ai_processing_allowed': batch.source.external_ai_processing_allowed,
         'can_execute_provider': can_execute_provider,
+        'commission_run': selected_commission,
+        'commission_status': (
+            serialize_run_status(selected_commission) if selected_commission else None
+        ),
+        'commission_idempotency_key': uuid.uuid4().hex,
     })

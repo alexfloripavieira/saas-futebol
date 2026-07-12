@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from futebol.models import (
     AIAgent, AIProvider, SportsDataArtifact, SportsDataImportBatch, SportsDataSource,
-    TacticalAgentOpinion, TacticalInsightReview, Tenant, TenantMembership,
+    TacticalAgentOpinion, TacticalCommissionRun, TacticalCommissionTask,
+    TacticalInsightReview, Tenant, TenantMembership,
     TenantModuleSubscription,
 )
 
@@ -24,6 +26,11 @@ class TrackingAnalysisLabHTTPTests(TestCase):
             kind=SportsDataSource.Kind.SKILLCORNER_OPEN,
             capabilities=['tracking_frames'], license_id='MIT', attribution='SkillCorner',
             quality='research_sample', active=False,
+            external_ai_processing_allowed=True,
+            external_ai_provider_scope=AIProvider.Kind.OPENCODE,
+            external_ai_authorization_note='Autorizado para métricas táticas agregadas.',
+            external_ai_authorized_at=timezone.now(),
+            external_ai_authorized_by=self.user,
         )
         self.batch = SportsDataImportBatch.objects.create(
             tenant=self.tenant, source=source, dataset_id='tracking-1',
@@ -121,3 +128,70 @@ class TrackingAnalysisLabHTTPTests(TestCase):
         response = self.client.get(reverse('tracking-analysis-lab', args=[self.batch.pk]))
 
         self.assertEqual(response.status_code, 404)
+
+    def test_inicia_comissao_e_exibe_progresso_no_laboratorio(self):
+        response = self.client.post(
+            reverse('tactical-commission-start', args=[self.batch.pk]),
+            {'idempotency_key': 'http-comissao-1', 'max_provider_calls': '8'},
+        )
+
+        run = TacticalCommissionRun.objects.get(artifact=self.artifact)
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(f'commission={run.pk}', response.url)
+        page = self.client.get(response.url)
+        self.assertContains(page, 'Orquestração da Comissão Técnica')
+        self.assertContains(page, f'Execução #{run.pk}')
+        self.assertContains(page, 'Coordenador técnico')
+
+    def test_status_da_comissao_e_minimo_e_isolado(self):
+        run = TacticalCommissionRun.objects.create(
+            tenant=self.tenant, artifact=self.artifact, requested_by=self.user,
+            idempotency_key='status-http', requested_specialties=['tactical'],
+        )
+        TacticalCommissionTask.objects.create(
+            tenant=self.tenant, run=run, specialty='tactical',
+        )
+
+        response = self.client.get(reverse('tactical-commission-status', args=[run.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload['id'], run.pk)
+        self.assertNotIn('idempotency_key', payload)
+        self.assertNotIn('tracking/fake.jsonl', str(payload))
+
+    def test_cancela_comissao_e_impede_tarefas_pendentes(self):
+        run = TacticalCommissionRun.objects.create(
+            tenant=self.tenant, artifact=self.artifact, requested_by=self.user,
+            idempotency_key='cancel-http', requested_specialties=['tactical'],
+        )
+        task = TacticalCommissionTask.objects.create(
+            tenant=self.tenant, run=run, specialty='tactical',
+        )
+
+        response = self.client.post(reverse('tactical-commission-cancel', args=[run.pk]))
+
+        self.assertEqual(response.status_code, 302)
+        run.refresh_from_db()
+        task.refresh_from_db()
+        self.assertEqual(run.status, TacticalCommissionRun.Status.CANCELLED)
+        self.assertEqual(task.status, TacticalCommissionTask.Status.CANCELLED)
+
+    def test_revisa_cenarios_concluidos_sem_alterar_escalação_oficial(self):
+        run = TacticalCommissionRun.objects.create(
+            tenant=self.tenant, artifact=self.artifact, requested_by=self.user,
+            idempotency_key='review-http', requested_specialties=['tactical'],
+            status=TacticalCommissionRun.Status.PARTIAL,
+            finished_at=timezone.now(),
+            plan_variants=[{'variant': 'balanced', 'label': 'Equilibrado'}],
+        )
+
+        response = self.client.post(
+            reverse('tactical-commission-review', args=[run.pk]),
+            {'decision': 'approved_training', 'note': 'Somente treinamento.'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        run.refresh_from_db()
+        self.assertEqual(run.review_decision, 'approved_training')
+        self.assertEqual(run.reviewed_by, self.user)

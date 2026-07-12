@@ -12,6 +12,8 @@ from futebol.models import (
     AIAgent,
     AIAgentSourceLink,
     AIProvider,
+    AthleteMatchAvailability,
+    AthleteSportProfile,
     ApprovalDecision,
     ApprovalFlow,
     ApprovalFlowStep,
@@ -25,12 +27,21 @@ from futebol.models import (
     Evidence,
     ExternalSystem,
     IntegrationRecord,
+    GamePlan,
+    GamePlanPlayer,
     KnowledgeSource,
+    LineupDraft,
+    LineupDraftPlayer,
     Match,
     MatchEvent,
     MatchLineup,
+    MatchDossier,
     Negotiation,
     Person,
+    SpecialistOpinion,
+    SportsDataImportBatch,
+    SportsDataRecord,
+    SportsDataSource,
     TeamCategory,
     Tenant,
     TenantBranding,
@@ -40,6 +51,8 @@ from futebol.models import (
 from futebol.modules import MODULE_CATALOG
 from futebol.services.ai import seed_demo_ai_stack
 from futebol.services.approvals import cast_decision, open_request
+from futebol.services.intelligent_coach import generate_match_dossier
+from futebol.services.sports_data import import_local_sports_dataset
 
 
 class Command(BaseCommand):
@@ -144,6 +157,50 @@ class Command(BaseCommand):
             'lucas': Person.objects.create(tenant=tenant, full_name='Lucas Zagueiro', kind=Person.Kind.ATHLETE, birth_date=date(2007, 2, 20)),
             'caio': Person.objects.create(tenant=tenant, full_name='Caio Goleiro', kind=Person.Kind.ATHLETE, birth_date=date(2006, 8, 30)),
         }
+        extra_people = (
+            ('maria', 'Maria Lateral', 'LD'),
+            ('bruno', 'Bruno Defensor', 'ZAG'),
+            ('diego', 'Diego Defensor', 'ZAG'),
+            ('rafael', 'Rafael Lateral', 'LE'),
+            ('andre', 'André Volante', 'VOL'),
+            ('felipe', 'Felipe Central', 'MC'),
+            ('vinicius', 'Vinícius Ponta', 'PD'),
+            ('matheus', 'Matheus Ponta', 'PE'),
+            ('gabriel', 'Gabriel Centroavante', 'ATA'),
+        )
+        opponent_people = (
+            ('hugo_adv', 'Hugo Guarda-Redes', 'GOL'),
+            ('tiago_adv', 'Tiago Lateral', 'LD'),
+            ('nando_adv', 'Nando Zagueiro', 'ZAG'),
+            ('cesar_adv', 'César Lateral', 'LE'),
+            ('otavio_adv', 'Otávio Volante', 'VOL'),
+            ('leo_adv', 'Léo Central', 'MC'),
+            ('samuel_adv', 'Samuel Armador', 'MEI'),
+            ('igor_adv', 'Igor Ponta', 'PD'),
+            ('davi_adv', 'Davi Ponta', 'PE'),
+            ('heitor_adv', 'Heitor Atacante', 'ATA'),
+        )
+        for key, full_name, _position in extra_people:
+            people[key] = Person.objects.create(
+                tenant=tenant, full_name=full_name, kind=Person.Kind.ATHLETE
+            )
+        for key, full_name, _position in opponent_people:
+            people[key] = Person.objects.create(
+                tenant=tenant, full_name=full_name, kind=Person.Kind.ATHLETE
+            )
+
+        profile_positions = {
+            'joao': 'ATA', 'pedro': 'MEI', 'lucas': 'ZAG', 'caio': 'GOL',
+            **{key: position for key, _name, position in extra_people},
+            **{key: position for key, _name, position in opponent_people},
+        }
+        for key, position in profile_positions.items():
+            AthleteSportProfile.objects.create(
+                tenant=tenant,
+                player=people[key],
+                primary_position=position,
+                tactical_roles=['função-base do elenco demo'],
+            )
 
         competition = Competition.objects.create(
             tenant=tenant,
@@ -195,11 +252,33 @@ class Command(BaseCommand):
             away_score=1,
             notes='Jogo-base para validar lineup, eventos e relatórios locais.',
         )
+        future_match = Match.objects.create(
+            tenant=tenant,
+            phase=phase,
+            home_club=clubs['aurora'],
+            away_club=clubs['horizonte'],
+            reference_code='DEM-2026-COACH-001',
+            scheduled_at=timezone.now() + timedelta(days=5),
+            venue='Estádio Demo',
+            status=Match.Status.CONFIRMED,
+            notes='Próxima partida para o Treinador Inteligente.',
+        )
 
         MatchLineup.objects.create(tenant=tenant, match=match, player=people['joao'], club=clubs['aurora'], jersey_number=9, position='ATA', is_starter=True, captain=False)
         MatchLineup.objects.create(tenant=tenant, match=match, player=people['pedro'], club=clubs['aurora'], jersey_number=8, position='MEI', is_starter=True, captain=True)
         MatchLineup.objects.create(tenant=tenant, match=match, player=people['caio'], club=clubs['aurora'], jersey_number=1, position='GOL', is_starter=True, captain=False)
         MatchLineup.objects.create(tenant=tenant, match=match, player=people['lucas'], club=clubs['horizonte'], jersey_number=4, position='ZAG', is_starter=True, captain=False)
+        for number, (key, _name, position) in enumerate(opponent_people, start=1):
+            MatchLineup.objects.create(
+                tenant=tenant,
+                match=match,
+                player=people[key],
+                club=clubs['horizonte'],
+                jersey_number=number,
+                position=position,
+                is_starter=True,
+                captain=(position == 'MC'),
+            )
 
         MatchEvent.objects.create(tenant=tenant, match=match, player=people['joao'], event_type=MatchEvent.EventType.GOAL, minute=14, period='1º tempo', details={'assist': 'Pedro Meio-Campo'})
         MatchEvent.objects.create(tenant=tenant, match=match, player=people['pedro'], event_type=MatchEvent.EventType.YELLOW_CARD, minute=52, period='2º tempo', details={'reason': 'Entrada atrasada'})
@@ -211,6 +290,33 @@ class Command(BaseCommand):
             start_date=date(2025, 7, 1),
             signed_at=timezone.now() - timedelta(days=90),
             status=Contract.Status.ACTIVE,
+        )
+        Contract.objects.create(
+            tenant=tenant,
+            person=people['caio'],
+            club=clubs['aurora'],
+            start_date=date(2025, 7, 1),
+            signed_at=timezone.now() - timedelta(days=90),
+            status=Contract.Status.ACTIVE,
+        )
+        for key, _full_name, _position in extra_people:
+            Contract.objects.create(
+                tenant=tenant,
+                person=people[key],
+                club=clubs['aurora'],
+                start_date=date(2025, 8, 1),
+                signed_at=timezone.now() - timedelta(days=45),
+                status=Contract.Status.ACTIVE,
+            )
+        AthleteMatchAvailability.objects.create(
+            tenant=tenant,
+            match=future_match,
+            player=people['vinicius'],
+            club=clubs['aurora'],
+            status=AthleteMatchAvailability.Status.LIMITED,
+            max_minutes=60,
+            readiness=72,
+            note='Carga controlada no cenário demonstrativo.',
         )
         draft_contract = Contract.objects.create(
             tenant=tenant,
@@ -292,6 +398,17 @@ class Command(BaseCommand):
         )
 
         seed_demo_ai_stack(tenant=tenant, root=Path(settings.BASE_DIR).parent)
+        import_local_sports_dataset(
+            tenant=tenant,
+            dataset_slug='demo-treinador-sintetico-v1',
+            imported_by=users['admin'],
+            root=Path(settings.BASE_DIR) / 'futebol' / 'data' / 'sports',
+        )
+        generate_match_dossier(
+            match=future_match,
+            club=clubs['aurora'],
+            requested_by=users['admin'],
+        )
 
         self.stdout.write(self.style.SUCCESS('Seed demo criado com sucesso.'))
         self.stdout.write(f'Tenant: {tenant.slug}')
@@ -306,8 +423,19 @@ class Command(BaseCommand):
         model_names = [
             'ApprovalDecision',
             'Evidence',
+            'LineupDraftPlayer',
+            'LineupDraft',
+            'GamePlanPlayer',
+            'GamePlan',
+            'SpecialistOpinion',
+            'MatchDossier',
+            'AthleteMatchAvailability',
+            'AthleteSportProfile',
             'MatchEvent',
             'MatchLineup',
+            'SportsDataRecord',
+            'SportsDataImportBatch',
+            'SportsDataSource',
             'IntegrationRecord',
             'ApprovalRequest',
             'Match',

@@ -3,6 +3,14 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 
 from futebol.operational_views import evidence_download, health
+from futebol.intelligent_coach_views import (
+    intelligent_coach_apply_draft,
+    intelligent_coach_center,
+    intelligent_coach_dossier,
+    intelligent_coach_draft,
+    intelligent_coach_generate,
+    intelligent_coach_review_draft,
+)
 
 from futebol.views import (
     ai_agent_create,
@@ -103,6 +111,32 @@ urlpatterns = [
     path('partidas/', match_list, name='match-list'),
     path('partidas/nova/', match_create, name='match-create'),
     path('partidas/<int:pk>/editar/', match_edit, name='match-edit'),
+    path('ia/treinador/', intelligent_coach_center, name='intelligent-coach-center'),
+    path(
+        'ia/treinador/partidas/<int:pk>/gerar/',
+        intelligent_coach_generate,
+        name='intelligent-coach-generate',
+    ),
+    path(
+        'ia/treinador/dossies/<int:pk>/',
+        intelligent_coach_dossier,
+        name='intelligent-coach-dossier',
+    ),
+    path(
+        'ia/treinador/planos/<int:pk>/aplicar-rascunho/',
+        intelligent_coach_apply_draft,
+        name='intelligent-coach-apply-draft',
+    ),
+    path(
+        'ia/treinador/rascunhos/<int:pk>/',
+        intelligent_coach_draft,
+        name='intelligent-coach-draft',
+    ),
+    path(
+        'ia/treinador/rascunhos/<int:pk>/revisar/',
+        intelligent_coach_review_draft,
+        name='intelligent-coach-review-draft',
+    ),
     path('aprovacoes/', approval_flow_list, name='approval-flow-list'),
     path('solicitacoes-aprovacao/', approval_request_list, name='approval-request-list'),
     path('solicitacoes-aprovacao/nova/', approval_request_create, name='approval-request-create'),

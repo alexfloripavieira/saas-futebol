@@ -4,6 +4,8 @@ from .models import (
     AIAgent,
     AIAgentSourceLink,
     AIProvider,
+    AthleteMatchAvailability,
+    AthleteSportProfile,
     ApprovalDecision,
     ApprovalFlow,
     ApprovalFlowStep,
@@ -19,14 +21,23 @@ from .models import (
     ExternalSystem,
     IntegrationRecord,
     KnowledgeSource,
+    GamePlan,
+    GamePlanPlayer,
+    LineupDraft,
+    LineupDraftPlayer,
     Match,
     MatchEvent,
     MatchLineup,
+    MatchDossier,
     Negotiation,
     Notification,
     Person,
     Proposal,
     PublicAPICredential,
+    SpecialistOpinion,
+    SportsDataImportBatch,
+    SportsDataRecord,
+    SportsDataSource,
     TeamCategory,
     Tenant,
     TenantBranding,
@@ -152,6 +163,72 @@ class MatchEventAdmin(admin.ModelAdmin):
 class MatchLineupAdmin(admin.ModelAdmin):
     list_display = ('match', 'club', 'player', 'jersey_number', 'is_starter', 'captain')
     list_filter = ('is_starter', 'captain')
+
+
+@admin.register(AthleteSportProfile)
+class AthleteSportProfileAdmin(admin.ModelAdmin):
+    list_display = ('player', 'primary_position', 'preferred_foot', 'tenant')
+    search_fields = ('player__full_name', 'primary_position')
+
+
+@admin.register(AthleteMatchAvailability)
+class AthleteMatchAvailabilityAdmin(admin.ModelAdmin):
+    list_display = ('match', 'player', 'club', 'status', 'max_minutes', 'readiness')
+    list_filter = ('status',)
+
+
+@admin.register(MatchDossier)
+class MatchDossierAdmin(admin.ModelAdmin):
+    list_display = ('match', 'analyzed_club', 'version', 'status', 'confidence', 'generated_at')
+    list_filter = ('status',)
+
+
+@admin.register(SpecialistOpinion)
+class SpecialistOpinionAdmin(admin.ModelAdmin):
+    list_display = ('dossier', 'specialty', 'confidence')
+    list_filter = ('specialty',)
+
+
+class GamePlanPlayerInline(admin.TabularInline):
+    model = GamePlanPlayer
+    extra = 0
+
+
+@admin.register(GamePlan)
+class GamePlanAdmin(admin.ModelAdmin):
+    list_display = ('dossier', 'variant', 'formation', 'confidence')
+    list_filter = ('variant',)
+    inlines = [GamePlanPlayerInline]
+
+
+class LineupDraftPlayerInline(admin.TabularInline):
+    model = LineupDraftPlayer
+    extra = 0
+
+
+@admin.register(LineupDraft)
+class LineupDraftAdmin(admin.ModelAdmin):
+    list_display = ('match', 'club', 'plan', 'status', 'created_by')
+    list_filter = ('status',)
+    inlines = [LineupDraftPlayerInline]
+
+
+@admin.register(SportsDataSource)
+class SportsDataSourceAdmin(admin.ModelAdmin):
+    list_display = ('name', 'kind', 'quality', 'license_id', 'tenant', 'active')
+    list_filter = ('kind', 'quality', 'active')
+
+
+@admin.register(SportsDataImportBatch)
+class SportsDataImportBatchAdmin(admin.ModelAdmin):
+    list_display = ('dataset_id', 'dataset_version', 'source', 'status', 'record_count', 'imported_at')
+    list_filter = ('status', 'quality')
+
+
+@admin.register(SportsDataRecord)
+class SportsDataRecordAdmin(admin.ModelAdmin):
+    list_display = ('provider_record_id', 'capability', 'source', 'observed_at', 'expires_at')
+    list_filter = ('capability',)
 
 
 @admin.register(Contract)

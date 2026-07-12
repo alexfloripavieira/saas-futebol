@@ -45,3 +45,29 @@ _Avoid_: splash screen, home page (unless that is the exact public marketing ent
 **Onboarding do Tenant**:
 The first configuration flow shown to the initial tenant admin after login. It creates the Tenant and configures the initial access, modules, and branding.
 _Avoid_: setup wizard (acceptable only in technical docs)
+
+## Inteligência esportiva
+
+**Comissão Técnica Digital**:
+Conjunto coordenado de Agentes Especialistas que analisa o mesmo contexto de uma partida e produz recomendações complementares para a comissão humana.
+_Avoid_: chatbot, IA genérica, vários bots independentes
+
+**Agente Especialista**:
+Integrante da Comissão Técnica Digital com responsabilidade delimitada, como análise tática, preparação física, defesa, ataque, observação ou bola parada.
+_Avoid_: persona (persona descreve tom; o Agente Especialista possui responsabilidade e limites)
+
+**Dossiê da Partida**:
+Retrato versionado dos dados disponíveis sobre nosso time, adversário, ambiente e disponibilidade no momento de uma análise.
+_Avoid_: prompt, contexto solto, relatório do adversário
+
+**Recomendação Tática**:
+Proposta explicável de escalação, estrutura ou comportamento, acompanhada de evidências, confiança e restrições.
+_Avoid_: palpite, resposta da IA
+
+**Plano de Jogo**:
+Conjunto escolhido de Recomendações Táticas para uma partida, incluindo formação, escalação, comportamentos por fase e cenários alternativos.
+_Avoid_: estratégia (genérico), escalação (é apenas uma parte do plano)
+
+**Fonte de Dados Esportivos**:
+Origem estruturada de partidas, eventos, métricas ou tracking, com proveniência, licença, qualidade e validade conhecidas.
+_Avoid_: Fonte de Conhecimento (reservada a documentos e conteúdo textual)

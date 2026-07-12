@@ -1,0 +1,24 @@
+[
+  {
+    "provider_record_id": "demo-match-001",
+    "observed_at": "2026-07-01T20:00:00Z",
+    "payload": {
+      "home_team": "Aurora FC",
+      "away_team": "Horizonte EC",
+      "home_score": 2,
+      "away_score": 1,
+      "status": "played"
+    }
+  },
+  {
+    "provider_record_id": "demo-match-002",
+    "observed_at": "2026-07-08T20:00:00Z",
+    "payload": {
+      "home_team": "Horizonte EC",
+      "away_team": "Aurora FC",
+      "home_score": null,
+      "away_score": null,
+      "status": "scheduled"
+    }
+  }
+]

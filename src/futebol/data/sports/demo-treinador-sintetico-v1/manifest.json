@@ -1,0 +1,19 @@
+{
+  "dataset_id": "demo-treinador-sintetico-v1",
+  "name": "Demonstração sintética do Treinador Inteligente",
+  "version": "1.0.0",
+  "license_id": "internal-demo",
+  "license_url": "",
+  "attribution": "Dados sintéticos gerados pelo projeto SaaS do Futebol",
+  "quality": "synthetic",
+  "files": {
+    "fixtures_results": {
+      "path": "matches.json",
+      "sha256": "867335b3ed7386c1c774f5e1caf601a7182d44336cb2b26111477cf6c21a057e"
+    },
+    "standings_form": {
+      "path": "standings.json",
+      "sha256": "f16d14e86665015284de62ebe4c7ce8ca8c4b00b263d48d29b12743c251ee26a"
+    }
+  }
+}

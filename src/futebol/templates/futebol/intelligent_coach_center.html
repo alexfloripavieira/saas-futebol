@@ -1,0 +1,56 @@
+{% extends 'futebol/base.html' %}
+
+{% block content %}
+<style>
+  .coach-stepper,.coach-grid{display:grid;gap:1rem}.coach-stepper{grid-template-columns:repeat(4,1fr);margin:1rem 0 1.5rem}.coach-step{padding:.8rem;border:1px solid color-mix(in srgb,var(--tenant-accent) 30%,transparent);border-radius:12px;background:rgba(255,255,255,.04)}.coach-step strong{display:block;color:var(--tenant-accent)}.coach-grid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.coach-match{padding:1.2rem;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035)}.coach-match h2{margin:.35rem 0}.coach-actions{display:flex;gap:.65rem;flex-wrap:wrap;margin-top:1rem}.coach-actions form{margin:0}.coach-badge{display:inline-flex;padding:.3rem .6rem;border-radius:999px;background:rgba(85,167,255,.14);color:var(--tenant-accent);font-size:.8rem}.coach-empty{padding:2rem;text-align:center;border:1px dashed rgba(255,255,255,.2);border-radius:16px}
+  @media(max-width:760px){.coach-stepper{grid-template-columns:1fr 1fr}}
+</style>
+
+<section class="hero">
+  <div>
+    <span class="eyebrow">Comissão Técnica Digital</span>
+    <h1>Treinador Inteligente</h1>
+    <p>Selecione a próxima partida, gere um dossiê explicável e compare três Planos de Jogo antes de criar um rascunho.</p>
+  </div>
+</section>
+
+<div class="coach-stepper" aria-label="Etapas do Treinador Inteligente">
+  <div class="coach-step"><strong>1 · Partida</strong><span>Escolher confronto</span></div>
+  <div class="coach-step"><strong>2 · Dossiê</strong><span>Consolidar os dados</span></div>
+  <div class="coach-step"><strong>3 · Planos</strong><span>Comparar cenários</span></div>
+  <div class="coach-step"><strong>4 · Rascunho</strong><span>Revisão humana</span></div>
+</div>
+
+{% if rows %}
+<div class="coach-grid">
+  {% for row in rows %}
+  <article class="coach-match">
+    <span class="coach-badge">{{ row.match.phase.edition.competition.name }}</span>
+    <h2>{{ row.match.home_club.name }} × {{ row.match.away_club.name }}</h2>
+    <p>{{ row.match.scheduled_at|date:'d/m/Y H:i' }} · {{ row.match.venue|default:'Local a confirmar' }}</p>
+    {% if row.dossier %}
+      <p><strong>Dossiê v{{ row.dossier.version }}</strong> · {{ row.dossier.get_status_display }} · confiança {{ row.dossier.confidence }}%</p>
+      <a class="button button-secondary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Abrir análise</a>
+    {% else %}
+      <p class="muted">Ainda não há análise para esta partida.</p>
+    {% endif %}
+    <div class="coach-actions">
+      {% for club in row.clubs %}
+      <form method="post" action="{% url 'intelligent-coach-generate' row.match.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="club" value="{{ club.pk }}">
+        <button class="button {% if forloop.first %}button-primary{% else %}button-secondary{% endif %}" type="submit">Analisar {{ club.name }}</button>
+      </form>
+      {% endfor %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="coach-empty">
+  <h2>Sem partidas futuras</h2>
+  <p>Cadastre ou confirme uma partida futura para iniciar a preparação inteligente.</p>
+  <a class="button button-primary" href="{% url 'match-create' %}">Nova partida</a>
+</div>
+{% endif %}
+{% endblock %}

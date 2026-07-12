@@ -1,8 +1,8 @@
 {
-  "current_sprint": "sprint_13",
-  "current_task": "13.6",
-  "current_subtask": "13.6.3",
-  "status": "blocked",
+  "current_sprint": "sprint_14",
+  "current_task": "14.4",
+  "current_subtask": "14.4.3",
+  "status": "in_progress",
   "history": [
     {
       "subtask_id": "0.1.2",
@@ -143,5 +143,5 @@
   ],
   "failures": {},
   "started_at": "2026-06-28T21:37:59.744354",
-  "last_updated": "2026-07-11T22:00:00-03:00"
+  "last_updated": "2026-07-12T02:00:00-03:00"
 }

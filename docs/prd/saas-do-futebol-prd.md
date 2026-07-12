@@ -786,6 +786,23 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 
 **Fora do escopo desta sprint:** novos módulos, novos tipos de previsão, expansão do scouting e integrações avançadas que não sejam necessárias à jornada do piloto.
 
+### Sprint 14 — Treinador Inteligente e Comissão Técnica Digital
+
+**Objetivo:** transformar os dados esportivos em recomendações explicáveis e acionáveis para a preparação da próxima partida, sem substituir a decisão da comissão técnica humana.
+
+**Critério de saída:** uma partida futura possui Dossiê versionado, três Planos de Jogo comparáveis, contribuições rastreáveis dos Agentes Especialistas e aplicação explícita da escalação escolhida como rascunho.
+
+- [x] Criar Dossiê da Partida com nosso time, adversário, disponibilidade, forma e ambiente.
+- [x] Criar Agentes Especialistas de tática, físico, defesa, ataque, observação e bola parada.
+- [x] Criar Coordenador Técnico para consolidar conflitos e gerar três cenários.
+- [x] Exibir escalação, formação, zonas, riscos, confiança e evidências em uma tela visual.
+- [x] Aplicar uma recomendação apenas como rascunho auditável, sujeito à decisão humana.
+- [x] Separar Fonte de Dados Esportivos de Fonte de Conhecimento e preservar proveniência/licença.
+- [x] Importar dataset sintético local e preparar adaptador futuro para football-data.org.
+- [x] Cobrir geração, isolamento por tenant e aplicação de rascunho em testes de contrato e HTTP.
+
+**Fora do escopo desta sprint:** diagnóstico médico, decisão autônoma final, scraping de sites, redistribuição de datasets sem licença, promessa de tracking brasileiro ao vivo e aprendizado automático sem avaliação humana.
+
 ---
 
 ## 19. Escopo incremental recomendado
@@ -820,6 +837,13 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 - API e evidências endurecidas;
 - runtime de produção e recuperação;
 - jornada vertical validada com dados de piloto.
+
+### Fase 6 — Inteligência esportiva ativa
+- comissão técnica digital;
+- dossiê versionado da partida;
+- recomendações táticas explicáveis;
+- escalação e plano de jogo em rascunho;
+- conectores de dados com proveniência e licença.
 
 ---
 

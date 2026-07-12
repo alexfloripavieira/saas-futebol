@@ -1,0 +1,146 @@
+{% extends 'futebol/base.html' %}
+
+{% block content %}
+<style>
+  .dossier-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.confidence{min-width:92px;text-align:center;padding:1rem;border-radius:50%;background:conic-gradient(var(--tenant-accent) calc(var(--confidence)*1%),rgba(255,255,255,.08) 0);position:relative}.confidence:after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--tenant-bg)}.confidence span{position:relative;z-index:1;font-weight:800}.metric-grid,.opinion-grid,.plan-grid{display:grid;gap:1rem}.metric-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:1.2rem 0}.metric{padding:1rem;border-radius:14px;background:rgba(255,255,255,.05)}.metric strong{display:block;font-size:1.55rem}.section-title{margin-top:2rem}.opinion-grid{grid-template-columns:repeat(auto-fit,minmax(235px,1fr))}.opinion,.plan{border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:1rem;background:rgba(255,255,255,.035)}.opinion h3,.plan h2{margin:.2rem 0}.confidence-bar{height:7px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}.confidence-bar span{display:block;height:100%;background:var(--tenant-accent)}.plan-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}.plan[data-variant="balanced"]{border-color:color-mix(in srgb,var(--tenant-accent) 55%,transparent)}.pitch{position:relative;aspect-ratio:1.55;min-height:340px;overflow:hidden;background:repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 10%,rgba(255,255,255,.055) 10%,rgba(255,255,255,.055) 20%),#123f31;border:2px solid rgba(255,255,255,.52);border-radius:12px;margin:1rem 0}.pitch:before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,.55)}.pitch:after{content:"";position:absolute;left:50%;top:50%;width:20%;aspect-ratio:1;border:1px solid rgba(255,255,255,.55);border-radius:50%;transform:translate(-50%,-50%)}.pitch-box{position:absolute;top:24%;bottom:24%;width:12%;border:1px solid rgba(255,255,255,.5);z-index:1}.pitch-box.left{left:0;border-left:0}.pitch-box.right{right:0;border-right:0}.pitch-svg{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}.player-chip,.opponent-chip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;width:68px;min-height:38px;padding:.28rem;border-radius:9px;font-size:.68rem;line-height:1.05;text-align:center;z-index:4;box-shadow:0 4px 12px rgba(0,0,0,.3)}.player-chip{background:rgba(2,37,73,.92);border:1px solid var(--tenant-accent)}.opponent-chip{background:rgba(105,27,35,.88);border:1px solid #ff8e98}.player-chip b{color:var(--tenant-accent)}.opponent-chip b{color:#ffc5ca}.pitch-label{position:absolute;top:.4rem;z-index:5;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.pitch-label.ours{left:.55rem;color:var(--tenant-accent)}.pitch-label.opponent{right:.55rem;color:#ffc5ca}.pitch-legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;margin-top:-.5rem}.legend-dot{display:inline-block;width:.65rem;height:.65rem;border-radius:50%;margin-right:.3rem}.legend-dot.ours{background:var(--tenant-accent)}.legend-dot.opponent{background:#ff8e98}.plan ul,.opinion ul{padding-left:1.1rem}.warning{padding:.75rem;border-radius:10px;background:rgba(255,184,77,.12);color:#ffd79b}.evidence{font-size:.85rem;color:var(--tenant-muted)}
+  @media(max-width:620px){.plan-grid{grid-template-columns:1fr}.pitch{min-height:300px}.player-chip,.opponent-chip{width:54px;font-size:.59rem}}
+</style>
+
+<section class="dossier-head">
+  <div>
+    <span class="eyebrow">Comissão Técnica Digital · Dossiê v{{ dossier.version }}</span>
+    <h1>{{ dossier.match.home_club.name }} × {{ dossier.match.away_club.name }}</h1>
+    <p>Análise para <strong>{{ dossier.analyzed_club.name }}</strong> · {{ dossier.match.scheduled_at|date:'d/m/Y H:i' }} · gerada por {{ dossier.generated_by.username }}</p>
+  </div>
+  <div class="confidence" style="--confidence:{{ dossier.confidence }}"><span>{{ dossier.confidence }}%</span></div>
+</section>
+
+<div class="metric-grid">
+  <div class="metric"><span>Atletas elegíveis</span><strong>{{ dossier.data_snapshot.available_players }}</strong></div>
+  <div class="metric"><span>Com restrição</span><strong>{{ dossier.data_snapshot.limited_players }}</strong></div>
+  <div class="metric"><span>Jogos na amostra</span><strong>{{ dossier.data_snapshot.recent_form.matches }}</strong></div>
+  <div class="metric"><span>Pontos recentes</span><strong>{{ dossier.data_snapshot.recent_form.points }}</strong></div>
+  <div class="metric"><span>Gols pró/contra</span><strong>{{ dossier.data_snapshot.recent_form.goals_for }}/{{ dossier.data_snapshot.recent_form.goals_against }}</strong></div>
+  <div class="metric"><span>Cartões recentes</span><strong>{{ dossier.data_snapshot.recent_form.cards }}</strong></div>
+  {% if dossier.data_snapshot.external_form %}<div class="metric"><span>Forma externa — nosso time</span><strong>{{ dossier.data_snapshot.external_form.points }}/{{ dossier.data_snapshot.external_form.matches }}</strong></div>{% endif %}
+  {% if dossier.data_snapshot.opponent_external_form %}<div class="metric"><span>Forma externa — adversário</span><strong>{{ dossier.data_snapshot.opponent_external_form.points }}/{{ dossier.data_snapshot.opponent_external_form.matches }}</strong></div>{% endif %}
+</div>
+{% if form_sequence %}
+<div class="pitch-legend" aria-label="Forma recente">
+  <strong>Forma recente:</strong>
+  {% for points in form_sequence %}
+    <span class="metric" title="{{ points }} ponto(s)">{% if points == 3 %}V{% elif points == 1 %}E{% else %}D{% endif %}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if not dossier.data_snapshot.spatial_coverage %}
+<p class="warning"><strong>Dados insuficientes para recomendação espacial.</strong> As orientações de corredor e zona permanecem hipóteses até existirem eventos coordenados, tracking ou vídeo anotado recente.</p>
+{% endif %}
+
+<h2 class="section-title">Conselho da Comissão Técnica Digital</h2>
+<div class="opinion-grid">
+  {% for opinion in opinions %}
+  <article class="opinion">
+    <span class="eyebrow">{{ opinion.get_specialty_display }}</span>
+    {% if opinion.agent %}<p class="evidence">{{ opinion.agent.name }} · modo {{ opinion.execution_mode }} · {{ opinion.model_name }}</p>{% endif %}
+    <h3>{{ opinion.summary }}</h3>
+    <div class="confidence-bar" title="Confiança {{ opinion.confidence }}%"><span style="width:{{ opinion.confidence }}%"></span></div>
+    <ul>{% for item in opinion.recommendations %}<li>{{ item }}</li>{% endfor %}</ul>
+    {% if opinion.evidence %}<p class="evidence">Evidências: {% for item in opinion.evidence %}{{ item.record_id|default:item.description }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+    {% if opinion.limitations %}<p class="evidence">Limitações: {{ opinion.limitations|join:', ' }}</p>{% endif %}
+  </article>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">Comparação dos Planos de Jogo</h2>
+<div class="plan-grid">
+  {% for plan in plans %}
+  <article class="plan" data-variant="{{ plan.variant }}">
+    <span class="eyebrow">{{ plan.formation }} · confiança {{ plan.confidence }}%</span>
+    <h2>Plano {{ plan.get_variant_display|lower }}</h2>
+    <p>{{ plan.summary }}</p>
+    <div class="pitch" aria-label="Prancheta tática com adversário espelhado">
+      <span class="pitch-label ours">{{ dossier.analyzed_club.name }} →</span>
+      <span class="pitch-label opponent">← Espelho do adversário</span>
+      <span class="pitch-box left"></span><span class="pitch-box right"></span>
+      <svg class="pitch-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Movimentos planejados">
+        <defs>
+          <marker id="arrow-{{ plan.pk }}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#66b2ff"/></marker>
+          <marker id="opp-arrow-{{ plan.pk }}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#ff8e98"/></marker>
+        </defs>
+        <line x1="23" y1="12" x2="23" y2="88" stroke="#66b2ff" stroke-width=".7" stroke-dasharray="2 2" opacity=".8"/>
+        <line x1="77" y1="12" x2="77" y2="88" stroke="#ff8e98" stroke-width=".7" stroke-dasharray="2 2" opacity=".65"/>
+        {% if plan.variant == 'offensive' %}
+          <path d="M45 50 C58 42,68 30,82 18" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
+          <path d="M46 62 C62 65,72 70,84 82" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
+        {% elif plan.variant == 'conservative' %}
+          <path d="M28 38 C42 38,58 40,76 38" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
+          <path d="M28 62 C42 62,58 60,76 62" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
+        {% else %}
+          <path d="M48 50 C60 48,70 45,84 50" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
+          <path d="M55 30 C64 28,72 23,80 18" fill="none" stroke="#66b2ff" stroke-width=".9" marker-end="url(#arrow-{{ plan.pk }})"/>
+        {% endif %}
+        <path d="M72 30 C62 35,57 42,51 48" fill="none" stroke="#ff8e98" stroke-width=".8" stroke-dasharray="2 1" marker-end="url(#opp-arrow-{{ plan.pk }})" opacity=".75"/>
+      </svg>
+      {% for selection in plan.players.all %}
+        {% if selection.is_starter %}<span class="player-chip" style="left:{{ selection.pitch_x }}%;top:{{ selection.pitch_y }}%"><b>{{ selection.position }}</b>{{ selection.player.full_name }}</span>{% endif %}
+      {% endfor %}
+      {% for opponent in dossier.data_snapshot.opponent_shape.players %}
+        <span class="opponent-chip" style="left:{{ opponent.x }}%;top:{{ opponent.y }}%"><b>{{ opponent.position }}</b>{{ opponent.name }}</span>
+      {% endfor %}
+    </div>
+    <div class="pitch-legend">
+      <span><i class="legend-dot ours"></i>Nosso plano e movimentos</span>
+      <span><i class="legend-dot opponent"></i>Espelho do adversário — movimento hipotético</span>
+      <span>{{ dossier.data_snapshot.opponent_shape.label }}</span>
+    </div>
+    <p class="evidence"><strong>Movimentos planejados:</strong> setas azuis são instruções do plano; linhas vermelhas tracejadas representam a resposta adversária estimada.</p>
+    <h3>Com a bola</h3><ul>{% for item in plan.attacking_plan %}<li>{{ item }}</li>{% endfor %}</ul>
+    <h3>Sem a bola</h3><ul>{% for item in plan.defensive_plan %}<li>{{ item }}</li>{% endfor %}</ul>
+    <h3>Transições</h3><ul>{% for item in plan.transitions %}<li>{{ item }}</li>{% endfor %}</ul>
+    <h3>Bola parada</h3><ul>{% for item in plan.set_pieces %}<li>{{ item }}</li>{% endfor %}</ul>
+    <p class="warning">{{ plan.risks|join:' · ' }}</p>
+    <form method="post" action="{% url 'intelligent-coach-apply-draft' plan.pk %}">
+      {% csrf_token %}
+      <label><input type="checkbox" name="confirm" value="apply-draft" required> Confirmo que quero criar um rascunho para revisão humana.</label>
+      <button class="button button-primary" type="submit">Aplicar como rascunho</button>
+    </form>
+  </article>
+  {% endfor %}
+</div>
+
+<h2 class="section-title">Proveniência dos dados</h2>
+{% if dossier.data_snapshot.external_sources %}
+<div class="opinion-grid">
+  {% for source in dossier.data_snapshot.external_sources %}
+  <article class="opinion">
+    <span class="eyebrow">{{ source.quality }} · licença {{ source.license_id }}</span>
+    <h3>{{ source.name }}</h3>
+    <p>Dataset v{{ source.dataset_version }}</p>
+    <p class="evidence">Importado em {{ source.imported_at }}{% if source.age_days != None %} · idade {{ source.age_days }} dia(s){% endif %}</p>
+    <p class="evidence">{{ source.attribution }}</p>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<p class="warning">Nenhuma Fonte de Dados Esportivos externa foi incluída neste Dossiê.</p>
+{% endif %}
+
+{% if dossier.data_snapshot.expired_external_evidence %}
+<p class="warning"><strong>Dados vencidos não utilizados:</strong>
+  {% for evidence in dossier.data_snapshot.expired_external_evidence %}{{ evidence.record_id }}{% if not forloop.last %}, {% endif %}{% endfor %}.
+</p>
+{% endif %}
+
+{% if dossier.data_snapshot.external_evidence %}
+<h3>Evidências utilizadas</h3>
+<ul class="evidence">
+  {% for evidence in dossier.data_snapshot.external_evidence %}
+  <li>{{ evidence.capability }} · {{ evidence.record_id }} · observado em {{ evidence.observed_at|default:'não informado' }}{% if evidence.expires_at %} · expira em {{ evidence.expires_at }}{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+<p class="evidence">Qualidade: {{ dossier.data_snapshot.data_quality }} · gerado em {{ dossier.generated_at|date:'d/m/Y H:i' }} · nenhuma escalação oficial foi alterada.</p>
+{% endblock %}

@@ -8,7 +8,7 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -464,6 +464,455 @@ class MatchLineup(TenantScopedModel):
 
     def __str__(self):
         return f'{self.player} — {self.match}'
+
+
+class AthleteSportProfile(TenantScopedModel):
+    """Perfil esportivo usado pela comissão técnica, separado do cadastro civil."""
+
+    class PreferredFoot(models.TextChoices):
+        RIGHT = 'right', 'Direito'
+        LEFT = 'left', 'Esquerdo'
+        BOTH = 'both', 'Ambidestro'
+        UNKNOWN = 'unknown', 'Não informado'
+
+    player = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='sport_profiles')
+    primary_position = models.CharField(max_length=16)
+    secondary_positions = models.JSONField(default=list, blank=True)
+    preferred_foot = models.CharField(
+        max_length=16, choices=PreferredFoot.choices, default=PreferredFoot.UNKNOWN
+    )
+    tactical_roles = models.JSONField(default=list, blank=True)
+
+    tenant_bound_fields = ('player',)
+
+    class Meta:
+        ordering = ['player__full_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'player'], name='uniq_athlete_sport_profile_per_tenant'
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.player_id and self.player.kind != Person.Kind.ATHLETE:
+            raise ValidationError({'player': 'O perfil esportivo exige uma pessoa do tipo atleta.'})
+
+    def __str__(self):
+        return f'{self.player} — {self.primary_position}'
+
+
+class AthleteMatchAvailability(TenantScopedModel):
+    class Status(models.TextChoices):
+        AVAILABLE = 'available', 'Disponível'
+        LIMITED = 'limited', 'Disponível com limite'
+        DOUBT = 'doubt', 'Dúvida'
+        UNAVAILABLE = 'unavailable', 'Indisponível'
+
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='athlete_availabilities')
+    player = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='match_availabilities')
+    club = models.ForeignKey(Club, on_delete=models.CASCADE, related_name='athlete_availabilities')
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.AVAILABLE)
+    max_minutes = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(130)]
+    )
+    readiness = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    note = models.TextField(blank=True, default='')
+
+    tenant_bound_fields = ('match', 'player', 'club')
+
+    class Meta:
+        ordering = ['match__scheduled_at', 'player__full_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'match', 'player'], name='uniq_availability_per_match_player'
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.match_id and self.club_id and self.club_id not in {
+            self.match.home_club_id, self.match.away_club_id
+        }:
+            raise ValidationError({'club': 'O clube precisa participar da partida.'})
+        if self.player_id and self.player.kind != Person.Kind.ATHLETE:
+            raise ValidationError({'player': 'A disponibilidade exige uma pessoa do tipo atleta.'})
+        if self.status == self.Status.UNAVAILABLE and self.max_minutes is not None:
+            raise ValidationError({'max_minutes': 'Atleta indisponível não pode ter limite de minutos.'})
+
+    def __str__(self):
+        return f'{self.player} — {self.get_status_display()}'
+
+
+class MatchDossier(TenantScopedModel):
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Rascunho'
+        READY = 'ready', 'Pronto para revisão'
+        FAILED = 'failed', 'Falhou'
+
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='intelligence_dossiers')
+    analyzed_club = models.ForeignKey(Club, on_delete=models.CASCADE, related_name='match_dossiers')
+    version = models.PositiveIntegerField(default=1)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    data_snapshot = models.JSONField(default=dict)
+    confidence = models.PositiveSmallIntegerField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='generated_match_dossiers'
+    )
+    generated_at = models.DateTimeField(null=True, blank=True)
+
+    tenant_bound_fields = ('match', 'analyzed_club')
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'match', 'analyzed_club', 'version'],
+                name='uniq_match_dossier_version',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.match_id and self.analyzed_club_id and self.analyzed_club_id not in {
+            self.match.home_club_id, self.match.away_club_id
+        }:
+            raise ValidationError({'analyzed_club': 'O clube precisa participar da partida.'})
+        if self.match_id and self.match.scheduled_at <= timezone.now():
+            raise ValidationError(
+                {'match': 'O Dossiê só pode ser criado para uma partida futura.'}
+            )
+        if self.match_id and self.match.status not in {
+            Match.Status.SCHEDULED,
+            Match.Status.CONFIRMED,
+        }:
+            raise ValidationError(
+                {'match': 'O Dossiê exige uma partida agendada ou confirmada.'}
+            )
+
+    def __str__(self):
+        return f'Dossiê v{self.version} — {self.match}'
+
+
+class SpecialistOpinion(TenantScopedModel):
+    class Specialty(models.TextChoices):
+        COORDINATOR = 'coordinator', 'Coordenador técnico'
+        TACTICAL = 'tactical', 'Análise tática'
+        PHYSICAL = 'physical', 'Preparação física'
+        DEFENSE = 'defense', 'Defesa'
+        ATTACK = 'attack', 'Ataque'
+        SCOUT = 'scout', 'Olheiro'
+        SET_PIECES = 'set_pieces', 'Bola parada'
+        ENVIRONMENT = 'environment', 'Ambiente e logística'
+
+    class ExecutionMode(models.TextChoices):
+        DETERMINISTIC = 'deterministic', 'Determinístico'
+        PROVIDER = 'provider', 'Provedor de IA'
+        FALLBACK = 'fallback', 'Fallback determinístico'
+
+    dossier = models.ForeignKey(MatchDossier, on_delete=models.CASCADE, related_name='opinions')
+    agent = models.ForeignKey(
+        'AIAgent',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='specialist_opinions',
+    )
+    specialty = models.CharField(max_length=24, choices=Specialty.choices)
+    summary = models.TextField()
+    recommendations = models.JSONField(default=list)
+    evidence = models.JSONField(default=list, blank=True)
+    confidence = models.PositiveSmallIntegerField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    limitations = models.JSONField(default=list, blank=True)
+    execution_mode = models.CharField(
+        max_length=24,
+        choices=ExecutionMode.choices,
+        default=ExecutionMode.DETERMINISTIC,
+    )
+    model_name = models.CharField(max_length=120, blank=True, default='')
+
+    tenant_bound_fields = ('dossier', 'agent')
+
+    class Meta:
+        ordering = ['specialty']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'dossier', 'specialty'], name='uniq_specialist_opinion_per_dossier'
+            ),
+        ]
+
+
+class GamePlan(TenantScopedModel):
+    class Variant(models.TextChoices):
+        BALANCED = 'balanced', 'Equilibrado'
+        OFFENSIVE = 'offensive', 'Ofensivo'
+        CONSERVATIVE = 'conservative', 'Conservador'
+
+    dossier = models.ForeignKey(MatchDossier, on_delete=models.CASCADE, related_name='plans')
+    variant = models.CharField(max_length=16, choices=Variant.choices)
+    formation = models.CharField(max_length=16)
+    summary = models.TextField()
+    attacking_plan = models.JSONField(default=list)
+    defensive_plan = models.JSONField(default=list)
+    transitions = models.JSONField(default=list)
+    set_pieces = models.JSONField(default=list)
+    risks = models.JSONField(default=list, blank=True)
+    confidence = models.PositiveSmallIntegerField(
+        default=0, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+
+    tenant_bound_fields = ('dossier',)
+
+    class Meta:
+        ordering = ['variant']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'dossier', 'variant'], name='uniq_game_plan_variant_per_dossier'
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.get_variant_display()} — {self.dossier.match}'
+
+
+class GamePlanPlayer(TenantScopedModel):
+    plan = models.ForeignKey(GamePlan, on_delete=models.CASCADE, related_name='players')
+    player = models.ForeignKey(Person, on_delete=models.PROTECT, related_name='game_plan_selections')
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name='game_plan_selections')
+    position = models.CharField(max_length=16)
+    pitch_x = models.PositiveSmallIntegerField(
+        default=50, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    pitch_y = models.PositiveSmallIntegerField(
+        default=50, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    tactical_role = models.CharField(max_length=80, blank=True, default='')
+    is_starter = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=1)
+    rationale = models.TextField(blank=True, default='')
+    minute_limit = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(130)]
+    )
+
+    tenant_bound_fields = ('plan', 'player', 'club')
+
+    class Meta:
+        ordering = ['-is_starter', 'order', 'player__full_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'plan', 'player'], name='uniq_game_plan_player'
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.plan_id and self.club_id and self.club_id != self.plan.dossier.analyzed_club_id:
+            raise ValidationError({'club': 'O atleta precisa representar o clube analisado.'})
+        if self.player_id and self.player.kind != Person.Kind.ATHLETE:
+            raise ValidationError({'player': 'O plano de jogo aceita somente atletas.'})
+        if self.plan_id and self.player_id and self.club_id:
+            match_date = timezone.localtime(self.plan.dossier.match.scheduled_at).date()
+            has_active_contract = Contract.objects.filter(
+                tenant_id=self.tenant_id,
+                person_id=self.player_id,
+                club_id=self.club_id,
+                status=Contract.Status.ACTIVE,
+                start_date__lte=match_date,
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=match_date)).exists()
+            if not has_active_contract:
+                raise ValidationError(
+                    {'player': 'O atleta precisa ter contrato ativo com o clube na data da partida.'}
+                )
+            is_unavailable = AthleteMatchAvailability.objects.filter(
+                tenant_id=self.tenant_id,
+                match_id=self.plan.dossier.match_id,
+                player_id=self.player_id,
+                club_id=self.club_id,
+                status=AthleteMatchAvailability.Status.UNAVAILABLE,
+            ).exists()
+            if is_unavailable:
+                raise ValidationError({'player': 'O atleta está indisponível para esta partida.'})
+
+
+class LineupDraft(TenantScopedModel):
+    class Status(models.TextChoices):
+        DRAFT = 'draft', 'Rascunho'
+        REVIEWED = 'reviewed', 'Revisado'
+        ARCHIVED = 'archived', 'Arquivado'
+
+    plan = models.OneToOneField(GamePlan, on_delete=models.PROTECT, related_name='lineup_draft')
+    match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='lineup_drafts')
+    club = models.ForeignKey(Club, on_delete=models.PROTECT, related_name='lineup_drafts')
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='created_lineup_drafts'
+    )
+
+    tenant_bound_fields = ('plan', 'match', 'club')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def clean(self):
+        super().clean()
+        if self.plan_id:
+            if self.match_id and self.match_id != self.plan.dossier.match_id:
+                raise ValidationError({'match': 'O rascunho precisa usar a partida do plano.'})
+            if self.club_id and self.club_id != self.plan.dossier.analyzed_club_id:
+                raise ValidationError({'club': 'O rascunho precisa usar o clube analisado.'})
+
+
+class LineupDraftPlayer(TenantScopedModel):
+    draft = models.ForeignKey(LineupDraft, on_delete=models.CASCADE, related_name='players')
+    player = models.ForeignKey(Person, on_delete=models.PROTECT, related_name='lineup_draft_selections')
+    position = models.CharField(max_length=16)
+    pitch_x = models.PositiveSmallIntegerField(
+        default=50, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    pitch_y = models.PositiveSmallIntegerField(
+        default=50, validators=[MinValueValidator(0), MaxValueValidator(100)]
+    )
+    tactical_role = models.CharField(max_length=80, blank=True, default='')
+    is_starter = models.BooleanField(default=True)
+    order = models.PositiveSmallIntegerField(default=1)
+    rationale = models.TextField(blank=True, default='')
+    minute_limit = models.PositiveSmallIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(130)]
+    )
+
+    tenant_bound_fields = ('draft', 'player')
+
+    class Meta:
+        ordering = ['-is_starter', 'order', 'player__full_name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'draft', 'player'], name='uniq_lineup_draft_player'
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.player_id and self.player.kind != Person.Kind.ATHLETE:
+            raise ValidationError({'player': 'O rascunho aceita somente atletas.'})
+        if self.draft_id and self.player_id:
+            match_date = timezone.localtime(self.draft.match.scheduled_at).date()
+            has_active_contract = Contract.objects.filter(
+                tenant_id=self.tenant_id,
+                person_id=self.player_id,
+                club_id=self.draft.club_id,
+                status=Contract.Status.ACTIVE,
+                start_date__lte=match_date,
+            ).filter(Q(end_date__isnull=True) | Q(end_date__gte=match_date)).exists()
+            if not has_active_contract:
+                raise ValidationError(
+                    {'player': 'O atleta precisa ter contrato ativo com o clube na data da partida.'}
+                )
+            is_unavailable = AthleteMatchAvailability.objects.filter(
+                tenant_id=self.tenant_id,
+                match_id=self.draft.match_id,
+                player_id=self.player_id,
+                club_id=self.draft.club_id,
+                status=AthleteMatchAvailability.Status.UNAVAILABLE,
+            ).exists()
+            if is_unavailable:
+                raise ValidationError({'player': 'O atleta está indisponível para esta partida.'})
+
+
+class SportsDataSource(TenantScopedModel):
+    class Kind(models.TextChoices):
+        LOCAL_DATASET = 'local_dataset', 'Dataset local'
+        FOOTBALL_DATA_ORG = 'football_data_org', 'football-data.org'
+        CLUB_INTERNAL = 'club_internal', 'Dados internos do clube'
+
+    code = models.SlugField(max_length=80)
+    name = models.CharField(max_length=160)
+    kind = models.CharField(max_length=32, choices=Kind.choices)
+    capabilities = models.JSONField(default=list)
+    license_id = models.CharField(max_length=80)
+    license_url = models.URLField(blank=True, default='')
+    attribution = models.CharField(max_length=240)
+    quality = models.CharField(max_length=40)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'code'], name='uniq_sports_data_source_code_per_tenant'
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class SportsDataImportBatch(TenantScopedModel):
+    class Status(models.TextChoices):
+        PROCESSING = 'processing', 'Processando'
+        COMPLETED = 'completed', 'Concluído'
+        FAILED = 'failed', 'Falhou'
+
+    source = models.ForeignKey(SportsDataSource, on_delete=models.PROTECT, related_name='import_batches')
+    dataset_id = models.CharField(max_length=120)
+    dataset_version = models.CharField(max_length=80)
+    content_hash = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PROCESSING)
+    record_count = models.PositiveIntegerField(default=0)
+    manifest = models.JSONField(default=dict)
+    license_id = models.CharField(max_length=80)
+    attribution = models.CharField(max_length=240)
+    quality = models.CharField(max_length=40)
+    imported_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='sports_data_imports'
+    )
+    imported_at = models.DateTimeField(null=True, blank=True)
+
+    tenant_bound_fields = ('source',)
+
+    class Meta:
+        ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'source', 'dataset_id', 'dataset_version', 'content_hash'],
+                name='uniq_sports_data_import_content',
+            ),
+        ]
+
+
+class SportsDataRecord(TenantScopedModel):
+    source = models.ForeignKey(SportsDataSource, on_delete=models.PROTECT, related_name='records')
+    batch = models.ForeignKey(SportsDataImportBatch, on_delete=models.CASCADE, related_name='records')
+    capability = models.CharField(max_length=64)
+    provider_record_id = models.CharField(max_length=160)
+    observed_at = models.DateTimeField(null=True, blank=True)
+    payload = models.JSONField(default=dict)
+    source_url = models.URLField(blank=True, default='')
+    content_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField(null=True, blank=True)
+
+    tenant_bound_fields = ('source', 'batch')
+
+    class Meta:
+        ordering = ['capability', 'provider_record_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'batch', 'capability', 'provider_record_id'],
+                name='uniq_sports_data_record_per_batch',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.source_id and self.batch_id and self.source_id != self.batch.source_id:
+            raise ValidationError({'source': 'A fonte do registro diverge da fonte do lote.'})
+        if self.observed_at and self.expires_at and self.expires_at < self.observed_at:
+            raise ValidationError({'expires_at': 'A validade não pode anteceder a observação.'})
 
 
 class Contract(TenantScopedModel):

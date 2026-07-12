@@ -78,6 +78,7 @@ NAV_GROUPS = (
         'icon': '🧠',
         'open': True,
         'items': (
+            {'label': 'Treinador Inteligente', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
             {'label': 'Centro de IA', 'url_name': 'ai-center', 'icon': '✨'},
             {'label': 'Providers IA', 'url_name': 'ai-provider-list', 'icon': '🔌'},
             {'label': 'Agentes IA', 'url_name': 'ai-agent-list', 'icon': '🤖'},

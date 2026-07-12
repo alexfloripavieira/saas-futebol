@@ -414,6 +414,74 @@ def ensure_demo_agent(*, tenant: Tenant, provider: AIProvider) -> AIAgent:
     return agent
 
 
+SPECIALIST_AGENT_CATALOG = (
+    (
+        'coach-coordinator',
+        'Coordenador Técnico IA',
+        'Consolidar pareceres, explicitar conflitos e comparar cenários sem substituir a decisão humana.',
+    ),
+    (
+        'coach-tactical',
+        'Analista Tático IA',
+        'Analisar estrutura, fases, pressão e transições sem inventar dados espaciais ausentes.',
+    ),
+    (
+        'coach-physical',
+        'Preparador Físico IA',
+        'Avaliar disponibilidade, carga e limite de minutos sem diagnosticar ou prescrever tratamento.',
+    ),
+    (
+        'coach-defense',
+        'Especialista Defensivo IA',
+        'Propor bloco, coberturas, proteção após perda e gatilhos defensivos explicáveis.',
+    ),
+    (
+        'coach-attack',
+        'Especialista Ofensivo IA',
+        'Propor progressão, criação e finalização compatíveis com a cobertura real dos dados.',
+    ),
+    (
+        'coach-scout',
+        'Olheiro IA',
+        'Sintetizar padrões do adversário e declarar lacunas, amostra e recência do scouting.',
+    ),
+    (
+        'coach-set-pieces',
+        'Especialista em Bola Parada IA',
+        'Preparar prioridades ofensivas e defensivas de bola parada com responsabilidades claras.',
+    ),
+    (
+        'coach-environment',
+        'Analista de Ambiente IA',
+        'Avaliar clima, viagem, altitude e gramado somente quando houver fonte identificada.',
+    ),
+)
+
+
+def ensure_specialist_agents(*, tenant: Tenant, provider: AIProvider) -> list[AIAgent]:
+    agents = []
+    for slug, name, responsibility in SPECIALIST_AGENT_CATALOG:
+        agent, _ = AIAgent.objects.update_or_create(
+            tenant=tenant,
+            slug=slug,
+            defaults={
+                'provider': provider,
+                'name': name,
+                'purpose': responsibility,
+                'system_prompt': (
+                    'Você integra a Comissão Técnica Digital. ' + responsibility + ' '
+                    'Responda de forma estruturada, cite evidências e diferencie ausência de dado de valor zero. '
+                    'A decisão final pertence à comissão técnica humana.'
+                ),
+                'model_override': '',
+                'temperature': Decimal('0.15'),
+                'active': True,
+            },
+        )
+        agents.append(agent)
+    return agents
+
+
 def link_agent_sources(*, tenant: Tenant, agent: AIAgent, sources: list[KnowledgeSource]) -> None:
     linked_ids = set(
         AIAgentSourceLink.objects.filter(tenant=tenant, agent=agent).values_list('source_id', flat=True)
@@ -439,6 +507,8 @@ def seed_demo_ai_stack(*, tenant: Tenant, root: Path) -> AISourceSyncResult:
     agent = ensure_demo_agent(tenant=tenant, provider=provider)
     sources = list(KnowledgeSource.objects.filter(tenant=tenant, active=True).order_by('title'))
     link_agent_sources(tenant=tenant, agent=agent, sources=sources)
+    for specialist in ensure_specialist_agents(tenant=tenant, provider=provider):
+        link_agent_sources(tenant=tenant, agent=specialist, sources=sources)
     return result
 
 

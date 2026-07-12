@@ -1,0 +1,37 @@
+{% extends 'futebol/base.html' %}
+
+{% block content %}
+<style>
+  .draft-banner{padding:1rem;border-radius:14px;background:rgba(85,167,255,.12);margin:1rem 0}.draft-grid{display:grid;grid-template-columns:2fr 1fr;gap:1rem}.draft-list{display:grid;gap:.6rem}.draft-player{display:grid;grid-template-columns:60px 1fr auto;gap:.75rem;align-items:center;padding:.75rem;border-radius:12px;background:rgba(255,255,255,.045)}.position{font-weight:800;color:var(--tenant-accent)}@media(max-width:760px){.draft-grid{grid-template-columns:1fr}}
+</style>
+<section class="hero">
+  <div>
+    <span class="eyebrow">Plano {{ draft.plan.get_variant_display }} · {{ draft.plan.formation }} · {{ draft.get_status_display }}</span>
+    <h1>Rascunho de escalação</h1>
+    <p>{{ draft.club.name }} · {{ draft.match.home_club.name }} × {{ draft.match.away_club.name }}</p>
+  </div>
+</section>
+<p class="draft-banner"><strong>Decisão humana obrigatória.</strong> Este rascunho é editável e não alterou a escalação oficial da partida.</p>
+<form method="post" action="{% url 'intelligent-coach-review-draft' draft.pk %}">
+{% csrf_token %}
+<p>Marque os 11 titulares. Desmarcar um titular e marcar um reserva realiza a substituição no rascunho.</p>
+<div class="draft-grid">
+  <section>
+    <h2>Titulares</h2>
+    <div class="draft-list">
+      {% for selection in starters %}
+      <label class="draft-player"><span><input type="checkbox" name="starters" value="{{ selection.pk }}" checked> <span class="position">{{ selection.position }}</span></span><span><strong>{{ selection.player.full_name }}</strong><br><small>{{ selection.rationale }}</small></span><span>{% if selection.minute_limit %}até {{ selection.minute_limit }} min{% endif %}</span></label>
+      {% empty %}<p>Nenhum titular sugerido.</p>{% endfor %}
+    </div>
+  </section>
+  <aside>
+    <h2>Banco</h2>
+    <div class="draft-list">
+      {% for selection in bench %}<label class="draft-player"><span><input type="checkbox" name="starters" value="{{ selection.pk }}"> <span class="position">{{ selection.position }}</span></span><span>{{ selection.player.full_name }}</span><span>{% if selection.minute_limit %}até {{ selection.minute_limit }} min{% endif %}</span></label>{% empty %}<p>Sem reservas no recorte atual.</p>{% endfor %}
+    </div>
+  </aside>
+</div>
+<p><button class="button button-primary" type="submit">Salvar revisão humana</button></p>
+</form>
+<p><a class="button button-secondary" href="{% url 'intelligent-coach-dossier' draft.plan.dossier_id %}">Voltar ao Dossiê</a></p>
+{% endblock %}

@@ -36,10 +36,12 @@ from .models import (
     Match,
     MatchEvent,
     MatchLineup,
+    MatchDossier,
     Negotiation,
     Notification,
     Person,
     Proposal,
+    SportsDataSource,
     Tenant,
     TenantBranding,
     TenantMembership,
@@ -224,8 +226,18 @@ class AIFeatureTests(Sprint3BaseTestCase):
 
         self.assertEqual(KnowledgeSource.objects.filter(tenant=self.tenant).count(), 10)
         self.assertEqual(AIProvider.objects.filter(tenant=self.tenant).count(), 2)
-        self.assertEqual(AIAgent.objects.filter(tenant=self.tenant).count(), 1)
-        self.assertEqual(AIAgentSourceLink.objects.filter(tenant=self.tenant).count(), 10)
+        self.assertTrue(AIAgent.objects.filter(tenant=self.tenant, slug='scout-ia').exists())
+        self.assertEqual(
+            AIAgent.objects.filter(tenant=self.tenant, slug__startswith='coach-').count(),
+            8,
+        )
+        self.assertEqual(
+            AIAgentSourceLink.objects.filter(
+                tenant=self.tenant,
+                agent__slug='scout-ia',
+            ).count(),
+            10,
+        )
         self.assertEqual(KnowledgeSource.objects.get(tenant=self.tenant, identifier='external:kaggle').source_url, 'https://www.kaggle.com/')
 
 
@@ -1161,6 +1173,9 @@ class RemainingPrdSprintTests(Sprint3BaseTestCase):
         self.assertEqual(tenant.name, 'Avaí FC')
         self.assertEqual(tenant.branding.public_title, 'Avaí FC Intelligence')
         self.assertTrue(TenantModuleSubscription.objects.filter(tenant=tenant, module_code='previsoes', enabled=True).exists())
+        self.assertEqual(AIAgent.objects.filter(tenant=tenant, slug__startswith='coach-').count(), 8)
+        self.assertTrue(MatchDossier.objects.filter(tenant=tenant, status=MatchDossier.Status.READY).exists())
+        self.assertTrue(SportsDataSource.objects.filter(tenant=tenant, quality='synthetic').exists())
 
 
 class ApprovalEngineTests(TestCase):

@@ -44,6 +44,7 @@ NAV_GROUPS = (
         'items': (
             {'label': 'Dashboard', 'url_name': 'home', 'icon': '🏠'},
             {'label': 'Clubes', 'url_name': 'club-list', 'icon': '⚽'},
+            {'label': 'Pessoas', 'url_name': 'person-list', 'icon': '👥'},
             {'label': 'Competições', 'url_name': 'competition-list', 'icon': '🏆'},
             {'label': 'Partidas', 'url_name': 'match-list', 'icon': '📅'},
         ),

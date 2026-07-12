@@ -1,22 +1,6 @@
-from .models import Tenant, TenantBranding, TenantMembership
+from .models import TenantBranding, TenantMembership
 from .modules import ACCOUNT_GROUP, build_nav_groups, enabled_module_codes
-
-
-def _active_tenant(request, memberships):
-    """Tenant ativo para branding/menu.
-
-    Superusuário: primeiro tenant ativo (ou o selecionado via ?tenant=).
-    Demais: primeiro tenant de vínculo ativo.
-    """
-    if not request.user.is_authenticated:
-        return None
-    if request.user.is_superuser:
-        tenant_id = request.GET.get('tenant')
-        if tenant_id:
-            return Tenant.objects.filter(pk=tenant_id).first()
-        return Tenant.objects.filter(active=True).first()
-    membership = memberships[0] if memberships else None
-    return membership.tenant if membership else None
+from .services.tenancy import accessible_tenants, active_tenant
 
 
 def sprint_context(request):
@@ -29,7 +13,7 @@ def sprint_context(request):
             .order_by('tenant__name')
         )
 
-    tenant = _active_tenant(request, memberships)
+    tenant = active_tenant(request, required=False)
 
     if tenant is not None:
         branding = getattr(tenant, 'branding', None) or TenantBranding(tenant=tenant)
@@ -42,6 +26,7 @@ def sprint_context(request):
     return {
         'sprint_name': 'Operação',
         'tenant_memberships': memberships,
+        'tenant_options': list(accessible_tenants(request.user)) if request.user.is_authenticated else [],
         'is_authenticated': request.user.is_authenticated,
         'active_tenant': tenant,
         'branding': branding,

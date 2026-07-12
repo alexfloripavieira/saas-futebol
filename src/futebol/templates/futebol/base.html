@@ -321,6 +321,21 @@
         </nav>
       </aside>
       <main class="content">
+        {% if active_tenant and tenant_options|length > 1 %}
+          <div class="topbar">
+            <span class="pill">Tenant ativo: {{ active_tenant.name }}</span>
+            <form method="post" action="{% url 'tenant-select' %}">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.path }}">
+              <label for="tenant-switcher">Trocar tenant</label>
+              <select id="tenant-switcher" name="tenant" onchange="this.form.submit()">
+                {% for tenant_option in tenant_options %}
+                  <option value="{{ tenant_option.id }}"{% if tenant_option.id == active_tenant.id %} selected{% endif %}>{{ tenant_option.name }}</option>
+                {% endfor %}
+              </select>
+            </form>
+          </div>
+        {% endif %}
         {% if messages %}
           {% for message in messages %}
             <div class="alert alert-{{ message.tags }}">{{ message }}</div>

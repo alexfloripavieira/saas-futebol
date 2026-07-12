@@ -65,15 +65,45 @@ def approvable_models() -> set[type[models.Model]]:
 @transaction.atomic
 def open_request(target: models.Model, requested_by, reason: str = '') -> ApprovalRequest:
     """Auto-open a Solicitação over `target` (ADR-0001, decision 9)."""
+    if target.pk is None:
+        raise ValidationError('O alvo precisa estar salvo antes de solicitar aprovação.')
     spec = spec_for_model(type(target))
     flow = ApprovalFlow.objects.get(
         tenant=target.tenant, target_kind=spec.target_kind, active=True
     )
+    if not flow.steps.exists():
+        raise ValidationError('O fluxo precisa ter ao menos uma etapa antes de receber solicitações.')
+
+    if not requested_by.is_superuser:
+        allowed_roles = {
+            spec.proponent_role,
+            TenantMembership.Role.ADMIN_TENANT,
+            TenantMembership.Role.ADMIN_PLATAFORMA,
+        }
+        can_propose = TenantMembership.objects.filter(
+            user=requested_by,
+            tenant=target.tenant,
+            role__in=allowed_roles,
+            active=True,
+            tenant__active=True,
+        ).exists()
+        if not can_propose:
+            raise ValidationError('O usuário não possui o papel exigido para solicitar esta aprovação.')
+
+    content_type = ContentType.objects.get_for_model(type(target))
+    if ApprovalRequest.objects.select_for_update().filter(
+        tenant=target.tenant,
+        content_type=content_type,
+        object_id=str(target.pk),
+        status=ApprovalRequest.Status.OPEN,
+    ).exists():
+        raise ValidationError('Já existe uma solicitação aberta para este alvo.')
+
     request = ApprovalRequest(
         tenant=target.tenant,
         flow=flow,
         requested_by=requested_by,
-        content_type=ContentType.objects.get_for_model(type(target)),
+        content_type=content_type,
         object_id=str(target.pk),
         reason=reason,
     )
@@ -102,6 +132,11 @@ def cast_decision(request: ApprovalRequest, step, user, outcome: str, note: str 
     Solicitação and runs the gate's on_rejected. An approval resolves the case
     only once every Etapa of the flow has an approving Decisão.
     """
+    if not request.flow.steps.exists():
+        raise ValidationError('Não é possível decidir uma solicitação cujo fluxo não possui etapas.')
+    if step is None:
+        raise ValidationError('Não há etapa pendente para esta solicitação.')
+
     decision = ApprovalDecision(
         tenant=request.tenant,
         request=request,

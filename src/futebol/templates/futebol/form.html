@@ -16,7 +16,7 @@
       </div>
     {% endif %}
 
-    <form method="post" class="stack">
+    <form method="post" enctype="multipart/form-data" class="stack">
       {% csrf_token %}
       <div class="form-grid">
         {% for field in form.visible_fields %}

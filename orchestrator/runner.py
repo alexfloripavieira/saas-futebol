@@ -55,6 +55,10 @@ def now():
 def find_next_pending(sprints, state):
     """Encontra a próxima subtask pendente respeitando a ordem."""
     for sprint in sprints["sprints"]:
+        # Sprints concluídas podem manter subtarefas históricas/suprimidas sem
+        # voltar para a fila. O status da sprint é a autoridade do planner.
+        if sprint.get("status") == "completed":
+            continue
         for task in sprint["tasks"]:
             for sub in task["subtasks"]:
                 if sub["status"] == "pending":

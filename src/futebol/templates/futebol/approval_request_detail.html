@@ -1,0 +1,31 @@
+{% extends 'futebol/base.html' %}
+
+{% block title %}{{ title }} · SaaS do Futebol{% endblock %}
+
+{% block content %}
+  <div class="hero">
+    <span class="ferrari-signal">{{ approval_request.get_status_display }}</span>
+    <h1>{{ approval_request.flow.name }}</h1>
+    <p class="muted">Alvo: {{ target|default:'Indisponível' }} · Solicitante: {{ approval_request.requested_by }}</p>
+  </div>
+  <div class="grid">
+    <section class="card stack">
+      <h2>Etapas</h2>
+      {% for step in steps %}
+        <div class="state"><strong>Etapa {{ step.order }}</strong><div class="muted">{{ step.get_required_role_display }}{% if step.requires_evidence %} · exige evidência{% endif %}</div></div>
+      {% empty %}<div class="state state-error">Fluxo sem etapas.</div>{% endfor %}
+    </section>
+    <section class="card stack">
+      <h2>Decisões</h2>
+      {% for decision in decisions %}
+        <div class="state"><strong>{{ decision.get_outcome_display }}</strong><div class="muted">{{ decision.decided_by }} · etapa {{ decision.step.order }}</div></div>
+      {% empty %}<div class="state state-empty">Nenhuma decisão registrada.</div>{% endfor %}
+    </section>
+  </div>
+  <section class="card stack" style="margin-top:16px;">
+    <h2>Evidências</h2>
+    {% for evidence in evidences %}
+      <div class="state"><strong>{{ evidence.note|default:'Evidência' }}</strong>{% if evidence.file %}<a href="{% url 'evidence-download' evidence.pk %}">Baixar arquivo</a>{% endif %}</div>
+    {% empty %}<div class="state state-empty">Nenhuma evidência anexada.</div>{% endfor %}
+  </section>
+{% endblock %}

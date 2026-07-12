@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-import hmac
 from functools import wraps
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import OperationalError, transaction
 from django.db.models import Count, Q
+from django.forms import HiddenInput
 from django.http import HttpResponse, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -39,6 +40,7 @@ from .forms import (
     NegotiationForm,
     NotificationForm,
     OnboardingForm,
+    PersonForm,
     ProposalForm,
     TenantBrandingForm,
     TenantMembershipForm,
@@ -80,24 +82,13 @@ from .services.data_io import export_csv, import_payload
 from .services import approvals
 from .services.audit import log_audit_event, snapshot_instance
 from .services.permissions import require_any_role, user_has_any_role
+from .services.tenancy import accessible_tenants, active_tenant, select_active_tenant
 
 User = get_user_model()
 
 
-def _accessible_tenants(user):
-    return user.tenant_memberships.filter(active=True, tenant__active=True).values_list('tenant_id', flat=True)
-
-
 def _primary_tenant(request):
-    if request.user.is_superuser:
-        tenant_id = request.GET.get('tenant') or request.POST.get('tenant')
-        if tenant_id:
-            return get_object_or_404(Tenant, pk=tenant_id)
-        return Tenant.objects.filter(active=True).first()
-    tenant_id = _accessible_tenants(request.user).first()
-    if tenant_id is None:
-        raise PermissionDenied('O usuário não possui tenant ativo para operar.')
-    return get_object_or_404(Tenant, pk=tenant_id)
+    return active_tenant(request)
 
 
 def _require_roles(request, roles, tenant=None, message='Sem permissão para executar esta ação.'):
@@ -136,91 +127,7 @@ def _scope_queryset(request, model, *select_related_fields):
     qs = model.objects.all()
     if select_related_fields:
         qs = qs.select_related(*select_related_fields)
-    if request.user.is_superuser:
-        return qs
-    tenant_ids = list(_accessible_tenants(request.user))
-    return qs.filter(tenant_id__in=tenant_ids)
-
-
-def _public_api_authorized(request, tenant):
-    """Autoriza a API pública com a chave ESPECÍFICA do tenant requisitado.
-
-    A chave não é global: cada tenant tem a sua (`Tenant.public_api_key`). Uma
-    chave só dá acesso ao próprio tenant — não é possível ler outros tenants
-    trocando o slug na URL.
-    """
-    expected = (tenant.public_api_key or '').strip()
-    provided = (request.headers.get('X-SaaS-Futebol-API-Key') or request.GET.get('api_key', '')).strip()
-    if not expected or not provided:
-        return False
-    return hmac.compare_digest(provided, expected)
-
-
-def _public_api_forbidden():
-    return JsonResponse({'detail': 'Chave de API inválida ou ausente.'}, status=403)
-
-
-def _public_api_tenant(tenant_slug):
-    return get_object_or_404(Tenant, slug=tenant_slug, active=True)
-
-
-def _public_api_match_payload(match):
-    return {
-        'reference_code': match.reference_code,
-        'competition': match.phase.edition.competition.name,
-        'competition_slug': match.phase.edition.competition.slug,
-        'edition': match.phase.edition.name,
-        'phase': match.phase.name,
-        'home_club': match.home_club.name,
-        'away_club': match.away_club.name,
-        'status': match.get_status_display(),
-        'status_code': match.status,
-        'score': None if match.home_score is None or match.away_score is None else {
-            'home': match.home_score,
-            'away': match.away_score,
-        },
-        'scheduled_at': match.scheduled_at.strftime('%Y-%m-%dT%H:%M:%S'),
-        'venue': match.venue,
-    }
-
-
-def _public_api_event_payload(event):
-    return {
-        'match': event.match.reference_code,
-        'competition': event.match.phase.edition.competition.slug,
-        'type': event.get_event_type_display(),
-        'type_code': event.event_type,
-        'minute': event.minute,
-        'period': event.period,
-        'player': event.player.full_name if event.player_id else None,
-    }
-
-
-def _public_api_overview_payload(tenant):
-    match_qs = Match.objects.filter(tenant=tenant).select_related('phase', 'phase__edition', 'phase__edition__competition', 'home_club', 'away_club')
-    contract_qs = Contract.objects.filter(tenant=tenant).select_related('person', 'club')
-    event_qs = MatchEvent.objects.filter(tenant=tenant).select_related('match', 'match__phase', 'match__phase__edition', 'match__phase__edition__competition', 'player')
-    summary_cards = [
-        {'label': 'Clubes', 'value': Club.objects.filter(tenant=tenant).count()},
-        {'label': 'Competições', 'value': Competition.objects.filter(tenant=tenant).count()},
-        {'label': 'Partidas', 'value': match_qs.count()},
-        {'label': 'Partidas disputadas', 'value': match_qs.filter(status=Match.Status.PLAYED).count()},
-        {'label': 'Gols registrados', 'value': event_qs.filter(event_type=MatchEvent.EventType.GOAL).count()},
-        {'label': 'Contratos ativos', 'value': contract_qs.filter(status=Contract.Status.ACTIVE).count()},
-    ]
-    recent_matches = [_public_api_match_payload(match) for match in match_qs[:5]]
-    recent_events = [_public_api_event_payload(event) for event in event_qs[:5]]
-    return {
-        'tenant': {'name': tenant.name, 'slug': tenant.slug},
-        'generated_at': timezone.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        'summary_cards': summary_cards,
-        'recent_matches': recent_matches,
-        'recent_events': recent_events,
-        'endpoints': [
-            {'path': f'/api/publica/{tenant.slug}/visao-geral/', 'method': 'GET'},
-            {'path': f'/api/publica/{tenant.slug}/partidas/', 'method': 'GET'},
-        ],
-    }
+    return qs.filter(tenant=active_tenant(request))
 
 
 class TablePage:
@@ -238,11 +145,14 @@ class TablePage:
     create_label = 'Novo registro'
     extra_actions: tuple[dict[str, str], ...] = ()
     empty_message = 'Nenhum registro encontrado.'
+    queryset_factory = None
 
     def __init__(self, request):
         self.request = request
 
     def queryset(self):
+        if self.queryset_factory is not None:
+            return self.queryset_factory()
         return _scope_queryset(self.request, self.model, *self.select_related_fields)
 
     def filtered_queryset(self):
@@ -338,14 +248,15 @@ class FormPage:
         self.post_save = post_save
 
     def form_kwargs(self):
-        kwargs = {'tenant': _primary_tenant(self.request), 'user': self.request.user}
+        tenant = self.instance.tenant if self.instance is not None and hasattr(self.instance, 'tenant') else _primary_tenant(self.request)
+        kwargs = {'tenant': tenant, 'user': self.request.user}
         if self.instance is not None:
             kwargs['instance'] = self.instance
         return kwargs
 
     def get_form(self):
         if self.request.method == 'POST':
-            return self.form_class(self.request.POST, **self.form_kwargs())
+            return self.form_class(self.request.POST, self.request.FILES, **self.form_kwargs())
         return self.form_class(**self.form_kwargs())
 
     def get_context(self, form):
@@ -403,7 +314,7 @@ def root_dispatch(request):
     """Ponto de entrada: institucional para visitantes, painel/onboarding para logados."""
     if not request.user.is_authenticated:
         return landing(request)
-    if request.user.is_superuser or _accessible_tenants(request.user).exists():
+    if accessible_tenants(request.user).exists():
         return redirect('home')
     return redirect('onboarding')
 
@@ -417,9 +328,21 @@ def landing(request):
 
 
 @login_required
+def tenant_select(request):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    select_active_tenant(request, request.POST.get('tenant'))
+    messages.success(request, 'Tenant ativo alterado com sucesso.')
+    next_url = request.POST.get('next') or reverse('home')
+    if not next_url.startswith('/') or next_url.startswith('//'):
+        next_url = reverse('home')
+    return redirect(next_url)
+
+
+@login_required
 def onboarding(request):
     """Onboarding inicial: cria tenant, branding, módulos e o primeiro vínculo."""
-    if _accessible_tenants(request.user).exists():
+    if accessible_tenants(request.user).exists():
         messages.info(request, 'Você já possui um tenant ativo.')
         return redirect('home')
 
@@ -624,17 +547,17 @@ def tenant_membership_edit(request, pk):
 
 @login_required
 def home(request):
-    memberships = request.user.tenant_memberships.select_related('tenant').filter(active=True, tenant__active=True)
-    tenant_ids = list(memberships.values_list('tenant_id', flat=True))
-    club_count = Club.objects.filter(tenant_id__in=tenant_ids).count()
-    competition_count = Competition.objects.filter(tenant_id__in=tenant_ids).count()
-    match_count = Match.objects.filter(tenant_id__in=tenant_ids).count()
-    approval_count = ApprovalRequest.objects.filter(tenant_id__in=tenant_ids).count()
-    notification_count = Notification.objects.filter(tenant_id__in=tenant_ids).count()
-    contract_count = Contract.objects.filter(tenant_id__in=tenant_ids).count()
-    negotiation_count = Negotiation.objects.filter(tenant_id__in=tenant_ids).count()
-    proposal_count = Proposal.objects.filter(tenant_id__in=tenant_ids).count()
-    evidence_count = Evidence.objects.filter(tenant_id__in=tenant_ids).count()
+    tenant = _primary_tenant(request)
+    memberships = request.user.tenant_memberships.select_related('tenant').filter(active=True, tenant=tenant)
+    club_count = Club.objects.filter(tenant=tenant).count()
+    competition_count = Competition.objects.filter(tenant=tenant).count()
+    match_count = Match.objects.filter(tenant=tenant).count()
+    approval_count = ApprovalRequest.objects.filter(tenant=tenant).count()
+    notification_count = Notification.objects.filter(tenant=tenant).count()
+    contract_count = Contract.objects.filter(tenant=tenant).count()
+    negotiation_count = Negotiation.objects.filter(tenant=tenant).count()
+    proposal_count = Proposal.objects.filter(tenant=tenant).count()
+    evidence_count = Evidence.objects.filter(tenant=tenant).count()
     context = {
         'title': 'SaaS do Futebol',
         'subtitle': 'Interface de operação da plataforma',
@@ -649,7 +572,7 @@ def home(request):
         'negotiation_count': negotiation_count,
         'proposal_count': proposal_count,
         'evidence_count': evidence_count,
-        'tenant_count': len(tenant_ids),
+        'tenant_count': 1,
     }
     return render(request, 'futebol/home.html', context)
 
@@ -700,6 +623,53 @@ def club_edit(request, pk):
         'admin_plataforma',
     ], tenant=club.tenant)
     return _render_form(request, ClubForm, instance=club, title='Editar clube', subtitle='Atualize os dados cadastrais do clube', success_url_name='club-list', success_message='Clube atualizado com sucesso.', cancel_url=reverse('club-list'))
+
+
+@login_required
+def person_list(request):
+    page = TablePage(request)
+    page.model = Person
+    page.title = 'Pessoas'
+    page.subtitle = 'Atletas, comissão, arbitragem e demais profissionais'
+    page.search_fields = ('full_name', 'document_id', 'kind')
+    page.default_ordering = 'full_name'
+    page.ordering_map = {'full_name': 'full_name', '-full_name': '-full_name', 'kind': 'kind'}
+    page.columns = (
+        ('Nome', 'full_name'),
+        ('Documento', lambda obj: obj.document_id or '-'),
+        ('Tipo', 'get_kind_display'),
+        ('Nascimento', lambda obj: obj.birth_date.strftime('%d/%m/%Y') if obj.birth_date else '-'),
+        ('Ativa', lambda obj: 'Sim' if obj.active else 'Não'),
+    )
+    page.row_actions = lambda request, obj: format_html(
+        '<a class="action action-secondary" href="{}">Editar</a>',
+        reverse('person-edit', args=[obj.pk]),
+    )
+    page.create_url = reverse('person-create')
+    page.create_label = 'Nova pessoa'
+    page.empty_message = 'Nenhuma pessoa cadastrada ainda.'
+    return page.render()
+
+
+@login_required
+def person_create(request):
+    _require_roles(request, [
+        TenantMembership.Role.ADMIN_TENANT,
+        TenantMembership.Role.GESTOR_CLUBE,
+        TenantMembership.Role.ADMIN_PLATAFORMA,
+    ])
+    return _render_form(request, PersonForm, title='Nova pessoa', subtitle='Cadastre uma pessoa para a operação esportiva', success_url_name='person-list', success_message='Pessoa cadastrada com sucesso.', cancel_url=reverse('person-list'))
+
+
+@login_required
+def person_edit(request, pk):
+    person = _get_visible_object(request, Person, pk)
+    _require_roles(request, [
+        TenantMembership.Role.ADMIN_TENANT,
+        TenantMembership.Role.GESTOR_CLUBE,
+        TenantMembership.Role.ADMIN_PLATAFORMA,
+    ], tenant=person.tenant)
+    return _render_form(request, PersonForm, instance=person, title='Editar pessoa', subtitle='Atualize os dados da pessoa', success_url_name='person-list', success_message='Pessoa atualizada com sucesso.', cancel_url=reverse('person-list'))
 
 
 @login_required
@@ -759,7 +729,7 @@ def match_list(request):
         ('Mandante', 'home_club.name'),
         ('Visitante', 'away_club.name'),
         ('Data', lambda obj: obj.scheduled_at.strftime('%d/%m/%Y %H:%M')),
-        ('Status', 'status'),
+        ('Status', 'get_status_display'),
         ('Placar', lambda obj: '-' if obj.home_score is None or obj.away_score is None else f'{obj.home_score} x {obj.away_score}'),
     )
     page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('match-edit', args=[obj.pk]))
@@ -855,10 +825,40 @@ def approval_request_create(request):
 
 @login_required
 @_module_required('aprovacoes')
+def approval_request_detail(request, pk):
+    approval_request = _visible_approval_request(request, pk)
+    evidences = Evidence.objects.filter(
+        tenant=approval_request.tenant,
+        content_type=approval_request.content_type,
+        object_id=approval_request.object_id,
+    ).select_related('uploaded_by')
+    return render(request, 'futebol/approval_request_detail.html', {
+        'title': 'Detalhe da solicitação',
+        'subtitle': approval_request.flow.name,
+        'approval_request': approval_request,
+        'target': approval_request.content_object,
+        'steps': approval_request.flow.steps.all(),
+        'decisions': approval_request.decisions.select_related('step', 'decided_by'),
+        'evidences': evidences,
+    })
+
+
+@login_required
+@_module_required('aprovacoes')
 def notification_list(request):
     page = TablePage(request)
     page.model = Notification
     page.select_related_fields = ('tenant', 'recipient')
+    tenant = _primary_tenant(request)
+    can_manage = request.user.is_superuser or user_has_any_role(
+        request.user,
+        tenant.pk,
+        [TenantMembership.Role.ADMIN_TENANT, TenantMembership.Role.ADMIN_PLATAFORMA],
+    )
+    page.queryset_factory = lambda: Notification.objects.filter(
+        tenant=tenant,
+        **({} if can_manage else {'recipient': request.user}),
+    ).select_related('tenant', 'recipient')
     page.title = 'Notificações'
     page.subtitle = 'Mensagens enviadas, pendentes e falhas'
     page.search_fields = ('subject', 'recipient__username', 'channel', 'status')
@@ -868,7 +868,7 @@ def notification_list(request):
         ('Assunto', 'subject'),
         ('Destinatário', 'recipient.username'),
         ('Canal', 'channel'),
-        ('Status', 'status'),
+        ('Status', 'get_status_display'),
         ('Enviada em', lambda obj: obj.sent_at.strftime('%d/%m/%Y %H:%M') if obj.sent_at else '-'),
     )
     page.row_actions = _notification_actions
@@ -927,8 +927,7 @@ def transfer_center(request):
         'auditor_somente_leitura',
         'admin_plataforma',
     ])
-    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
-    scope = {} if request.user.is_superuser else {'tenant_id__in': tenant_ids}
+    scope = {'tenant': _primary_tenant(request)}
     context = {
         'title': 'Transferências, contratos e evidências',
         'subtitle': 'Central operacional para negociações, contratos e documentação de suporte',
@@ -974,8 +973,7 @@ def report_center(request):
         'auditor_somente_leitura',
         'admin_plataforma',
     ])
-    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
-    scope = {} if request.user.is_superuser else {'tenant_id__in': tenant_ids}
+    scope = {'tenant': _primary_tenant(request)}
 
     contract_labels = dict(Contract.Status.choices)
     negotiation_labels = dict(Negotiation.Status.choices)
@@ -1044,14 +1042,8 @@ def bi_center(request):
         'auditor_somente_leitura',
         'admin_plataforma',
     ])
-    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
-    accessible_tenants = Tenant.objects.filter(active=True) if request.user.is_superuser else Tenant.objects.filter(pk__in=tenant_ids, active=True)
-    default_tenant = None
-    tenant_param = request.GET.get('tenant')
-    if tenant_param:
-        default_tenant = accessible_tenants.filter(pk=tenant_param).first()
-    if default_tenant is None:
-        default_tenant = accessible_tenants.first()
+    default_tenant = _primary_tenant(request)
+    accessible_tenants = Tenant.objects.filter(pk=default_tenant.pk)
     form = BIExplorerForm(request.GET or None, tenant=default_tenant, user=request.user, accessible_tenants=accessible_tenants)
     selected_tenant = default_tenant
     competition = None
@@ -1157,40 +1149,14 @@ def public_api_docs(request):
             'subtitle': 'Leitura externa de dados esportivos, com autenticação por chave e escopo por tenant.',
             'sprint_label': 'API pública',
             'endpoints': [
-                {'label': 'Visão geral', 'method': 'GET', 'path': '/api/publica/<tenant_slug>/visao-geral/'},
-                {'label': 'Partidas', 'method': 'GET', 'path': '/api/publica/<tenant_slug>/partidas/'},
+                {'label': 'Visão geral', 'method': 'GET', 'path': '/api/publica/v1/<tenant_slug>/visao-geral/'},
+                {'label': 'Partidas', 'method': 'GET', 'path': '/api/publica/v1/<tenant_slug>/partidas/'},
             ],
             'auth_header': 'X-SaaS-Futebol-API-Key',
-            'auth_query': 'api_key',
-            'example_curl': "curl -H 'X-SaaS-Futebol-API-Key: SUA_CHAVE' https://seu-dominio/api/publica/seu-tenant/visao-geral/",
+            'auth_query': '',
+            'example_curl': "curl -H 'X-SaaS-Futebol-API-Key: SUA_CHAVE' https://seu-dominio/api/publica/v1/seu-tenant/visao-geral/",
         },
     )
-
-
-def public_api_overview(request, tenant_slug):
-    tenant = _public_api_tenant(tenant_slug)
-    if not _public_api_authorized(request, tenant):
-        return _public_api_forbidden()
-    return JsonResponse(_public_api_overview_payload(tenant))
-
-
-def public_api_matches(request, tenant_slug):
-    tenant = _public_api_tenant(tenant_slug)
-    if not _public_api_authorized(request, tenant):
-        return _public_api_forbidden()
-    match_qs = Match.objects.filter(tenant=tenant).select_related('phase', 'phase__edition', 'phase__edition__competition', 'home_club', 'away_club').order_by('-scheduled_at')
-    competition_slug = request.GET.get('competition')
-    status = request.GET.get('status')
-    if competition_slug:
-        match_qs = match_qs.filter(phase__edition__competition__slug=competition_slug)
-    if status:
-        match_qs = match_qs.filter(status=status)
-    return JsonResponse({
-        'tenant': {'name': tenant.name, 'slug': tenant.slug},
-        'generated_at': timezone.now().strftime('%Y-%m-%dT%H:%M:%S'),
-        'count': match_qs.count(),
-        'results': [_public_api_match_payload(match) for match in match_qs[:50]],
-    })
 
 
 @login_required
@@ -1214,7 +1180,7 @@ def contract_list(request):
         ('Clube', 'club.name'),
         ('Início', lambda obj: obj.start_date.strftime('%d/%m/%Y')),
         ('Fim', lambda obj: obj.end_date.strftime('%d/%m/%Y') if obj.end_date else '-'),
-        ('Status', 'status'),
+        ('Status', 'get_status_display'),
     )
     page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('contract-edit', args=[obj.pk]))
     page.create_url = reverse('contract-create')
@@ -1266,11 +1232,11 @@ def negotiation_list(request):
     page.columns = (
         ('Pessoa', 'person.full_name'),
         ('Clube', 'club.name'),
-        ('Status', 'status'),
+        ('Status', 'get_status_display'),
         ('Aberta em', lambda obj: obj.opened_at.strftime('%d/%m/%Y %H:%M')),
         ('Encerrada em', lambda obj: obj.closed_at.strftime('%d/%m/%Y %H:%M') if obj.closed_at else '-'),
     )
-    page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('negotiation-edit', args=[obj.pk]))
+    page.row_actions = _negotiation_actions
     page.create_url = reverse('negotiation-create')
     page.create_label = 'Nova negociação'
     page.empty_message = 'Nenhuma negociação cadastrada ainda.'
@@ -1302,6 +1268,66 @@ def negotiation_edit(request, pk):
 
 @login_required
 @_module_required('transferencias')
+def transfer_approval_open(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    negotiation = _get_visible_object(request, Negotiation, pk)
+    try:
+        approvals.open_request(negotiation, request.user, reason=request.POST.get('reason', 'Transferência'))
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+    else:
+        messages.success(request, 'Solicitação de transferência aberta com sucesso.')
+    return redirect('negotiation-list')
+
+
+@login_required
+@_module_required('transferencias')
+def transfer_evidence_create(request, pk):
+    negotiation = _get_visible_object(request, Negotiation, pk)
+    _require_roles(request, [
+        TenantMembership.Role.ADMIN_TENANT,
+        TenantMembership.Role.GESTOR_CLUBE,
+        TenantMembership.Role.APROVADOR,
+        TenantMembership.Role.ADMIN_PLATAFORMA,
+    ], tenant=negotiation.tenant)
+    content_type = ContentType.objects.get_for_model(Negotiation)
+    initial = {'content_type': content_type.pk, 'object_id': str(negotiation.pk)}
+    data = request.POST.copy() if request.method == 'POST' else None
+    if data is not None:
+        data['content_type'] = str(content_type.pk)
+        data['object_id'] = str(negotiation.pk)
+    form = EvidenceForm(
+        data,
+        request.FILES or None,
+        tenant=negotiation.tenant,
+        user=request.user,
+        initial=initial,
+    )
+    form.fields['content_type'].widget = HiddenInput()
+    form.fields['object_id'].widget = HiddenInput()
+    if request.method == 'POST' and form.is_valid():
+        evidence = form.save()
+        log_audit_event(
+            tenant=negotiation.tenant,
+            actor=request.user,
+            action='create',
+            obj=evidence,
+            after_state=snapshot_instance(evidence),
+            correlation_id=getattr(request, 'request_id', ''),
+        )
+        messages.success(request, 'Evidência anexada à transferência.')
+        return redirect('negotiation-list')
+    return render(request, 'futebol/form.html', {
+        'title': 'Evidência da transferência',
+        'subtitle': f'Anexe a documentação de {negotiation.person.full_name}.',
+        'form': form,
+        'cancel_url': reverse('negotiation-list'),
+    })
+
+
+@login_required
+@_module_required('transferencias')
 def proposal_list(request):
     _require_roles(request, [
         'admin_tenant',
@@ -1321,7 +1347,7 @@ def proposal_list(request):
         ('Negociação', lambda obj: f'{obj.negotiation.person.full_name} × {obj.negotiation.club.name}'),
         ('Clube', 'club.name'),
         ('Valor', lambda obj: f'{obj.currency} {obj.amount}'),
-        ('Status', 'status'),
+        ('Status', 'get_status_display'),
         ('Enviada em', lambda obj: obj.sent_at.strftime('%d/%m/%Y %H:%M') if obj.sent_at else '-'),
     )
     page.row_actions = lambda request, obj: format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('proposal-edit', args=[obj.pk]))
@@ -1381,7 +1407,7 @@ def evidence_list(request):
     )
     page.row_actions = lambda request, obj: format_html(
         '{}{}',
-        format_html('<a class="action action-secondary" href="{}">Arquivo</a>', obj.file.url) if obj.file else '',
+        format_html('<a class="action action-secondary" href="{}">Arquivo</a>', reverse('evidence-download', args=[obj.pk])) if obj.file else '',
         format_html('<a class="action action-secondary" href="{}" target="_blank" rel="noreferrer">URL</a>', obj.url) if obj.url else '',
     )
     page.create_url = reverse('evidence-create')
@@ -1425,18 +1451,7 @@ def _cast(request, pk, outcome, success_text):
     except OperationalError:
         step = None
     if step is None:
-        approval_request.status = ApprovalRequest.Status.APPROVED if outcome == ApprovalDecision.Outcome.APPROVED else ApprovalRequest.Status.REJECTED
-        approval_request.resolved_at = timezone.now()
-        approval_request.save(update_fields=['status', 'resolved_at'])
-        log_audit_event(
-            tenant=approval_request.tenant,
-            actor=request.user,
-            action='approve' if outcome == ApprovalDecision.Outcome.APPROVED else 'reject',
-            obj=approval_request,
-            before_state={'status': ApprovalRequest.Status.OPEN},
-            after_state={'status': approval_request.status, 'resolved_at': approval_request.resolved_at.isoformat()},
-        )
-        messages.success(request, success_text)
+        messages.error(request, 'O fluxo não possui etapa pendente para decisão.')
         return redirect('approval-request-list')
     try:
         approvals.cast_decision(approval_request, step, request.user, outcome)
@@ -1590,8 +1605,7 @@ def integration_hub(request):
         'admin_tenant',
         'admin_plataforma',
     ])
-    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
-    scope = {} if request.user.is_superuser else {'tenant_id__in': tenant_ids}
+    scope = {'tenant': _primary_tenant(request)}
     context = {
         'title': 'Integrações, automações e IA',
         'subtitle': 'Centro operacional para conectores, rotinas e apoio inteligente',
@@ -1694,8 +1708,7 @@ def integration_export(request):
 @login_required
 @_module_required('automacoes')
 def automation_center(request):
-    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
-    scope = {} if request.user.is_superuser else {'tenant_id__in': tenant_ids}
+    scope = {'tenant': _primary_tenant(request)}
     open_approvals = ApprovalRequest.objects.filter(**scope, status=ApprovalRequest.Status.OPEN).count()
     integration_errors = IntegrationRecord.objects.filter(**scope, status='error').count()
     card_events = MatchEvent.objects.filter(**scope, event_type__in=[MatchEvent.EventType.YELLOW_CARD, MatchEvent.EventType.RED_CARD]).count()
@@ -2048,16 +2061,7 @@ def ai_agent_edit(request, pk):
 @login_required
 @_module_required('ia')
 def ai_center(request):
-    tenant_ids = [] if request.user.is_superuser else list(_accessible_tenants(request.user))
-    accessible_tenants = Tenant.objects.filter(active=True) if request.user.is_superuser else Tenant.objects.filter(pk__in=tenant_ids, active=True)
-    default_tenant = None
-    tenant_param = request.GET.get('tenant')
-    if tenant_param:
-        default_tenant = accessible_tenants.filter(pk=tenant_param).first()
-    if default_tenant is None:
-        default_tenant = accessible_tenants.first()
-    if default_tenant is None:
-        raise PermissionDenied('Nenhum tenant ativo disponível para análise tática.')
+    default_tenant = _primary_tenant(request)
 
     provider_qs = AIProvider.objects.filter(tenant=default_tenant).order_by('name')
     agent_qs = AIAgent.objects.filter(tenant=default_tenant).select_related('provider').order_by('name')
@@ -2283,59 +2287,74 @@ def _render_form(request, form_class, *, instance=None, title, subtitle, success
 
 def _visible_approval_request(request, pk):
     qs = ApprovalRequest.objects.select_related('tenant', 'flow', 'requested_by')
-    if request.user.is_superuser:
-        return get_object_or_404(qs, pk=pk)
-    tenant_ids = list(_accessible_tenants(request.user))
-    return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+    return get_object_or_404(qs.filter(tenant=_primary_tenant(request)), pk=pk)
 
 
 def _visible_notification(request, pk):
     qs = Notification.objects.select_related('tenant', 'recipient')
-    if request.user.is_superuser:
-        return get_object_or_404(qs, pk=pk)
-    tenant_ids = list(_accessible_tenants(request.user))
-    return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+    tenant = _primary_tenant(request)
+    can_manage = request.user.is_superuser or user_has_any_role(
+        request.user,
+        tenant.pk,
+        [TenantMembership.Role.ADMIN_TENANT, TenantMembership.Role.ADMIN_PLATAFORMA],
+    )
+    if not can_manage:
+        qs = qs.filter(recipient=request.user)
+    return get_object_or_404(qs.filter(tenant=tenant), pk=pk)
 
 
 def _visible_integration_record(request, pk):
     qs = IntegrationRecord.objects.select_related('tenant', 'external_system')
-    if request.user.is_superuser:
-        return get_object_or_404(qs, pk=pk)
-    tenant_ids = list(_accessible_tenants(request.user))
-    return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+    return get_object_or_404(qs.filter(tenant=_primary_tenant(request)), pk=pk)
 
 
 def _visible_membership(request, pk):
     qs = TenantMembership.objects.select_related('tenant', 'user')
-    if request.user.is_superuser:
-        return get_object_or_404(qs, pk=pk)
-    tenant_ids = list(_accessible_tenants(request.user))
-    return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+    return get_object_or_404(qs.filter(tenant=_primary_tenant(request)), pk=pk)
 
 
 def _visible_tenant_user(request, pk):
     qs = User.objects.filter(tenant_memberships__tenant__active=True).distinct()
-    if request.user.is_superuser:
-        return get_object_or_404(qs, pk=pk)
-    tenant_ids = list(_accessible_tenants(request.user))
-    return get_object_or_404(qs.filter(tenant_memberships__tenant_id__in=tenant_ids), pk=pk)
+    return get_object_or_404(qs.filter(tenant_memberships__tenant=_primary_tenant(request)), pk=pk)
 
 
 def _get_visible_object(request, model, pk):
     qs = model.objects.all()
-    if request.user.is_superuser:
-        return get_object_or_404(qs, pk=pk)
-    tenant_ids = list(_accessible_tenants(request.user))
-    return get_object_or_404(qs.filter(tenant_id__in=tenant_ids), pk=pk)
+    return get_object_or_404(qs.filter(tenant=_primary_tenant(request)), pk=pk)
 
 
 def _approval_request_actions(request, obj):
+    detail = format_html('<a class="action action-secondary" href="{}">Detalhes</a>', reverse('approval-request-detail', args=[obj.pk]))
     if obj.status != ApprovalRequest.Status.OPEN:
-        return format_html('<span class="muted">Sem ações</span>')
-    approve = _post_button(request, reverse('approval-request-approve', args=[obj.pk]), 'Aprovar', 'success')
-    reject = _post_button(request, reverse('approval-request-reject', args=[obj.pk]), 'Rejeitar', 'warning')
-    cancel = _post_button(request, reverse('approval-request-cancel', args=[obj.pk]), 'Cancelar', 'danger')
-    return format_html('<div class="row-actions">{}{}{} </div>', approve, reject, cancel)
+        return detail
+    step = _current_step(obj)
+    can_decide = request.user.is_superuser or (
+        step is not None
+        and user_has_any_role(request.user, obj.tenant_id, [step.required_role])
+    )
+    can_cancel = request.user.is_superuser or obj.requested_by_id == request.user.id or user_has_any_role(
+        request.user,
+        obj.tenant_id,
+        [TenantMembership.Role.ADMIN_TENANT, TenantMembership.Role.ADMIN_PLATAFORMA],
+    )
+    approve = _post_button(request, reverse('approval-request-approve', args=[obj.pk]), 'Aprovar', 'success') if can_decide else ''
+    reject = _post_button(request, reverse('approval-request-reject', args=[obj.pk]), 'Rejeitar', 'warning') if can_decide else ''
+    cancel = _post_button(request, reverse('approval-request-cancel', args=[obj.pk]), 'Cancelar', 'danger') if can_cancel else ''
+    return format_html('<div class="row-actions">{}{}{}{} </div>', detail, approve, reject, cancel)
+
+
+def _negotiation_actions(request, obj):
+    edit = format_html('<a class="action action-secondary" href="{}">Editar</a>', reverse('negotiation-edit', args=[obj.pk]))
+    can_operate = request.user.is_superuser or user_has_any_role(request.user, obj.tenant_id, [
+        TenantMembership.Role.ADMIN_TENANT,
+        TenantMembership.Role.GESTOR_CLUBE,
+        TenantMembership.Role.ADMIN_PLATAFORMA,
+    ])
+    if not can_operate:
+        return format_html('<span class="muted">Somente leitura</span>')
+    evidence = format_html('<a class="action action-secondary" href="{}">Evidência</a>', reverse('transfer-evidence-create', args=[obj.pk]))
+    approval = _post_button(request, reverse('transfer-approval-open', args=[obj.pk]), 'Solicitar aprovação', 'success')
+    return format_html('<div class="row-actions">{}{}{} </div>', edit, evidence, approval)
 
 
 def _notification_actions(request, obj):

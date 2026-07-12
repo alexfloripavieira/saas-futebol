@@ -6,23 +6,20 @@ import secrets
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 
+from .validators import evidence_upload_path, validate_evidence_file
+
 
 class Tenant(models.Model):
     name = models.CharField(max_length=120, unique=True)
     slug = models.SlugField(max_length=120, unique=True)
     active = models.BooleanField(default=True)
-    public_api_key = models.CharField(
-        max_length=64,
-        blank=True,
-        default='',
-        help_text='Chave da API pública específica deste tenant. Vazio = API desabilitada.',
-    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -33,11 +30,14 @@ class Tenant(models.Model):
         return self.name
 
     def rotate_public_api_key(self, *, save=True):
-        """Gera (ou regenera) a chave da API pública deste tenant."""
-        self.public_api_key = secrets.token_urlsafe(32)
-        if save:
-            self.save(update_fields=['public_api_key', 'updated_at'])
-        return self.public_api_key
+        """Emite uma chave e persiste somente sua representação segura."""
+        return PublicAPICredential.issue_for(self)
+
+    def revoke_public_api_key(self):
+        """Revoga a credencial atual, se existir."""
+        credential = PublicAPICredential.objects.filter(tenant=self).first()
+        if credential:
+            credential.revoke()
 
 
 class TenantMembership(models.Model):
@@ -122,6 +122,60 @@ class TenantScopedModel(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class PublicAPICredential(TenantScopedModel):
+    """Credencial da API pública sem armazenamento do segredo em texto puro."""
+
+    tenant = models.OneToOneField(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='public_api_credential',
+    )
+    key_prefix = models.CharField(max_length=12, unique=True)
+    key_hash = models.CharField(max_length=128)
+    active = models.BooleanField(default=True)
+    rotated_at = models.DateTimeField(default=timezone.now)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    rate_window_started_at = models.DateTimeField(default=timezone.now)
+    rate_request_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name = 'Credencial da API pública'
+        verbose_name_plural = 'Credenciais da API pública'
+
+    @classmethod
+    def issue_for(cls, tenant):
+        prefix = secrets.token_hex(4)
+        raw_key = f'sf_pub_{prefix}_{secrets.token_urlsafe(32)}'
+        cls.objects.update_or_create(
+            tenant=tenant,
+            defaults={
+                'key_prefix': prefix,
+                'key_hash': make_password(raw_key),
+                'active': True,
+                'rotated_at': timezone.now(),
+                'revoked_at': None,
+                'last_used_at': None,
+                'rate_window_started_at': timezone.now(),
+                'rate_request_count': 0,
+            },
+        )
+        return raw_key
+
+    def matches(self, raw_key):
+        if not self.active or self.revoked_at or not raw_key:
+            return False
+        return check_password(raw_key, self.key_hash)
+
+    def revoke(self):
+        self.active = False
+        self.revoked_at = timezone.now()
+        self.save(update_fields=['active', 'revoked_at', 'updated_at'])
+
+    def __str__(self):
+        return f'{self.tenant} — {self.key_prefix}'
 
 
 class TenantModuleSubscription(TenantScopedModel):
@@ -567,6 +621,13 @@ class ApprovalRequest(TenantScopedModel):
         verbose_name = 'Solicitação de aprovação'
         verbose_name_plural = 'Solicitações de aprovação'
         ordering = ['-requested_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'content_type', 'object_id'],
+                condition=Q(status='open'),
+                name='uniq_open_approval_per_target',
+            ),
+        ]
 
     def clean(self):
         super().clean()
@@ -589,6 +650,17 @@ class ApprovalRequest(TenantScopedModel):
                 spec = approvals.spec_for_model(model_class)
                 if spec.target_kind != self.flow.target_kind:
                     errors['flow'] = 'O fluxo não corresponde ao tipo do alvo.'
+            if model_class in approvals.approvable_models() and self.object_id:
+                try:
+                    target = model_class.objects.filter(pk=self.object_id).first()
+                except (TypeError, ValueError, ValidationError):
+                    target = None
+                if target is None:
+                    errors['object_id'] = 'O objeto de destino informado não existe.'
+                elif self.tenant_id is not None and getattr(target, 'tenant_id', None) != self.tenant_id:
+                    errors['content_type'] = 'A solicitação precisa pertencer ao mesmo tenant do alvo.'
+        if self.flow_id and not self.flow.steps.exists():
+            errors['flow'] = 'O fluxo precisa ter ao menos uma etapa antes de receber solicitações.'
         if errors:
             raise ValidationError(errors)
 
@@ -676,7 +748,11 @@ class Evidence(TenantScopedModel):
     content_type = models.ForeignKey(ContentType, on_delete=models.PROTECT)
     object_id = models.CharField(max_length=64)
     content_object = GenericForeignKey('content_type', 'object_id')
-    file = models.FileField(upload_to='evidencias/', blank=True)
+    file = models.FileField(
+        upload_to=evidence_upload_path,
+        validators=[validate_evidence_file],
+        blank=True,
+    )
     url = models.URLField(blank=True, default='')
     note = models.TextField(blank=True, default='')
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='evidences')
@@ -689,6 +765,8 @@ class Evidence(TenantScopedModel):
     def clean(self):
         super().clean()
         errors = {}
+        if not self.file and not self.url and not self.note.strip():
+            errors['__all__'] = 'Informe um arquivo, uma URL ou uma observação como evidência.'
         model_class = self.content_type.model_class() if self.content_type_id else None
         if model_class is not None:
             target = model_class.objects.filter(pk=self.object_id).first()
@@ -798,6 +876,45 @@ class AuditLog(TenantScopedModel):
 
     def __str__(self):
         return f'{self.get_action_display()} — {self.content_type}:{self.object_id}'
+
+
+class OperationalMetric(TenantScopedModel):
+    """Evento operacional de baixa cardinalidade para acompanhar o piloto."""
+
+    class Kind(models.TextChoices):
+        USAGE = 'usage', 'Uso'
+        FAILURE = 'failure', 'Falha'
+        AUTHORIZATION_DENIED = 'authorization_denied', 'Autorização negada'
+        JOURNEY = 'journey', 'Jornada'
+
+    kind = models.CharField(max_length=32, choices=Kind.choices)
+    event = models.CharField(max_length=64)
+    route_name = models.CharField(max_length=120, blank=True, default='')
+    method = models.CharField(max_length=8, blank=True, default='')
+    status_code = models.PositiveSmallIntegerField(default=0)
+    duration_ms = models.PositiveIntegerField(default=0)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='operational_metrics',
+    )
+    correlation_id = models.CharField(max_length=80, blank=True, default='')
+    metadata = models.JSONField(default=dict, blank=True)
+    occurred_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Métrica operacional'
+        verbose_name_plural = 'Métricas operacionais'
+        ordering = ['-occurred_at']
+        indexes = [
+            models.Index(fields=['tenant', 'kind', 'occurred_at'], name='metric_tenant_kind_idx'),
+            models.Index(fields=['tenant', 'event', 'occurred_at'], name='metric_tenant_event_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.get_kind_display()} — {self.event}'
 
 
 class AIProvider(TenantScopedModel):

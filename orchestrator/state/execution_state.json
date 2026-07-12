@@ -1,8 +1,8 @@
 {
-  "current_sprint": "sprint_12",
-  "current_task": "12.4.3",
-  "current_subtask": "12.4.3",
-  "status": "completed",
+  "current_sprint": "sprint_13",
+  "current_task": "13.6",
+  "current_subtask": "13.6.3",
+  "status": "blocked",
   "history": [
     {
       "subtask_id": "0.1.2",
@@ -138,8 +138,10 @@
       "report": "/Users/alexvieira/saas-futebol/orchestrator/reports/sprint_12_subtask_12.4.3.md"
     }
   ],
-  "review_queue": [],
+  "review_queue": [
+    "13.6.3"
+  ],
   "failures": {},
   "started_at": "2026-06-28T21:37:59.744354",
-  "last_updated": "2026-07-07T21:42:30-03:00"
+  "last_updated": "2026-07-11T22:00:00-03:00"
 }

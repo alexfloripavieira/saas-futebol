@@ -14,6 +14,9 @@ env/
 
 # Django — arquivos coletados por collectstatic (gerados no boot do container)
 src/staticfiles/
+src/media/
+var/media/
+backups/
 
 # OS
 .DS_Store

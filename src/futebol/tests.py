@@ -51,8 +51,14 @@ from .services.data_io import export_csv, import_payload
 class Sprint3BaseTestCase(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='alex', password='senha12345')
+        self.requester_user = User.objects.create_user(username='solicitante-base', password='senha12345')
         self.tenant = Tenant.objects.create(name='Clube Exemplo', slug='clube-exemplo')
         TenantMembership.objects.create(user=self.user, tenant=self.tenant, role=TenantMembership.Role.ADMIN_TENANT)
+        TenantMembership.objects.create(
+            user=self.requester_user,
+            tenant=self.tenant,
+            role=TenantMembership.Role.GESTOR_COMPETICAO,
+        )
         self.club_a = Club.objects.create(tenant=self.tenant, name='Clube A', slug='clube-a', city='São Paulo', state='SP')
         self.club_b = Club.objects.create(tenant=self.tenant, name='Clube B', slug='clube-b', city='Rio', state='RJ')
         self.competition = Competition.objects.create(tenant=self.tenant, name='Liga Principal', slug='liga-principal')
@@ -78,6 +84,20 @@ class Sprint3BaseTestCase(TestCase):
             code='alteracao-partida',
             name='Alteração de partida',
             target_kind=ApprovalFlow.TargetKind.PARTIDA,
+        )
+        ApprovalFlowStep.objects.create(
+            tenant=self.tenant,
+            flow=self.flow,
+            order=1,
+            required_role=TenantMembership.Role.ADMIN_TENANT,
+        )
+        self.match = Match.objects.create(
+            tenant=self.tenant,
+            phase=self.phase,
+            home_club=self.club_a,
+            away_club=self.club_b,
+            reference_code='BASE-001',
+            scheduled_at=timezone.now() + timedelta(days=3),
         )
 
 
@@ -278,9 +298,9 @@ class AIFeatureTests(Sprint3BaseTestCase):
         approval_request = ApprovalRequest.objects.create(
             tenant=self.tenant,
             flow=self.flow,
-            requested_by=self.user,
+            requested_by=self.requester_user,
             content_type=ContentType.objects.get_for_model(Match),
-            object_id='123',
+            object_id=str(self.match.pk),
             reason='Ajuste manual',
         )
         notification = Notification.objects.create(
@@ -348,7 +368,7 @@ class IntegrityTests(Sprint3BaseTestCase):
             flow=self.flow,
             requested_by=outsider,
             content_type=ContentType.objects.get_for_model(Match),
-            object_id='123',
+            object_id=str(self.match.pk),
         )
         with self.assertRaises(ValidationError):
             request.full_clean()
@@ -491,9 +511,9 @@ class InterfaceSprint4Tests(Sprint3BaseTestCase):
         approval_request = ApprovalRequest.objects.create(
             tenant=self.tenant,
             flow=self.flow,
-            requested_by=self.user,
+            requested_by=self.requester_user,
             content_type=ContentType.objects.get_for_model(Match),
-            object_id='123',
+            object_id=str(self.match.pk),
             reason='Ajuste manual',
         )
         notification = Notification.objects.create(
@@ -893,8 +913,7 @@ class Sprint10BiCenterTests(Sprint3BaseTestCase):
 class Sprint11PublicApiTests(Sprint3BaseTestCase):
     def setUp(self):
         super().setUp()
-        self.tenant.public_api_key = 'chave-publica-teste'
-        self.tenant.save(update_fields=['public_api_key'])
+        self.api_key = self.tenant.rotate_public_api_key()
         self.other_club = Club.objects.create(tenant=self.tenant, name='Clube C', slug='clube-c', city='Belo Horizonte', state='MG')
         self.person = Person.objects.create(tenant=self.tenant, full_name='Atleta API')
         self.match_played = Match.objects.create(
@@ -933,57 +952,57 @@ class Sprint11PublicApiTests(Sprint3BaseTestCase):
         )
 
     def test_public_api_requires_key(self):
-        response = self.client.get(reverse('public-api-overview', args=[self.tenant.slug]))
+        response = self.client.get(reverse('public-api-v1-overview', args=[self.tenant.slug]))
         self.assertEqual(response.status_code, 403)
 
     def test_public_api_rejects_wrong_key(self):
         response = self.client.get(
-            reverse('public-api-overview', args=[self.tenant.slug]),
+            reverse('public-api-v1-overview', args=[self.tenant.slug]),
             HTTP_X_SAAS_FUTEBOL_API_KEY='chave-errada',
         )
         self.assertEqual(response.status_code, 403)
 
     def test_public_api_key_is_scoped_per_tenant(self):
         # Um segundo tenant com a SUA própria chave.
-        other = Tenant.objects.create(name='Outro Clube', slug='outro-clube', public_api_key='chave-do-outro')
+        other = Tenant.objects.create(name='Outro Clube', slug='outro-clube')
+        other_key = other.rotate_public_api_key()
         # A chave do tenant atual NÃO dá acesso ao outro tenant (sem vazamento cross-tenant).
         cross = self.client.get(
-            reverse('public-api-overview', args=[other.slug]),
-            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-publica-teste',
+            reverse('public-api-v1-overview', args=[other.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY=self.api_key,
         )
         self.assertEqual(cross.status_code, 403)
         # A chave própria do outro tenant funciona no próprio tenant.
         own = self.client.get(
-            reverse('public-api-overview', args=[other.slug]),
-            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-do-outro',
+            reverse('public-api-v1-overview', args=[other.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY=other_key,
         )
         self.assertEqual(own.status_code, 200)
 
     def test_public_api_disabled_when_key_blank(self):
-        self.tenant.public_api_key = ''
-        self.tenant.save(update_fields=['public_api_key'])
+        self.tenant.revoke_public_api_key()
         response = self.client.get(
-            reverse('public-api-overview', args=[self.tenant.slug]),
+            reverse('public-api-v1-overview', args=[self.tenant.slug]),
             HTTP_X_SAAS_FUTEBOL_API_KEY='',
         )
         self.assertEqual(response.status_code, 403)
 
     def test_public_api_overview_and_matches(self):
         response = self.client.get(
-            reverse('public-api-overview', args=[self.tenant.slug]),
-            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-publica-teste',
+            reverse('public-api-v1-overview', args=[self.tenant.slug]),
+            HTTP_X_SAAS_FUTEBOL_API_KEY=self.api_key,
         )
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload['tenant']['slug'], self.tenant.slug)
         self.assertTrue(any(card['label'] == 'Partidas' for card in payload['summary_cards']))
         self.assertTrue(any(item['reference_code'] == 'API-001' for item in payload['recent_matches']))
-        self.assertTrue(any(item['type'] == 'Gol' for item in payload['recent_events']))
+        self.assertEqual(payload['api_version'], 'v1')
 
         matches_response = self.client.get(
-            reverse('public-api-matches', args=[self.tenant.slug]),
+            reverse('public-api-v1-matches', args=[self.tenant.slug]),
             {'competition': self.competition.slug},
-            HTTP_X_SAAS_FUTEBOL_API_KEY='chave-publica-teste',
+            HTTP_X_SAAS_FUTEBOL_API_KEY=self.api_key,
         )
         self.assertEqual(matches_response.status_code, 200)
         matches_payload = matches_response.json()
@@ -1281,6 +1300,11 @@ class ApprovalEngineTests(TestCase):
         ).exists())
 
     def test_match_reopen_discards_events(self):
+        TenantMembership.objects.create(
+            user=self.requester,
+            tenant=self.tenant,
+            role=TenantMembership.Role.GESTOR_COMPETICAO,
+        )
         flow = ApprovalFlow.objects.create(
             tenant=self.tenant, code='reabertura', name='Reabertura de partida',
             target_kind=ApprovalFlow.TargetKind.PARTIDA,
@@ -1468,9 +1492,9 @@ class Sprint8ReportingTests(Sprint3BaseTestCase):
         self.approval_request = ApprovalRequest.objects.create(
             tenant=self.tenant,
             flow=self.flow,
-            requested_by=self.user,
+            requested_by=self.requester_user,
             content_type=ContentType.objects.get_for_model(Match),
-            object_id='abc-123',
+            object_id=str(self.match.pk),
             reason='Relatório de teste',
         )
         self.notification = Notification.objects.create(
@@ -1756,3 +1780,89 @@ class SsrfHardeningTests(TestCase):
         )
         self.assertFalse(form.is_valid())
         self.assertIn('api_base_url', form.errors)
+
+
+class Sprint13ActiveTenantTests(TestCase):
+    """Sprint 13.1 — o contexto operacional usa um único tenant explícito."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='multi-tenant', password='senha12345')
+        self.tenant_a = Tenant.objects.create(name='Clube Alfa', slug='clube-alfa')
+        self.tenant_b = Tenant.objects.create(name='Clube Beta', slug='clube-beta')
+        for tenant in (self.tenant_a, self.tenant_b):
+            TenantMembership.objects.create(
+                user=self.user,
+                tenant=tenant,
+                role=TenantMembership.Role.ADMIN_TENANT,
+            )
+        Club.objects.create(tenant=self.tenant_a, name='Elenco Alfa', slug='elenco-alfa')
+        Club.objects.create(tenant=self.tenant_b, name='Elenco Beta', slug='elenco-beta')
+        self.client.login(username='multi-tenant', password='senha12345')
+
+    def test_user_switches_active_tenant_and_lists_only_its_data(self):
+        response = self.client.post(
+            reverse('tenant-select'),
+            {'tenant': self.tenant_b.pk, 'next': reverse('club-list')},
+        )
+
+        self.assertRedirects(response, reverse('club-list'))
+        response = self.client.get(reverse('club-list'))
+        self.assertContains(response, 'Elenco Beta')
+        self.assertNotContains(response, 'Elenco Alfa')
+        self.assertEqual(self.client.session['active_tenant_id'], self.tenant_b.pk)
+
+    def test_user_cannot_select_tenant_without_membership(self):
+        tenant_forbidden = Tenant.objects.create(name='Clube Restrito', slug='clube-restrito')
+
+        response = self.client.post(reverse('tenant-select'), {'tenant': tenant_forbidden.pk})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertNotEqual(self.client.session.get('active_tenant_id'), tenant_forbidden.pk)
+
+    def test_created_record_belongs_to_active_tenant(self):
+        self.client.post(reverse('tenant-select'), {'tenant': self.tenant_b.pk})
+
+        response = self.client.post(reverse('club-create'), {
+            'name': 'Novo Beta', 'slug': 'novo-beta', 'registration_code': '',
+            'city': 'Florianópolis', 'state': 'SC', 'active': 'on',
+        })
+
+        self.assertRedirects(response, reverse('club-list'))
+        self.assertTrue(Club.objects.filter(tenant=self.tenant_b, slug='novo-beta').exists())
+        self.assertFalse(Club.objects.filter(tenant=self.tenant_a, slug='novo-beta').exists())
+
+
+class Sprint13NotificationPrivacyTests(TestCase):
+    """Sprint 13.2 — mensagens pessoais não vazam entre membros do tenant."""
+
+    def setUp(self):
+        self.tenant = Tenant.objects.create(name='Privacidade FC', slug='privacidade')
+        self.user = User.objects.create_user(username='destinatario', password='senha12345')
+        self.other = User.objects.create_user(username='colega', password='senha12345')
+        for user in (self.user, self.other):
+            TenantMembership.objects.create(
+                user=user, tenant=self.tenant, role=TenantMembership.Role.GESTOR_CLUBE,
+            )
+        self.own = Notification.objects.create(
+            tenant=self.tenant, recipient=self.user, subject='Mensagem pessoal', body='Somente para mim',
+        )
+        self.foreign = Notification.objects.create(
+            tenant=self.tenant, recipient=self.other, subject='Mensagem alheia', body='Somente para colega',
+        )
+        TenantModuleSubscription.objects.create(
+            tenant=self.tenant, module_code='aprovacoes', module_name='Aprovações', enabled=True,
+        )
+        self.client.login(username='destinatario', password='senha12345')
+
+    def test_non_admin_lists_only_own_notifications(self):
+        response = self.client.get(reverse('notification-list'))
+
+        self.assertContains(response, 'Mensagem pessoal')
+        self.assertNotContains(response, 'Mensagem alheia')
+
+    def test_non_admin_cannot_mark_another_users_notification_read(self):
+        response = self.client.post(reverse('notification-mark-read', args=[self.foreign.pk]))
+
+        self.assertEqual(response.status_code, 404)
+        self.foreign.refresh_from_db()
+        self.assertNotEqual(self.foreign.status, Notification.Status.READ)

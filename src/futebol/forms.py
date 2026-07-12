@@ -363,6 +363,20 @@ class ClubForm(TenantScopedForm):
         }
 
 
+class PersonForm(TenantScopedForm):
+    class Meta:
+        model = Person
+        fields = ['full_name', 'document_id', 'kind', 'birth_date', 'active']
+        labels = {
+            'full_name': 'Nome completo',
+            'document_id': 'Documento',
+            'kind': 'Tipo de pessoa',
+            'birth_date': 'Data de nascimento',
+            'active': 'Ativa',
+        }
+        widgets = {'birth_date': forms.DateInput(attrs={'type': 'date'})}
+
+
 class CompetitionForm(TenantScopedForm):
     class Meta:
         model = Competition

@@ -1547,6 +1547,163 @@
           ]
         }
       ]
+    },
+    {
+      "id": "sprint_13",
+      "name": "Consolidação para piloto",
+      "status": "in_progress",
+      "tasks": [
+        {
+          "id": "13.1",
+          "name": "Contexto ativo e isolamento por tenant",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "13.1.1",
+              "name": "Implementar seleção explícita de tenant ativo na sessão",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.1.2",
+              "name": "Escopar listagens, formulários, módulos e dashboards ao tenant ativo",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.1.3",
+              "name": "Testar isolamento com usuários vinculados a múltiplos tenants",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "13.2",
+          "name": "Privacidade e matriz de autorização",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "13.2.1",
+              "name": "Restringir notificações ao destinatário e aos papéis administrativos autorizados",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.2.2",
+              "name": "Alinhar ações e dados visíveis à matriz de papéis por tenant",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.2.3",
+              "name": "Cobrir acessos positivos e negativos em testes de autorização",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "13.3",
+          "name": "API pública e gestão de credenciais",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "13.3.1",
+              "name": "Remover chave da query string e armazenar somente representação segura",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.3.2",
+              "name": "Adicionar rotação, limite de requisições e contrato versionado da API",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.3.3",
+              "name": "Testar autenticação, escopo, rotação e limitação por tenant",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "13.4",
+          "name": "Evidências e armazenamento de mídia",
+          "status": "completed",
+          "subtasks": [
+            {
+              "id": "13.4.1",
+              "name": "Configurar armazenamento persistente e privado para evidências",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.4.2",
+              "name": "Validar tipo, tamanho e autorização de download dos arquivos",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.4.3",
+              "name": "Testar upload, persistência e acesso isolado por tenant",
+              "status": "completed",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "13.5",
+          "name": "Runtime de produção e observabilidade",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "13.5.1",
+              "name": "Separar configurações de produção e habilitar controles HTTPS do Django",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.5.2",
+              "name": "Preparar servidor de aplicação, health check, backups e banco não exposto",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.5.3",
+              "name": "Validar deploy, logs, restauração e checklist de segurança",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        },
+        {
+          "id": "13.6",
+          "name": "Jornada vertical e gate de liberação do piloto",
+          "status": "pending",
+          "subtasks": [
+            {
+              "id": "13.6.1",
+              "name": "Fechar a jornada pessoa, contrato, transferência, evidência, aprovação e auditoria",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.6.2",
+              "name": "Instrumentar métricas mínimas de uso, falha e autorização",
+              "status": "completed",
+              "needs_review": false
+            },
+            {
+              "id": "13.6.3",
+              "name": "Executar aceite do piloto, rollback e decisão de go ou no-go",
+              "status": "pending",
+              "needs_review": true
+            }
+          ]
+        }
+      ]
     }
   ]
 }

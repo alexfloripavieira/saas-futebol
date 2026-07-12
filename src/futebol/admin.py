@@ -26,6 +26,7 @@ from .models import (
     Notification,
     Person,
     Proposal,
+    PublicAPICredential,
     TeamCategory,
     Tenant,
     TenantBranding,
@@ -39,17 +40,31 @@ class TenantAdmin(admin.ModelAdmin):
     list_display = ('name', 'slug', 'active', 'has_public_api_key', 'created_at')
     search_fields = ('name', 'slug')
     list_filter = ('active',)
-    actions = ('gerar_chave_api_publica',)
+    actions = ('gerar_chave_api_publica', 'revogar_chave_api_publica')
 
     @admin.display(boolean=True, description='Chave API pública')
     def has_public_api_key(self, obj):
-        return bool(obj.public_api_key)
+        return PublicAPICredential.objects.filter(
+            tenant=obj,
+            active=True,
+            revoked_at__isnull=True,
+        ).exists()
 
     @admin.action(description='Gerar/rotacionar chave da API pública')
     def gerar_chave_api_publica(self, request, queryset):
+        issued = []
         for tenant in queryset:
-            tenant.rotate_public_api_key()
-        self.message_user(request, f'Chave da API pública gerada para {queryset.count()} tenant(s).')
+            issued.append(f'{tenant.slug}: {tenant.rotate_public_api_key()}')
+        self.message_user(
+            request,
+            'Copie agora; as chaves não serão exibidas novamente. ' + ' | '.join(issued),
+        )
+
+    @admin.action(description='Revogar chave da API pública')
+    def revogar_chave_api_publica(self, request, queryset):
+        for tenant in queryset:
+            tenant.revoke_public_api_key()
+        self.message_user(request, f'Chave da API pública revogada para {queryset.count()} tenant(s).')
 
 
 @admin.register(TenantMembership)

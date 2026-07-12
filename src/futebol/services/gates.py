@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from futebol.models import Contract, Match, Negotiation
 from futebol.services.approvals import GateSpec, register
+from futebol.services.audit import log_audit_event, snapshot_instance
 
 
 # ─── G-1: Contrato ──────────────────────────────────────────────────────────
@@ -34,14 +35,30 @@ def contract_rejected(request):
 def transfer_approved(request):
     negotiation = request.content_object
     today = timezone.now().date()
+    actor = request.decisions.order_by('-decided_at', '-id').first().decided_by
+    negotiation_before = snapshot_instance(negotiation)
     # Rescind the athlete's current active contracts (origin).
-    Contract.objects.filter(
+    origin_contracts = list(Contract.objects.select_for_update().filter(
         tenant_id=negotiation.tenant_id,
         person_id=negotiation.person_id,
         status=Contract.Status.ACTIVE,
-    ).update(status=Contract.Status.TERMINATED, end_date=today, termination_reason='Transferência.')
+    ))
+    for contract in origin_contracts:
+        before_state = snapshot_instance(contract)
+        contract.status = Contract.Status.TERMINATED
+        contract.end_date = today
+        contract.termination_reason = 'Transferência.'
+        contract.save()
+        log_audit_event(
+            tenant=contract.tenant,
+            actor=actor,
+            action='update',
+            obj=contract,
+            before_state=before_state,
+            after_state=snapshot_instance(contract),
+        )
     # Create the destination contract already active — this approval is its approval.
-    Contract.objects.create(
+    destination_contract = Contract.objects.create(
         tenant=negotiation.tenant,
         person=negotiation.person,
         club=negotiation.club,
@@ -49,9 +66,24 @@ def transfer_approved(request):
         signed_at=timezone.now(),
         status=Contract.Status.ACTIVE,
     )
+    log_audit_event(
+        tenant=destination_contract.tenant,
+        actor=actor,
+        action='create',
+        obj=destination_contract,
+        after_state=snapshot_instance(destination_contract),
+    )
     negotiation.status = Negotiation.Status.ACCEPTED
     negotiation.closed_at = timezone.now()
     negotiation.save()
+    log_audit_event(
+        tenant=negotiation.tenant,
+        actor=actor,
+        action='update',
+        obj=negotiation,
+        before_state=negotiation_before,
+        after_state=snapshot_instance(negotiation),
+    )
 
 
 def transfer_rejected(request):

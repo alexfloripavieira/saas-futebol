@@ -27,8 +27,8 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-sa0s-futebol-dev-ke
 DEBUG = os.getenv('DJANGO_DEBUG', '1') == '1'
 
 ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,0.0.0.0,192.168.1.25,testserver').split(',')
-# A API pública é autorizada por chave POR TENANT (Tenant.public_api_key),
-# não por uma chave global — ver futebol.views._public_api_authorized.
+# A API pública usa uma credencial com hash por tenant; o segredo só é
+# apresentado no momento da emissão.
 
 
 # Application definition
@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'futebol.middleware.OperationalMetricsMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -127,6 +128,27 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Arquivos de evidência são privados: MEDIA_URL não deve ser servido diretamente
+# pelo proxy. O download passa por uma view autenticada e autorizada por tenant.
+MEDIA_URL = '/midia-privada/'
+MEDIA_ROOT = Path(os.getenv('DJANGO_MEDIA_ROOT', BASE_DIR / 'media'))
+FILE_UPLOAD_PERMISSIONS = 0o640
+FILE_UPLOAD_DIRECTORY_PERMISSIONS = 0o750
+EVIDENCE_MAX_UPLOAD_SIZE = int(os.getenv('EVIDENCE_MAX_UPLOAD_SIZE', str(10 * 1024 * 1024)))
+EVIDENCE_ALLOWED_EXTENSIONS = tuple(
+    item.strip().lower()
+    for item in os.getenv('EVIDENCE_ALLOWED_EXTENSIONS', '.pdf,.png,.jpg,.jpeg').split(',')
+    if item.strip()
+)
+EVIDENCE_ALLOWED_CONTENT_TYPES = tuple(
+    item.strip().lower()
+    for item in os.getenv(
+        'EVIDENCE_ALLOWED_CONTENT_TYPES',
+        'application/pdf,image/png,image/jpeg,image/pjpeg',
+    ).split(',')
+    if item.strip()
+)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field

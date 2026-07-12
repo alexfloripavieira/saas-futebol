@@ -25,9 +25,11 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
+      DJANGO_MEDIA_ROOT: /app/var/media
       DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0,192.168.1.25,testserver
     volumes:
       - .:/app
+      - media_data:/app/var/media
       - ${HOME}/.config/opencode:/root/.config/opencode
       - ${HOME}/.local/share/opencode:/root/.local/share/opencode
     ports:
@@ -64,3 +66,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:

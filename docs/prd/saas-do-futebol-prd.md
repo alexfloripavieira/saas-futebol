@@ -741,6 +741,51 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
   - [x] Testar permissões por papel.
   - [x] Testar respostas da IA por tenant.
 
+### Sprint 13 — Consolidação para piloto
+
+**Objetivo:** transformar o MVP demonstrável em uma versão segura e operável para um piloto controlado com um clube, priorizando isolamento, privacidade, persistência e capacidade de recuperação antes de ampliar o escopo funcional.
+
+**Critério de saída:** a aplicação somente estará liberada para o piloto quando todos os blocos abaixo estiverem concluídos, a suíte completa estiver verde e a revisão humana de go/no-go estiver aprovada.
+
+- [ ] Tornar o tenant ativo explícito e consistente em toda a aplicação.
+- [ ] Corrigir privacidade de notificações e consolidar a matriz de autorização.
+- [ ] Endurecer a API pública e a gestão de suas credenciais.
+- [ ] Tornar evidências persistentes, privadas e seguras.
+- [ ] Preparar runtime, segurança e observabilidade de produção.
+- [ ] Validar uma jornada operacional vertical de ponta a ponta.
+
+### Sprint 13.1 — Tenant ativo e isolamento
+  - [ ] Implementar seleção explícita do tenant ativo e persistência na sessão.
+  - [ ] Escopar listagens, formulários, módulos, dashboards e ações ao tenant ativo.
+  - [ ] Testar usuários com múltiplos vínculos, troca de tenant e tentativas de acesso cruzado.
+
+### Sprint 13.2 — Privacidade e autorização
+  - [ ] Restringir notificações ao destinatário e aos papéis administrativos autorizados.
+  - [ ] Ocultar ou bloquear ações conforme o papel no tenant do objeto.
+  - [ ] Criar uma matriz de testes positivos e negativos por papel e recurso.
+
+### Sprint 13.3 — API e credenciais
+  - [ ] Aceitar a chave somente em header e persistir apenas representação segura.
+  - [ ] Implementar rotação, rate limiting e versionamento do contrato externo.
+  - [ ] Testar autenticação, isolamento, rotação, revogação e excesso de requisições.
+
+### Sprint 13.4 — Evidências e mídia
+  - [ ] Configurar armazenamento persistente e privado para arquivos de evidência.
+  - [ ] Validar tamanho, tipo de arquivo e autorização de download.
+  - [ ] Testar persistência após reinício e acesso isolado por tenant.
+
+### Sprint 13.5 — Produção e observabilidade
+  - [ ] Separar configurações de desenvolvimento e produção, com HTTPS e cookies seguros.
+  - [ ] Usar servidor de aplicação adequado, health check e banco não exposto publicamente.
+  - [ ] Definir backups, restauração testada, logs correlacionados e monitoramento de erros.
+
+### Sprint 13.6 — Jornada do piloto e liberação
+  - [ ] Fechar a jornada pessoa → contrato → transferência → evidência → aprovação → auditoria.
+  - [ ] Instrumentar métricas mínimas de uso, falhas e erros de autorização.
+  - [ ] Executar checklist de aceite, ensaio de rollback e decisão formal de go/no-go.
+
+**Fora do escopo desta sprint:** novos módulos, novos tipos de previsão, expansão do scouting e integrações avançadas que não sejam necessárias à jornada do piloto.
+
 ---
 
 ## 19. Escopo incremental recomendado
@@ -768,6 +813,13 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 - previsões;
 - automações;
 - integrações avançadas.
+
+### Fase 5 — Consolidação para piloto
+- tenant ativo explícito;
+- privacidade e autorização revisadas;
+- API e evidências endurecidas;
+- runtime de produção e recuperação;
+- jornada vertical validada com dados de piloto.
 
 ---
 

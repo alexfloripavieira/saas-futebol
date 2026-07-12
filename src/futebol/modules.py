@@ -14,15 +14,15 @@ from __future__ import annotations
 # Catálogo canônico de módulos. ``code`` é a chave persistida em
 # ``TenantModuleSubscription.module_code``; ``name`` é o rótulo padrão.
 MODULE_CATALOG = (
-    {'code': 'operacao', 'name': 'Operação', 'icon': '🏁'},
-    {'code': 'aprovacoes', 'name': 'Aprovações', 'icon': '✅'},
-    {'code': 'transferencias', 'name': 'Transferências', 'icon': '↔️'},
-    {'code': 'ia', 'name': 'IA', 'icon': '🧠'},
-    {'code': 'relatorios', 'name': 'Relatórios', 'icon': '📊'},
-    {'code': 'previsoes', 'name': 'Previsões', 'icon': '🔮'},
-    {'code': 'integracoes', 'name': 'Integrações', 'icon': '🔗'},
-    {'code': 'auditoria', 'name': 'Auditoria', 'icon': '🕵️'},
-    {'code': 'automacoes', 'name': 'Automações', 'icon': '⚙️'},
+    {'code': 'operacao', 'name': 'Operação', 'icon': '🏁', 'category': 'Base esportiva', 'description': 'Clubes, pessoas, competições, partidas, escalações e rotina esportiva.'},
+    {'code': 'aprovacoes', 'name': 'Aprovações', 'icon': '✅', 'category': 'Governança', 'description': 'Fluxos, solicitações, notificações e decisões com responsáveis definidos.'},
+    {'code': 'transferencias', 'name': 'Transferências', 'icon': '↔️', 'category': 'Mercado', 'description': 'Contratos, negociações, propostas e evidências em uma central única.'},
+    {'code': 'ia', 'name': 'IA', 'icon': '🧠', 'category': 'Inteligência', 'description': 'Treinador Inteligente, providers, agentes, fontes esportivas e conhecimento.'},
+    {'code': 'relatorios', 'name': 'Relatórios', 'icon': '📊', 'category': 'Visibilidade', 'description': 'Indicadores operacionais, BI e leitura executiva do desempenho.'},
+    {'code': 'previsoes', 'name': 'Previsões', 'icon': '🔮', 'category': 'Antecipação', 'description': 'Cenários inteligentes para apoiar decisões esportivas e administrativas.'},
+    {'code': 'integracoes', 'name': 'Integrações', 'icon': '🔗', 'category': 'Conectividade', 'description': 'Troca controlada de dados com sistemas e provedores externos.'},
+    {'code': 'auditoria', 'name': 'Auditoria', 'icon': '🕵️', 'category': 'Conformidade', 'description': 'Trilha imutável das ações importantes e rastreabilidade por tenant.'},
+    {'code': 'automacoes', 'name': 'Automações', 'icon': '⚙️', 'category': 'Escala', 'description': 'Rotinas repetíveis e monitoradas para a operação ganhar velocidade.'},
 )
 
 MODULE_CODES = tuple(module['code'] for module in MODULE_CATALOG)

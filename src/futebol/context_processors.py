@@ -1,5 +1,5 @@
 from .models import TenantBranding, TenantMembership
-from .modules import ACCOUNT_GROUP, build_nav_groups, enabled_module_codes
+from .modules import ACCOUNT_GROUP, MODULE_CATALOG, build_nav_groups, enabled_module_codes
 from .services.tenancy import accessible_tenants, active_tenant
 
 
@@ -32,4 +32,5 @@ def sprint_context(request):
         'branding': branding,
         'nav_groups': nav_groups,
         'account_group': ACCOUNT_GROUP,
+        'module_catalog': MODULE_CATALOG,
     }

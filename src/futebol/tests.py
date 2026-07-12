@@ -47,6 +47,7 @@ from .models import (
     TenantMembership,
     TenantModuleSubscription,
 )
+from .modules import MODULE_NAMES
 from .services.data_io import export_csv, import_payload
 
 
@@ -1565,6 +1566,20 @@ class WhiteLabelPhase1Tests(TestCase):
         self.assertContains(response, 'white-label')
         self.assertContains(response, reverse('login'))
 
+    def test_landing_apresenta_inteligencia_tatica_e_catalogo_completo(self):
+        response = self.client.get(reverse('landing'))
+
+        self.assertContains(response, 'Treinador Inteligente')
+        self.assertContains(response, 'Comissão Técnica Digital')
+        self.assertContains(response, 'Prancheta temporal')
+        self.assertContains(response, 'Revisão humana')
+        for module_name in MODULE_NAMES.values():
+            self.assertContains(response, module_name)
+        self.assertEqual(
+            response.content.count(b'class="module-card"'),
+            len(MODULE_NAMES),
+        )
+
     def test_root_redirects_authenticated_without_tenant_to_onboarding(self):
         User.objects.create_user(username='novo', password='senha12345')
         self.client.login(username='novo', password='senha12345')
@@ -1658,6 +1673,20 @@ class PublicLoginJourneyTests(TestCase):
         # E manter o formulário de autenticação.
         self.assertContains(response, 'name="username"')
         self.assertContains(response, 'name="password"')
+
+    def test_login_comunica_valor_do_produto_sem_expor_shell(self):
+        response = self.client.get(reverse('login'))
+
+        self.assertContains(response, 'Seu clube pensa, decide e evolui')
+        self.assertContains(response, 'Treinador Inteligente')
+        self.assertContains(response, 'Operação e governança')
+        self.assertContains(response, 'Dados e inteligência')
+        self.assertEqual(
+            response.content.count(b'class="module-chip"'),
+            len(MODULE_NAMES),
+        )
+        self.assertContains(response, 'mailto:comercial@saasdofutebol.com')
+        self.assertNotContains(response, 'class="sidebar"')
 
 
 class TenantAdminIALinksTests(TestCase):

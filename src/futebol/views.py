@@ -324,6 +324,7 @@ def landing(request):
     """Página institucional pública para visitantes sem acesso ativo."""
     context = {
         'modules': list(MODULE_NAMES.values()),
+        'module_catalog': MODULE_CATALOG,
     }
     return render(request, 'futebol/landing.html', context)
 

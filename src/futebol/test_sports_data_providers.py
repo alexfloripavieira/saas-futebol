@@ -15,6 +15,8 @@ from futebol.models import (
 from futebol.services.sports_data_providers import (
     provision_provider_catalog,
     sync_football_data_org,
+    sync_skillcorner_open,
+    sync_statsbomb_open,
 )
 
 
@@ -126,6 +128,132 @@ class SportsDataProviderTests(TestCase):
                 imported_by=self.user,
                 api_key='',
                 competition_code='BSA',
+            )
+
+    @patch('futebol.services.sports_data_providers.safe_urlopen')
+    def test_statsbomb_open_importa_amostra_com_proveniencia_sem_ativar_fonte(self, urlopen):
+        matches = [{
+            'match_id': 9001,
+            'match_date': '2024-04-10',
+            'kick_off': '20:00:00.000',
+            'home_team': {'home_team_id': 1, 'home_team_name': 'Azul FC'},
+            'away_team': {'away_team_id': 2, 'away_team_name': 'Verde FC'},
+            'home_score': 2,
+            'away_score': 1,
+        }]
+        events = [{
+            'id': 'evt-1',
+            'index': 1,
+            'period': 1,
+            'timestamp': '00:00:00.000',
+            'type': {'id': 35, 'name': 'Starting XI'},
+            'team': {'id': 1, 'name': 'Azul FC'},
+            'player': {'id': 10, 'name': 'Atleta Um'},
+            'location': [60.0, 40.0],
+        }, {
+            'id': 'evt-2',
+            'index': 2,
+            'period': 1,
+            'timestamp': '00:00:01.000',
+            'type': {'id': 30, 'name': 'Pass'},
+            'team': {'id': 1, 'name': 'Azul FC'},
+        }]
+        urlopen.side_effect = [_Response(matches), _Response(events)]
+
+        batch = sync_statsbomb_open(
+            tenant=self.tenant,
+            imported_by=self.user,
+            competition_id='9',
+            season_id='281',
+            max_matches=1,
+            max_events=1,
+        )
+
+        self.assertEqual(batch.record_count, 2)
+        self.assertEqual(batch.quality, 'research_sample')
+        self.assertTrue(batch.manifest['research_only'])
+        self.assertEqual(batch.manifest['limits']['max_events_per_match'], 1)
+        self.assertEqual(
+            set(batch.records.values_list('capability', flat=True)),
+            {'fixtures_results', 'event_stream'},
+        )
+        event = batch.records.get(capability='event_stream')
+        self.assertEqual(event.raw_payload['id'], 'evt-1')
+        self.assertEqual(event.payload['event_type'], 'Starting XI')
+        self.assertTrue(event.content_hash)
+        source = batch.source
+        self.assertFalse(source.active)
+        self.assertEqual(
+            source.operational_status,
+            SportsDataSource.OperationalStatus.RESEARCH_ONLY,
+        )
+        integration = IntegrationRecord.objects.get(
+            correlation_id=f'statsbomb-open:{batch.content_hash}'
+        )
+        self.assertTrue(integration.payload['research_only'])
+        self.assertNotIn('X-auth-token', urlopen.call_args_list[0].args[0].headers)
+
+    def test_statsbomb_open_rejeita_amostra_acima_do_limite_antes_da_rede(self):
+        with self.assertRaisesMessage(ValidationError, 'entre 1 e 3 partidas'):
+            sync_statsbomb_open(
+                tenant=self.tenant,
+                imported_by=self.user,
+                competition_id='9',
+                season_id='281',
+                max_matches=4,
+            )
+
+    @patch('futebol.services.sports_data_providers.safe_urlopen')
+    def test_skillcorner_sincroniza_amostra_controlada_sem_tracking(self, urlopen):
+        catalog = [{
+            'id': 2017461, 'date_time': '2025-05-17T09:35:00Z',
+            'home_team': {'id': 868, 'short_name': 'Melbourne V FC'},
+            'away_team': {'id': 4177, 'short_name': 'Auckland FC'},
+            'status': 'closed', 'competition_id': 61, 'season_id': 95,
+        }, {
+            'id': 2015213, 'date_time': '2025-05-03T08:00:00Z',
+            'home_team': {'id': 1803, 'short_name': 'Western United'},
+            'away_team': {'id': 4177, 'short_name': 'Auckland FC'},
+            'status': 'closed', 'competition_id': 61, 'season_id': 95,
+        }]
+        metadata = {
+            'id': 2017461, 'date_time': '2025-05-17T09:35:00Z',
+            'home_team_score': 0, 'away_team_score': 1,
+            'home_team': {'id': 868, 'short_name': 'Melbourne V FC'},
+            'away_team': {'id': 4177, 'short_name': 'Auckland FC'},
+            'competition_edition': {
+                'competition': {'id': 61, 'name': 'A-League', 'area': 'AUS'},
+            },
+            'players': [{'id': 1}, {'id': 2}],
+            'match_periods': [{'period': 1, 'duration_minutes': 46.17}],
+        }
+        urlopen.side_effect = [_Response(catalog), _Response(metadata)]
+
+        batch = sync_skillcorner_open(
+            tenant=self.tenant, imported_by=self.user, max_matches=1,
+        )
+
+        self.assertEqual(batch.quality, 'research_sample')
+        self.assertEqual(batch.record_count, 3)
+        self.assertEqual(batch.manifest['usage_scope'], 'research_only')
+        self.assertIn('tracking_extrapolated', batch.manifest['excluded_large_files'])
+        metadata_record = batch.records.get(capability='match_metadata')
+        self.assertEqual(metadata_record.payload['players_count'], 2)
+        self.assertEqual(metadata_record.raw_payload['home_team_score'], 0)
+        self.assertFalse(batch.source.active)
+        self.assertEqual(
+            batch.source.operational_status,
+            SportsDataSource.OperationalStatus.RESEARCH_ONLY,
+        )
+        integration = IntegrationRecord.objects.get(
+            external_system__name='SkillCorner Open Data'
+        )
+        self.assertEqual(integration.payload['quality'], 'research_sample')
+
+    def test_skillcorner_limita_quantidade_de_metadados(self):
+        with self.assertRaisesMessage(ValidationError, 'entre 1 e 3'):
+            sync_skillcorner_open(
+                tenant=self.tenant, imported_by=self.user, max_matches=4,
             )
 
     @patch('futebol.services.sports_data_providers.safe_urlopen')

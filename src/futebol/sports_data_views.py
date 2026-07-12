@@ -13,6 +13,8 @@ from futebol.modules import tenant_has_module
 from futebol.services.permissions import require_any_role
 from futebol.services.sports_data_providers import (
     sync_football_data_org,
+    sync_skillcorner_open,
+    sync_statsbomb_open,
 )
 from futebol.services.tenancy import active_tenant
 
@@ -82,19 +84,33 @@ def sports_data_source_sync(request, pk):
         'Sem permissão para sincronizar fontes esportivas.',
     )
     source = get_object_or_404(SportsDataSource, tenant=tenant, pk=pk)
-    if source.code != 'football-data-org':
+    if source.code not in {'football-data-org', 'statsbomb-open', 'skillcorner-open'}:
         messages.warning(
             request,
             'Esta fonte aguarda dataset autorizado ou contrato comercial para sincronização.',
         )
         return redirect('sports-data-source-detail', pk=source.pk)
     try:
-        batch = sync_football_data_org(
-            tenant=tenant,
-            imported_by=request.user,
-            api_key=os.getenv('FOOTBALL_DATA_ORG_API_KEY', ''),
-            competition_code=request.POST.get('competition', 'BSA'),
-        )
+        if source.code == 'football-data-org':
+            batch = sync_football_data_org(
+                tenant=tenant,
+                imported_by=request.user,
+                api_key=os.getenv('FOOTBALL_DATA_ORG_API_KEY', ''),
+                competition_code=request.POST.get('competition', 'BSA'),
+            )
+        elif source.code == 'statsbomb-open':
+            batch = sync_statsbomb_open(
+                tenant=tenant,
+                imported_by=request.user,
+                competition_id=request.POST.get('competition_id', '43'),
+                season_id=request.POST.get('season_id', '106'),
+                max_matches=1,
+                max_events=200,
+            )
+        else:
+            batch = sync_skillcorner_open(
+                tenant=tenant, imported_by=request.user, max_matches=2
+            )
     except Exception:
         logger.exception(
             'Falha ao sincronizar fonte esportiva',

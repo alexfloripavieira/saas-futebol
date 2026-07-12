@@ -199,3 +199,16 @@ de feeds comerciais. A análise detalhada e as fontes oficiais estão no relató
 Pendências deliberadas: paginação/rate-limit avançado, mapeamento canônico de
 entidades e adaptadores comerciais só avançam com credenciais, fixtures e
 contratos reais fornecidos pelo responsável do produto.
+
+### Sincronização das fontes gratuitas — 12 de julho de 2026
+
+- football-data.org: Brasileirão Série A operacional, respeitando os cabeçalhos
+  `X-RequestsAvailable` e `X-RequestCounter-Reset` do plano contratado.
+- StatsBomb Open Data: amostra limitada a uma partida e 200 eventos por ciclo,
+  identificada permanentemente como `research_sample`/`research_only`.
+- SkillCorner Open Data: catálogo e metadados de duas partidas por ciclo; os
+  arquivos pesados de tracking não são rebaixados automaticamente.
+- O serviço Docker `sports-sync` executa as três fontes a cada seis horas, com
+  importação idempotente e parâmetros configuráveis por ambiente.
+- O painel permite sincronização manual das três fontes. Nenhuma fonte aberta
+  de laboratório passa a sustentar automaticamente uma recomendação comercial.

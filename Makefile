@@ -1,7 +1,7 @@
 COMPOSE ?= docker compose
 PROJECT ?= saas-futebol
 
-.PHONY: help build up down restart logs shell bash migrate makemigrations createsuperuser test ps clean seed-demo
+.PHONY: help build up down restart logs shell bash migrate makemigrations createsuperuser test ps clean seed-demo watch-sports-sources
 
 help:
 	@echo "Comandos disponíveis:"
@@ -19,6 +19,7 @@ help:
 	@echo "  make seed-demo        # cria o tenant demo local"
 	@echo "  make sync-ai-sources  # sincroniza as fontes de IA uma vez"
 	@echo "  make watch-ai-sources # sobe o watcher automático de fontes"
+	@echo "  make watch-sports-sources # sincroniza fontes esportivas periodicamente"
 	@echo "  make ps               # status dos containers"
 	@echo "  make clean            # remove containers e volumes"
 
@@ -64,6 +65,9 @@ sync-ai-sources:
 
 watch-ai-sources:
 	$(COMPOSE) up -d ai-sync
+
+watch-sports-sources:
+	$(COMPOSE) --profile watchers up -d sports-sync
 
 ps:
 	$(COMPOSE) ps

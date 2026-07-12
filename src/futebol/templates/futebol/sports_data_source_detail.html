@@ -11,7 +11,16 @@
   <button class="button" type="submit">Sincronizar agora</button>
 </form>
 {% elif summary.source.quality == 'research_sample' %}
-<div class="card state-empty"><strong>Laboratório de P&amp;D.</strong> Importe somente datasets versionados e autorizados; estes dados não alimentam decisões comerciais.</div>
+<form method="post" action="{% url 'sports-data-source-sync' summary.source.pk %}" class="card state-empty" style="margin-bottom:20px">
+  {% csrf_token %}
+  <strong>Laboratório de P&amp;D.</strong>
+  <p>Sincroniza uma amostra oficial, versionada e limitada. Estes dados não alimentam decisões comerciais.</p>
+  {% if summary.source.code == 'statsbomb-open' %}
+  <input type="hidden" name="competition_id" value="43">
+  <input type="hidden" name="season_id" value="106">
+  {% endif %}
+  <button class="button" type="submit">Sincronizar amostra agora</button>
+</form>
 {% elif summary.source.quality == 'contract_required' %}
 <div class="card state-empty"><strong>Contrato necessário.</strong> O adaptador permanece bloqueado até autorização comercial explícita.</div>
 {% endif %}

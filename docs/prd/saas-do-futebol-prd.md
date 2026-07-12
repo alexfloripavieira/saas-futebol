@@ -803,6 +803,11 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 
 **Fora do escopo desta sprint:** diagnóstico médico, decisão autônoma final, scraping de sites, redistribuição de datasets sem licença, promessa de tracking brasileiro ao vivo e aprendizado automático sem avaliação humana.
 
+### PRDs complementares após a Sprint 14
+
+- [Evolução do Treinador Inteligente](prd-evolucao-treinador-inteligente.md): prancheta interativa, execução assíncrona, dados espaciais, GPS/RPE, avaliação pós-jogo e gate do piloto.
+- [Fontes Reais e Providers de IA](prd-fontes-reais-providers-ia.md): conexões, adaptadores, credenciais, normalização, qualidade, roteamento, custos e rollout dos fornecedores que serão informados.
+
 ---
 
 ## 19. Escopo incremental recomendado

@@ -129,9 +129,15 @@ def _get_json(url, *, api_key):
     )
     with safe_urlopen(request, timeout=30) as response:
         try:
-            return json.loads(response.read().decode('utf-8'))
+            payload = json.loads(response.read().decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ValidationError('O provider retornou JSON inválido.') from exc
+        headers = getattr(response, 'headers', {})
+        return payload, {
+            'requests_available': headers.get('X-RequestsAvailable'),
+            'reset_seconds': headers.get('X-RequestCounter-Reset'),
+            'api_version': headers.get('X-API-Version'),
+        }
 
 
 def _normalize_matches(payload):
@@ -197,8 +203,8 @@ def sync_football_data_org(*, tenant, imported_by, api_key, competition_code='BS
     )
     base = f'https://api.football-data.org/v4/competitions/{competition_code}'
     try:
-        matches_payload = _get_json(f'{base}/matches', api_key=api_key)
-        standings_payload = _get_json(f'{base}/standings', api_key=api_key)
+        matches_payload, matches_rate = _get_json(f'{base}/matches', api_key=api_key)
+        standings_payload, standings_rate = _get_json(f'{base}/standings', api_key=api_key)
     except Exception:
         _record_provider_failure(
             tenant=tenant, source=source, competition_code=competition_code
@@ -215,6 +221,7 @@ def sync_football_data_org(*, tenant, imported_by, api_key, competition_code='BS
         matches_payload=matches_payload,
         standings_payload=standings_payload,
         records=records,
+        rate_limit={'matches': matches_rate, 'standings': standings_rate},
     )
 
 
@@ -248,7 +255,7 @@ def _record_provider_failure(*, tenant, source, competition_code):
 @transaction.atomic
 def _persist_football_data_sync(
     *, tenant, imported_by, source, competition_code, matches_payload,
-    standings_payload, records,
+    standings_payload, records, rate_limit,
 ):
     raw = json.dumps(
         {'matches': matches_payload, 'standings': standings_payload},
@@ -270,7 +277,8 @@ def _persist_football_data_sync(
         dataset_version=dataset_version, content_hash=content_hash,
         status=SportsDataImportBatch.Status.PROCESSING,
         manifest={'provider': 'football-data.org', 'competition': competition_code,
-                  'capabilities': ['fixtures_results', 'standings_form']},
+                  'capabilities': ['fixtures_results', 'standings_form'],
+                  'rate_limit': rate_limit},
         license_id=source.license_id, attribution=source.attribution,
         quality=source.quality, imported_by=imported_by,
     )

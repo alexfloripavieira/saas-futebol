@@ -21,6 +21,11 @@ from futebol.services.sports_data_providers import (
 class _Response:
     def __init__(self, payload):
         self.payload = payload
+        self.headers = {
+            'X-RequestsAvailable': '8',
+            'X-RequestCounter-Reset': '42',
+            'X-API-Version': 'v4',
+        }
 
     def __enter__(self):
         return self
@@ -100,6 +105,7 @@ class SportsDataProviderTests(TestCase):
         self.assertEqual(first.pk, second.pk)
         self.assertEqual(first.status, SportsDataImportBatch.Status.COMPLETED)
         self.assertEqual(first.record_count, 2)
+        self.assertEqual(first.manifest['rate_limit']['standings']['requests_available'], '8')
         self.assertEqual(
             set(first.records.values_list('capability', flat=True)),
             {'fixtures_results', 'standings_form'},

@@ -5,6 +5,7 @@ from django.test import SimpleTestCase
 
 from futebol.services.tracking_analytics import (
     build_tracking_analysis,
+    build_tracking_context,
     parse_tracking_stream,
 )
 
@@ -86,6 +87,27 @@ class TrackingStreamParserTests(SimpleTestCase):
 
         self.assertEqual(parsed['timestamp'], 750.5)
 
+    def test_normaliza_identidades_cores_e_direcoes_declaradas(self):
+        context = build_tracking_context({
+            'home_team': {'id': 10, 'short_name': 'Azul', 'jersey_color': '#001536'},
+            'away_team': {'id': 20, 'short_name': 'Verde', 'jersey_color': 'javascript:x'},
+            'home_team_kit': {'jersey_color': '#123456'},
+            'pitch_length': 'nan', 'pitch_width': 0,
+            'home_team_side': ['left_to_right', 'right_to_left'],
+            'players': [{
+                'id': 7, 'team_id': 10, 'short_name': 'Ana', 'number': 8,
+                'player_role': {'acronym': 'MC'},
+            }],
+        })
+
+        self.assertEqual(context['teams']['10']['name'], 'Azul')
+        self.assertEqual(context['teams']['10']['color'], '#123456')
+        self.assertEqual(context['teams']['20']['color'], '#ff8e98')
+        self.assertEqual(context['players']['7']['name'], 'Ana')
+        self.assertEqual(context['directions_by_period']['1'], {'10': 1, '20': -1})
+        self.assertEqual(context['directions_by_period']['2'], {'10': -1, '20': 1})
+        self.assertEqual((context['pitch_length'], context['pitch_width']), (105, 68))
+
 
 class TrackingAnalyticsTests(SimpleTestCase):
     def setUp(self):
@@ -103,6 +125,8 @@ class TrackingAnalyticsTests(SimpleTestCase):
         self.assertEqual(analysis['coverage'], 100.0)
         self.assertEqual(analysis['average_width'], 20.0)
         self.assertEqual(analysis['average_depth'], 9.0)
+        self.assertIn('team_metrics', analysis['preview'][0])
+        self.assertEqual(analysis['preview'][0]['ball']['x'], 50.0)
 
         athlete = next(
             player for player in analysis['players']

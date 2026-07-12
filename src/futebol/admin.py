@@ -40,6 +40,7 @@ from .models import (
     SportsDataRecord,
     SportsDataSource,
     TeamCategory,
+    TacticalInsightReview,
     Tenant,
     TenantBranding,
     TenantMembership,
@@ -238,6 +239,12 @@ class SportsDataArtifactAdmin(admin.ModelAdmin):
         'provider_object_id', 'capability', 'status', 'item_count', 'byte_size', 'batch',
     )
     list_filter = ('capability', 'status', 'format')
+
+
+@admin.register(TacticalInsightReview)
+class TacticalInsightReviewAdmin(admin.ModelAdmin):
+    list_display = ('evidence_id', 'decision', 'artifact', 'reviewed_by', 'reviewed_at')
+    list_filter = ('decision',)
 
 
 @admin.register(Contract)

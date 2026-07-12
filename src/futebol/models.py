@@ -1007,6 +1007,34 @@ class SportsDataArtifact(TenantScopedModel):
                     )
 
 
+class TacticalInsightReview(TenantScopedModel):
+    class Decision(models.TextChoices):
+        APPROVED_TRAINING = 'approved_training', 'Aprovada para treinamento'
+        REJECTED = 'rejected', 'Rejeitada'
+
+    artifact = models.ForeignKey(
+        SportsDataArtifact, on_delete=models.CASCADE, related_name='tactical_reviews',
+    )
+    evidence_id = models.CharField(max_length=64)
+    decision = models.CharField(max_length=24, choices=Decision.choices)
+    note = models.CharField(max_length=500, blank=True, default='')
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name='tactical_insight_reviews',
+    )
+    reviewed_at = models.DateTimeField(default=timezone.now)
+
+    tenant_bound_fields = ('artifact',)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'artifact', 'evidence_id'],
+                name='uniq_tactical_review_per_evidence',
+            ),
+        ]
+
+
 class Contract(TenantScopedModel):
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Rascunho'

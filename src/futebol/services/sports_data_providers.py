@@ -32,8 +32,9 @@ from futebol.models import (
 from futebol.services.audit import log_audit_event, snapshot_instance
 from futebol.services.net import safe_urlopen
 from futebol.services.tracking_analytics import (
-    build_tracking_analysis, parse_tracking_stream,
+    build_tracking_analysis, build_tracking_context, parse_tracking_stream,
 )
+from futebol.services.tactical_engine import detect_tactical_moments
 
 
 SKILLCORNER_OPEN_BASE_URL = (
@@ -324,7 +325,9 @@ def sync_skillcorner_tracking(*, tenant, imported_by, match_id):
             payload__provider_match_id=match_id,
         ).order_by('-created_at').first()
         player_teams = {}
+        tracking_context = {}
         if metadata_record:
+            tracking_context = build_tracking_context(metadata_record.raw_payload)
             for player in metadata_record.raw_payload.get('players') or []:
                 player_id = str(player.get('id') or player.get('player_id') or '')
                 team = player.get('team') or {}
@@ -334,13 +337,13 @@ def sync_skillcorner_tracking(*, tenant, imported_by, match_id):
         with open(temporary_path, 'rb') as stream:
             analysis = build_tracking_analysis(parse_tracking_stream(
                 stream, player_teams=player_teams,
-            ))
+            ), context=tracking_context)
         analyses_by_team = {}
         for team_id in sorted(set(player_teams.values())):
             with open(temporary_path, 'rb') as stream:
                 analyses_by_team[team_id] = build_tracking_analysis(
                     parse_tracking_stream(stream, player_teams=player_teams),
-                    team_id=team_id,
+                    team_id=team_id, context=tracking_context,
                 )
         if not analysis['frame_count']:
             raise ValidationError('O tracking não contém frames válidos.')
@@ -371,6 +374,7 @@ def sync_skillcorner_tracking(*, tenant, imported_by, match_id):
                 byte_size=byte_size, item_count=analysis['frame_count'],
                 metadata={
                     'analysis': analysis, 'analyses_by_team': analyses_by_team,
+                    'tracking_context': tracking_context, 'tactical_engine': {},
                     'preview_scope': 'primeiros 240 frames',
                 },
                 status=SportsDataArtifact.Status.READY,
@@ -380,6 +384,21 @@ def sync_skillcorner_tracking(*, tenant, imported_by, match_id):
             saved_name = artifact.file.name
             saved_storage = artifact.file.storage
             artifact.save()
+            engine_context = detect_tactical_moments(
+                analysis['preview'],
+                team_directions=tracking_context.get('directions_by_period'),
+                source_context={
+                    'source_code': source.code, 'batch_id': batch.pk,
+                    'artifact_id': artifact.pk, 'content_hash': content_hash,
+                    'schema_version': artifact.schema_version,
+                    'quality': 'research_sample',
+                    'license_id': source.license_id, 'attribution': source.attribution,
+                    'usage_scope': 'research_only', 'operational_use_allowed': False,
+                    'detected_position_ratio': round(analysis['coverage'] / 100, 3),
+                },
+            )
+            artifact.metadata = {**artifact.metadata, 'tactical_engine': engine_context}
+            artifact.save(update_fields=['metadata', 'updated_at'])
             batch.status = SportsDataImportBatch.Status.COMPLETED
             batch.imported_at = timezone.now()
             batch.save(update_fields=['status', 'imported_at', 'updated_at'])

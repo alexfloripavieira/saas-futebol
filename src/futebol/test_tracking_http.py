@@ -4,7 +4,7 @@ from django.urls import reverse
 
 from futebol.models import (
     SportsDataArtifact, SportsDataImportBatch, SportsDataSource, Tenant,
-    TenantMembership, TenantModuleSubscription,
+    TacticalInsightReview, TenantMembership, TenantModuleSubscription,
 )
 
 
@@ -31,12 +31,20 @@ class TrackingAnalysisLabHTTPTests(TestCase):
             manifest={'provider_match_id': '2017461'}, license_id='MIT',
             attribution='SkillCorner', quality='research_sample', imported_by=self.user,
         )
-        SportsDataArtifact.objects.create(
+        self.artifact = SportsDataArtifact.objects.create(
             tenant=self.tenant, batch=self.batch, capability='tracking_frames',
             provider_object_id='match:2017461', artifact_version='b' * 12,
             schema_version='v1', file='tracking/fake.jsonl', content_hash='b' * 64,
             byte_size=100, item_count=3, status=SportsDataArtifact.Status.READY,
-            metadata={'preview_scope': 'teste', 'analysis': {
+            metadata={'preview_scope': 'teste', 'tactical_engine': {
+                'status': 'available', 'limitations': [], 'moments': [{
+                    'evidence_id': 'd' * 64, 'description': 'Pressão de teste.',
+                    'duration': 1, 'frame_refs': {'count': 10},
+                    'validity': 'research_only', 'period': 1,
+                    'agent_route_labels': ['Analista Tático'],
+                    'agent_routes': ['tactical'], 'moment_type': 'pressing',
+                }],
+            }, 'analysis': {
                 'available': True, 'frame_count': 3, 'coverage': 100,
                 'average_width': 20, 'average_depth': 10,
                 'coordinate_system': 'metros', 'direction': 'não inferida',
@@ -54,6 +62,21 @@ class TrackingAnalysisLabHTTPTests(TestCase):
         self.assertContains(response, 'Tracking posicional')
         self.assertContains(response, 'SkillCorner')
         self.assertContains(response, '<svg', html=False)
+        self.assertContains(response, 'Linha do tempo')
+        self.assertContains(response, 'Motor de momentos táticos')
+        self.assertContains(response, 'tracking-playback-data')
+        self.assertContains(response, 'Espelhar')
+
+    def test_registra_revisao_humana_sem_alterar_dado_oficial(self):
+        response = self.client.post(
+            reverse('tracking-analysis-lab', args=[self.batch.pk]),
+            {'evidence_id': 'd' * 64, 'decision': 'approved_training'},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        review = TacticalInsightReview.objects.get(artifact=self.artifact)
+        self.assertEqual(review.decision, 'approved_training')
+        self.assertEqual(review.reviewed_by, self.user)
 
     def test_nao_expoe_tracking_de_outro_tenant(self):
         other = Tenant.objects.create(name='Outro Tracking', slug='outro-tracking')

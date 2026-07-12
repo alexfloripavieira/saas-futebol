@@ -808,6 +808,10 @@ Entregar uma SaaS em que cada clube tenha identidade própria, módulos contrata
 - [Evolução do Treinador Inteligente](prd-evolucao-treinador-inteligente.md): prancheta interativa, execução assíncrona, dados espaciais, GPS/RPE, avaliação pós-jogo e gate do piloto.
 - [Fontes Reais e Providers de IA](prd-fontes-reais-providers-ia.md): conexões, adaptadores, credenciais, normalização, qualidade, roteamento, custos e rollout dos fornecedores que serão informados.
 
+Essas evoluções não criam novos Módulos Contratados nesta fase. Elas aprofundam
+Operação, IA, Integrações, Automações, Relatórios/BI, Previsões, Aprovações,
+Auditoria e Transferências, preservando um único proprietário para cada regra.
+
 ---
 
 ## 19. Escopo incremental recomendado

@@ -76,6 +76,14 @@ licença, limites, ambiente e capacidades habilitadas.
 
 ## Implementation Decisions
 
+- Não será criado um novo Módulo Contratado chamado Fontes, Data Hub ou Providers. A solução aprofundará **Integrações**, **IA**, **Automações**, **Auditoria** e **Relatórios/BI**.
+- O módulo **Integrações** será proprietário de Sistemas Externos, Fontes de Dados Esportivos, sincronizações, lotes, quarentena, cache e reprocessamento.
+- O módulo **IA** continuará proprietário do catálogo de providers, modelos, Agentes Especialistas, prompts, roteamento e fallback determinístico.
+- O módulo **Automações** será proprietário de agendas, gatilhos, retries automáticos e alertas. Sincronização manual continuará disponível em Integrações sem exigir esse módulo.
+- O módulo **Auditoria** será proprietário da trilha de credenciais configuradas, ativações, execuções, custos e alterações, sem armazenar o segredo.
+- O módulo **Relatórios/BI** consumirá métricas agregadas de qualidade, cobertura, latência e custo; não será responsável por operar conectores.
+- Operação, Transferências e o Treinador Inteligente consumirão somente registros normalizados; nenhum deles conhecerá autenticação, paginação ou schema específico do fornecedor.
+- O gating seguirá o contrato comercial: fontes esportivas reais exigem Integrações; execução de Agentes Especialistas exige IA; rotinas programadas exigem Automações; consultas históricas avançadas exigem Relatórios.
 - A implementação evoluirá as estruturas já existentes: Sistema Externo representará a conexão operacional; Fonte de Dados Esportivos continuará representando proveniência e licença; provider de IA continuará representando catálogo e execução de modelos. Não será criado um cadastro paralelo com o mesmo significado.
 - Registros de Integração continuarão sendo a trilha técnica de recebimento e processamento; Lotes e Registros Esportivos continuarão sendo o histórico imutável dos dados normalizados.
 - Segredos serão referenciados por identificador de secret manager ou variável de ambiente; valores não serão persistidos em payloads, auditoria ou mensagens de erro.
@@ -119,6 +127,8 @@ licença, limites, ambiente e capacidades habilitadas.
 - Testes de integração HTTP usarão servidor falso local ou transporte mockado; a suíte não acessará vendors reais.
 - Smoke tests reais serão executados separadamente, somente em ambiente autorizado, com orçamento mínimo e credenciais de teste.
 - O gate de ativação verificará migrations, segurança, licença, atribuição, limites, telemetria, rollback e revogação.
+- Testes de composição verificarão que Integrações funciona sem Automações para sincronização manual, IA funciona sem fonte real por fallback e cada tela respeita o Módulo Contratado correspondente.
+- Os testes cruzarão os seams existentes de Sistema Externo, Registro de Integração, Fonte de Dados Esportivos, provider de IA e Agente Especialista, evitando uma segunda infraestrutura de testes para os mesmos conceitos.
 
 ## Out of Scope
 
@@ -130,6 +140,7 @@ licença, limites, ambiente e capacidades habilitadas.
 - Treinar modelos próprios nesta fase.
 - Enviar dados clínicos ou documentos pessoais a providers sem base, finalidade e autorização específicas.
 - Tornar qualquer vendor obrigatório para o funcionamento básico do Treinador Inteligente.
+- Criar módulos contratáveis separados para cada fonte, provider, modalidade de dado ou Agente Especialista.
 
 ## Further Notes
 

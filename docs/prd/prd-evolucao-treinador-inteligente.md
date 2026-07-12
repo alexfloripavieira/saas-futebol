@@ -68,6 +68,19 @@ Reais e Providers de IA”.
 
 ## Implementation Decisions
 
+- Não será criado um novo Módulo Contratado para scouting, preparação física, campo tático, dados espaciais ou avaliação pós-jogo. Essas capacidades aprofundarão os módulos originais.
+- O módulo **IA** será proprietário do Treinador Inteligente, Dossiê da Partida, Comissão Técnica Digital, Planos de Jogo, prancheta e revisão do rascunho.
+- O módulo **Operação** continuará proprietário dos dados oficiais de clubes, pessoas, competições, partidas, escalações e eventos; o Treinador Inteligente apenas os consumirá.
+- O módulo **Transferências** continuará proprietário de contratos e vínculos usados na elegibilidade dos atletas; não haverá um segundo cadastro esportivo dentro da IA.
+- O módulo **Integrações** será proprietário da entrada, normalização, qualidade e reprocessamento de Fontes de Dados Esportivos reais.
+- O módulo **Relatórios/BI** será proprietário de histórico, comparação Plano de Jogo × execução e avaliação pós-jogo. O Dossiê poderá apontar para essas análises sem duplicá-las.
+- O módulo **Previsões** será proprietário de tendências entre partidas e riscos futuros. A recomendação para uma partida específica continuará pertencendo ao Treinador Inteligente.
+- O módulo **Automações** será proprietário da programação recorrente, gatilhos, notificações e reprocessamento automático. A geração manual do Dossiê continuará funcionando apenas com o módulo IA.
+- O módulo **Aprovações** poderá formalizar a escalação quando contratado e configurado pelo Tenant; a revisão humana simples continuará disponível sem obrigar um Fluxo de Aprovação.
+- O módulo **Auditoria** continuará proprietário da trilha de dados, execuções, decisões humanas, alterações e custos.
+- O Centro de Scouting existente será aprofundado como visão especializada do Dossiê e do Olheiro, e não como um décimo módulo.
+- Capacidades cruzadas terão uma interface pequena: cada módulo proprietário expõe dados ou ações estáveis, sem compartilhar regras internas nem criar dependência circular.
+- O gating seguirá o contrato comercial: IA habilita o Treinador; Integrações habilita fontes reais; Relatórios habilita avaliação histórica; Automações habilita execução programada; Aprovações habilita o gate formal opcional.
 - O Dossiê da Partida continuará sendo o snapshot versionado compartilhado pela Comissão Técnica Digital.
 - A evolução estenderá os modelos existentes de Dossiê, parecer, Plano de Jogo e rascunho; não criará um segundo fluxo de inteligência esportiva em paralelo.
 - A geração assíncrona será modelada como uma execução rastreável, com estados `queued`, `running`, `partial`, `completed`, `failed` e `cancelled`.
@@ -100,6 +113,8 @@ Reais e Providers de IA”.
 - Dados sensíveis terão testes de não exposição em logs, notificações, auditoria serializada e respostas HTTP.
 - A avaliação pós-jogo terá testes de vínculo entre recomendação, decisão humana e evento realizado.
 - O gate final executará suíte completa, verificação de migrations, check de produção, jornada piloto e ensaio de rollback.
+- A composição modular terá testes externos: IA isolada mantém geração manual e fallback; Integrações adiciona fontes reais; Automações adiciona recorrência; Relatórios adiciona pós-jogo; Aprovações adiciona o gate formal.
+- Menus, rotas e ações continuarão cobertos por testes de Módulo Contratado e papel, evitando que uma capacidade profunda exponha módulos não adquiridos.
 
 ## Out of Scope
 
@@ -110,6 +125,7 @@ Reais e Providers de IA”.
 - Promessa de tracking em tempo real quando a fonte não oferecer essa capacidade.
 - Produção automática de vídeo ou visão computacional nesta fase.
 - Detalhes de autenticação e contratos de vendors específicos, tratados na PRD complementar.
+- Novos Módulos Contratados chamados Scouting, Campo Tático, Performance Física ou Pós-jogo nesta fase.
 
 ## Further Notes
 

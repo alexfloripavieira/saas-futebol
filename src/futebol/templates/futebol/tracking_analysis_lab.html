@@ -1,0 +1,21 @@
+{% extends 'futebol/base.html' %}
+
+{% block content %}
+<style>
+  .track-grid{display:grid;grid-template-columns:2fr 1fr;gap:1.2rem}.track-card{padding:1rem;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035)}
+  .track-pitch{width:100%;aspect-ratio:1.55;background:#164f39;border-radius:10px}.track-line{fill:none;stroke:rgba(255,255,255,.7);stroke-width:.45}.track-player{fill:#68b8ff;stroke:#fff;stroke-width:.35}.track-player.extrapolated{fill:#ffb34d;stroke-dasharray:1 1;opacity:.72}.track-warning{padding:1rem;border:1px solid #d7a642;border-radius:12px;background:rgba(215,166,66,.12)}
+  .metric-row{display:flex;gap:1rem;flex-wrap:wrap;margin:1rem 0}.track-metric{padding:.7rem 1rem;border-radius:10px;background:rgba(255,255,255,.06)}
+  @media(max-width:760px){.track-grid{grid-template-columns:1fr}}
+</style>
+<section class="hero"><span class="eyebrow">P&amp;D · {{ batch.source.name }}</span><h1>Tracking posicional</h1><p>Frames posicionais detectados e extrapolados usados para validar ocupação, estrutura e movimentos.</p></section>
+<p class="track-warning"><strong>Somente treinamento e validação.</strong> Fonte: {{ batch.attribution }} · licença {{ batch.license_id }} · partida {{ batch.manifest.provider_match_id }}. Identidade e posições carregam as limitações declaradas pela fonte.</p>
+<form method="get"><label>Equipe <select name="team"><option value="">Todas</option>{% for team in teams %}<option value="{{ team }}" {% if team == selected_team %}selected{% endif %}>{{ team }}</option>{% endfor %}</select></label> <button class="button" type="submit">Aplicar</button></form>
+<div class="metric-row"><div class="track-metric"><strong>{{ analysis.frame_count }}</strong> frames</div><div class="track-metric"><strong>{{ analysis.coverage }}%</strong> {{ analysis.coverage_label|default:'detectado' }}</div><div class="track-metric"><strong>{{ analysis.average_width|default:'—' }}</strong> m largura média</div><div class="track-metric"><strong>{{ analysis.average_depth|default:'—' }}</strong> m profundidade média</div></div>
+<p class="muted">{{ analysis.coordinate_system }}. Direção: {{ analysis.direction }}. Prévia: {{ artifact.metadata.preview_scope }}.</p>
+{% if analysis.available and preview %}
+<div class="track-grid"><article class="track-card"><h2>Posições detectadas e extrapoladas</h2><p class="muted">Quadro inicial da prévia; cada ponto preserva sua marca de detecção. A animação temporal será o próximo refinamento da prancheta.</p>
+  <p><span style="color:#68b8ff">● detectado</span> · <span style="color:#ffb34d">● extrapolado</span></p>
+  {% with frame=preview.0 %}<svg class="track-pitch" viewBox="0 0 100 100" role="img"><title>Posições observadas no campo</title><rect class="track-line" x="1" y="1" width="98" height="98"/><line class="track-line" x1="50" y1="1" x2="50" y2="99"/><circle class="track-line" cx="50" cy="50" r="10"/>{% for player in frame.players %}<circle class="track-player {% if not player.detected %}extrapolated{% endif %}" cx="{{ player.x }}" cy="{{ player.y }}" r="1.5"><title>Atleta {{ player.player_id }} · {% if player.detected %}detectado{% else %}extrapolado{% endif %}</title></circle>{% endfor %}</svg>{% endwith %}
+</article><aside class="track-card"><h2>Leitura responsável</h2><p>Os frames representam observações posicionais. A altura do bloco permanece indisponível enquanto a direção de ataque não for confirmada.</p><p>Velocidade e aceleração exigem suavização antes de qualquer uso de performance.</p></aside></div>
+{% else %}<p class="track-warning">{{ analysis.reason|default:'Tracking indisponível ou com cobertura insuficiente.' }}</p>{% endif %}
+{% endblock %}

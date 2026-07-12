@@ -1,13 +1,16 @@
 import json
+import io
+import tempfile
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from futebol.models import (
     IntegrationRecord,
     SportsDataImportBatch,
+    SportsDataArtifact,
     SportsDataRecord,
     SportsDataSource,
     Tenant,
@@ -16,6 +19,7 @@ from futebol.services.sports_data_providers import (
     provision_provider_catalog,
     sync_football_data_org,
     sync_skillcorner_open,
+    sync_skillcorner_tracking,
     sync_statsbomb_open,
 )
 
@@ -37,6 +41,15 @@ class _Response:
 
     def read(self):
         return json.dumps(self.payload).encode('utf-8')
+
+
+class _BinaryResponse(io.BytesIO):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+        return False
 
 
 class SportsDataProviderTests(TestCase):
@@ -255,6 +268,44 @@ class SportsDataProviderTests(TestCase):
             sync_skillcorner_open(
                 tenant=self.tenant, imported_by=self.user, max_matches=4,
             )
+
+    @patch('futebol.services.sports_data_providers.safe_urlopen')
+    def test_skillcorner_tracking_gera_artefato_privado_e_idempotente(self, urlopen):
+        frames = b''.join(json.dumps({
+            'frame': index, 'timestamp': index / 10, 'period': 1,
+            'player_data': [
+                {'player_id': 1, 'x': index, 'y': 0, 'is_detected': True},
+                {'player_id': 2, 'x': 10, 'y': 10, 'is_detected': True},
+            ],
+            'ball_data': {'x': 0, 'y': 0, 'is_detected': True},
+        }).encode() + b'\n' for index in range(3))
+        urlopen.side_effect = [_BinaryResponse(frames), _BinaryResponse(frames)]
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            batch = sync_skillcorner_tracking(
+                tenant=self.tenant, imported_by=self.user, match_id='2017461',
+            )
+            artifact = SportsDataArtifact.objects.get(batch=batch)
+            second = sync_skillcorner_tracking(
+                tenant=self.tenant, imported_by=self.user, match_id='2017461',
+            )
+
+            self.assertEqual(second.pk, batch.pk)
+            self.assertEqual(artifact.status, SportsDataArtifact.Status.READY)
+            self.assertEqual(artifact.item_count, 3)
+            self.assertEqual(len(artifact.content_hash), 64)
+            self.assertEqual(batch.records.count(), 0)
+            self.assertEqual(batch.manifest['frame_count'], 3)
+            self.assertTrue(artifact.file.name.startswith(
+                f'tracking/{self.tenant.pk}/{batch.pk}/'
+            ))
+            self.assertEqual(urlopen.call_count, 2)
+            self.assertTrue(IntegrationRecord.objects.filter(
+                correlation_id=f'skillcorner-tracking:{artifact.content_hash}',
+                status='processed',
+            ).exists())
+            artifact.byte_size += 1
+            with self.assertRaisesMessage(ValidationError, 'imutável'):
+                artifact.save()
 
     @patch('futebol.services.sports_data_providers.safe_urlopen')
     def test_falha_do_provider_e_registrada_sem_armazenar_credencial(self, urlopen):

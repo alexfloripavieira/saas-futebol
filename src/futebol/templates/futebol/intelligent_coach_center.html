@@ -23,6 +23,15 @@
 </section>
 {% endif %}
 
+{% if tracking_batch %}
+<section class="card" style="margin-bottom:1.5rem">
+  <span class="coach-badge">Tracking posicional</span>
+  <h2>Ocupação e movimentos com frames posicionais</h2>
+  <p>Explore posições observadas da amostra SkillCorner, isoladas do ambiente operacional.</p>
+  <a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Abrir tracking</a>
+</section>
+{% endif %}
+
 <div class="coach-stepper" aria-label="Etapas do Treinador Inteligente">
   <div class="coach-step"><strong>1 · Partida</strong><span>Escolher confronto</span></div>
   <div class="coach-step"><strong>2 · Dossiê</strong><span>Consolidar os dados</span></div>

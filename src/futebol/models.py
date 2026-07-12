@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import timedelta
 import secrets
+import string
+import uuid
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -934,6 +936,75 @@ class SportsDataRecord(TenantScopedModel):
             raise ValidationError({'source': 'A fonte do registro diverge da fonte do lote.'})
         if self.observed_at and self.expires_at and self.expires_at < self.observed_at:
             raise ValidationError({'expires_at': 'A validade não pode anteceder a observação.'})
+
+
+def sports_data_artifact_path(instance, filename):
+    extension = 'jsonl' if instance.format == 'jsonl' else 'bin'
+    return f'tracking/{instance.tenant_id}/{instance.batch_id}/{uuid.uuid4().hex}.{extension}'
+
+
+class SportsDataArtifact(TenantScopedModel):
+    class Status(models.TextChoices):
+        STAGED = 'staged', 'Preparando'
+        READY = 'ready', 'Pronto'
+        FAILED = 'failed', 'Falhou'
+
+    batch = models.ForeignKey(
+        SportsDataImportBatch, on_delete=models.CASCADE, related_name='artifacts',
+    )
+    capability = models.CharField(max_length=64)
+    provider_object_id = models.CharField(max_length=160)
+    artifact_version = models.CharField(max_length=80)
+    schema_version = models.CharField(max_length=32)
+    format = models.CharField(max_length=16, default='jsonl')
+    compression = models.CharField(max_length=16, default='none')
+    file = models.FileField(upload_to=sports_data_artifact_path)
+    content_hash = models.CharField(max_length=64)
+    byte_size = models.PositiveBigIntegerField(default=0)
+    item_count = models.PositiveBigIntegerField(default=0)
+    metadata = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.STAGED)
+
+    tenant_bound_fields = ('batch',)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'batch', 'capability', 'provider_object_id',
+                        'artifact_version'],
+                name='uniq_sports_artifact_version',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.status == self.Status.READY:
+            valid_hash = (
+                len(self.content_hash) == 64 and
+                all(character in string.hexdigits for character in self.content_hash)
+            )
+            if (
+                not self.file or not valid_hash or not self.byte_size or
+                not self.item_count or self.artifact_version != self.content_hash[:12]
+            ):
+                raise ValidationError(
+                    'Artefato pronto exige arquivo, hash, versão, tamanho e itens válidos.',
+                )
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).first()
+            if previous and previous.status == self.Status.READY:
+                immutable_fields = (
+                    'tenant_id', 'batch_id', 'capability', 'provider_object_id',
+                    'artifact_version', 'schema_version', 'format', 'compression',
+                    'file', 'content_hash', 'byte_size', 'item_count',
+                )
+                if any(
+                    getattr(previous, field) != getattr(self, field)
+                    for field in immutable_fields
+                ):
+                    raise ValidationError(
+                        'Artefato pronto é imutável; publique uma nova versão.',
+                    )
 
 
 class Contract(TenantScopedModel):

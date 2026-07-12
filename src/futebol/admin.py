@@ -36,6 +36,7 @@ from .models import (
     PublicAPICredential,
     SpecialistOpinion,
     SportsDataImportBatch,
+    SportsDataArtifact,
     SportsDataRecord,
     SportsDataSource,
     TeamCategory,
@@ -229,6 +230,14 @@ class SportsDataImportBatchAdmin(admin.ModelAdmin):
 class SportsDataRecordAdmin(admin.ModelAdmin):
     list_display = ('provider_record_id', 'capability', 'source', 'observed_at', 'expires_at')
     list_filter = ('capability',)
+
+
+@admin.register(SportsDataArtifact)
+class SportsDataArtifactAdmin(admin.ModelAdmin):
+    list_display = (
+        'provider_object_id', 'capability', 'status', 'item_count', 'byte_size', 'batch',
+    )
+    list_filter = ('capability', 'status', 'format')
 
 
 @admin.register(Contract)

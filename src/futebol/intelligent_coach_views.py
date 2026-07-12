@@ -71,6 +71,11 @@ def intelligent_coach_center(request):
             tenant=tenant, source__code='statsbomb-open',
             quality='research_sample', status=SportsDataImportBatch.Status.COMPLETED,
         ).order_by('-imported_at').first(),
+        'tracking_batch': SportsDataImportBatch.objects.filter(
+            tenant=tenant, source__code='skillcorner-open',
+            artifacts__capability='tracking_frames', artifacts__status='ready',
+            status=SportsDataImportBatch.Status.COMPLETED,
+        ).order_by('-imported_at').first(),
     })
 
 

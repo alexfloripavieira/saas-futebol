@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 import urllib.request
 from datetime import timedelta
 from uuid import uuid4
 
 from django.core.exceptions import ValidationError
+from django.core.files import File
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -22,17 +25,25 @@ from futebol.models import (
     ExternalSystem,
     IntegrationRecord,
     SportsDataImportBatch,
+    SportsDataArtifact,
     SportsDataRecord,
     SportsDataSource,
 )
 from futebol.services.audit import log_audit_event, snapshot_instance
 from futebol.services.net import safe_urlopen
+from futebol.services.tracking_analytics import (
+    build_tracking_analysis, parse_tracking_stream,
+)
 
 
 SKILLCORNER_OPEN_BASE_URL = (
     'https://raw.githubusercontent.com/SkillCorner/opendata/master/data'
 )
 SKILLCORNER_OPEN_MAX_MATCHES = 3
+SKILLCORNER_TRACKING_MEDIA_URL = (
+    'https://media.githubusercontent.com/media/SkillCorner/opendata/master/data'
+)
+SKILLCORNER_TRACKING_MAX_BYTES = 150 * 1024 * 1024
 
 
 PROVIDER_CATALOG = (
@@ -261,6 +272,171 @@ def sync_skillcorner_open(*, tenant, imported_by, max_matches=1):
         metadata_items=metadata_items,
         records=records,
         max_matches=max_matches,
+    )
+
+
+def sync_skillcorner_tracking(*, tenant, imported_by, match_id):
+    """Baixa e publica um artefato privado de tracking, de forma incremental."""
+    match_id = str(match_id or '')
+    if not match_id.isdigit():
+        raise ValidationError('A partida de tracking informada é inválida.')
+    source = next(
+        item for item in provision_provider_catalog(tenant=tenant)
+        if item.code == 'skillcorner-open'
+    )
+    url = (
+        f'{SKILLCORNER_TRACKING_MEDIA_URL}/matches/{match_id}/'
+        f'{match_id}_tracking_extrapolated.jsonl'
+    )
+    request = urllib.request.Request(url, headers={
+        'Accept': 'application/x-ndjson',
+        'User-Agent': 'SaaSFutebol-ResearchConnector/1.0',
+    })
+    temporary_path = ''
+    saved_name = ''
+    saved_storage = None
+    try:
+        with safe_urlopen(request, timeout=60) as response, tempfile.NamedTemporaryFile(
+            suffix='.jsonl', delete=False,
+        ) as temporary:
+            temporary_path = temporary.name
+            digest = hashlib.sha256()
+            byte_size = 0
+            while True:
+                chunk = response.read(64 * 1024)
+                if not chunk:
+                    break
+                byte_size += len(chunk)
+                if byte_size > SKILLCORNER_TRACKING_MAX_BYTES:
+                    raise ValidationError('O tracking excede o limite de 150 MB por partida.')
+                digest.update(chunk)
+                temporary.write(chunk)
+        content_hash = digest.hexdigest()
+        existing = SportsDataArtifact.objects.filter(
+            tenant=tenant, batch__source=source, capability='tracking_frames',
+            provider_object_id=f'match:{match_id}', content_hash=content_hash,
+            status=SportsDataArtifact.Status.READY,
+        ).select_related('batch').first()
+        if existing:
+            return existing.batch
+        metadata_record = SportsDataRecord.objects.filter(
+            tenant=tenant, source=source, capability='match_metadata',
+            payload__provider_match_id=match_id,
+        ).order_by('-created_at').first()
+        player_teams = {}
+        if metadata_record:
+            for player in metadata_record.raw_payload.get('players') or []:
+                player_id = str(player.get('id') or player.get('player_id') or '')
+                team = player.get('team') or {}
+                team_id = str(player.get('team_id') or team.get('id') or '')
+                if player_id and team_id:
+                    player_teams[player_id] = team_id
+        with open(temporary_path, 'rb') as stream:
+            analysis = build_tracking_analysis(parse_tracking_stream(
+                stream, player_teams=player_teams,
+            ))
+        analyses_by_team = {}
+        for team_id in sorted(set(player_teams.values())):
+            with open(temporary_path, 'rb') as stream:
+                analyses_by_team[team_id] = build_tracking_analysis(
+                    parse_tracking_stream(stream, player_teams=player_teams),
+                    team_id=team_id,
+                )
+        if not analysis['frame_count']:
+            raise ValidationError('O tracking não contém frames válidos.')
+
+        with transaction.atomic():
+            batch = SportsDataImportBatch.objects.create(
+                tenant=tenant, source=source,
+                dataset_id=f'skillcorner-tracking-{match_id}',
+                dataset_version=content_hash[:12], content_hash=content_hash,
+                status=SportsDataImportBatch.Status.PROCESSING,
+                record_count=0,
+                manifest={
+                    'provider': 'SkillCorner Open Data', 'provider_match_id': match_id,
+                    'capabilities': ['tracking_frames'], 'artifact_count': 1,
+                    'frame_count': analysis['frame_count'],
+                    'analyzable_frame_count': analysis['analyzable_frame_count'],
+                    'usage_scope': 'research_only',
+                    'source_url': url,
+                },
+                license_id=source.license_id, attribution=source.attribution,
+                quality='research_sample', imported_by=imported_by,
+            )
+            artifact = SportsDataArtifact(
+                tenant=tenant, batch=batch, capability='tracking_frames',
+                provider_object_id=f'match:{match_id}',
+                artifact_version=content_hash[:12], schema_version='skillcorner-jsonl-v1',
+                format='jsonl', compression='none', content_hash=content_hash,
+                byte_size=byte_size, item_count=analysis['frame_count'],
+                metadata={
+                    'analysis': analysis, 'analyses_by_team': analyses_by_team,
+                    'preview_scope': 'primeiros 240 frames',
+                },
+                status=SportsDataArtifact.Status.READY,
+            )
+            with open(temporary_path, 'rb') as stream:
+                artifact.file.save(f'{match_id}_tracking.jsonl', File(stream), save=False)
+            saved_name = artifact.file.name
+            saved_storage = artifact.file.storage
+            artifact.save()
+            batch.status = SportsDataImportBatch.Status.COMPLETED
+            batch.imported_at = timezone.now()
+            batch.save(update_fields=['status', 'imported_at', 'updated_at'])
+            log_audit_event(
+                tenant=tenant, actor=imported_by, action='import', obj=batch,
+                after_state=snapshot_instance(batch),
+            )
+            external_system, _ = ExternalSystem.objects.get_or_create(
+                tenant=tenant, name='SkillCorner Open Data',
+                defaults={
+                    'kind': ExternalSystem.Kind.IMPORT,
+                    'base_url': 'https://github.com/SkillCorner/opendata',
+                    'active': True,
+                },
+            )
+            IntegrationRecord.objects.create(
+                tenant=tenant, external_system=external_system,
+                correlation_id=f'skillcorner-tracking:{content_hash}',
+                external_object_id=f'match-{match_id}',
+                payload={
+                    'batch_id': batch.pk, 'artifact_id': artifact.pk,
+                    'content_hash': content_hash, 'frame_count': analysis['frame_count'],
+                    'usage_scope': 'research_only',
+                },
+                status='processed', processed_at=timezone.now(),
+            )
+        return batch
+    except Exception:
+        if saved_name and saved_storage:
+            saved_storage.delete(saved_name)
+        _record_skillcorner_tracking_failure(
+            tenant=tenant, source=source, match_id=match_id,
+        )
+        raise
+    finally:
+        if temporary_path and os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+
+
+@transaction.atomic
+def _record_skillcorner_tracking_failure(*, tenant, source, match_id):
+    source.last_error = 'Falha ao importar ou validar tracking público.'
+    source.save(update_fields=['last_error', 'updated_at'])
+    external_system, _ = ExternalSystem.objects.get_or_create(
+        tenant=tenant, name='SkillCorner Open Data',
+        defaults={
+            'kind': ExternalSystem.Kind.IMPORT,
+            'base_url': 'https://github.com/SkillCorner/opendata', 'active': True,
+        },
+    )
+    IntegrationRecord.objects.create(
+        tenant=tenant, external_system=external_system,
+        correlation_id=f'skillcorner-tracking:error:{uuid4()}',
+        external_object_id=f'match-{match_id}',
+        payload={'provider': 'SkillCorner Open Data', 'usage_scope': 'research_only'},
+        status='error', processed_at=timezone.now(),
+        error_message='Falha ao importar ou validar tracking público.',
     )
 
 

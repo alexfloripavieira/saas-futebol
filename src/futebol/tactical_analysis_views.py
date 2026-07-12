@@ -3,7 +3,7 @@ from functools import wraps
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
 
-from futebol.models import SportsDataImportBatch
+from futebol.models import SportsDataArtifact, SportsDataImportBatch
 from futebol.modules import tenant_has_module
 from futebol.services.spatial_analytics import build_event_analysis
 from futebol.services.tenancy import active_tenant
@@ -59,4 +59,30 @@ def tactical_analysis_lab(request, batch_pk):
             str(record.payload.get('period')) for record in records
             if record.payload.get('period')
         }),
+    })
+
+
+@login_required
+@_ia_required
+def tracking_analysis_lab(request, batch_pk):
+    tenant = active_tenant(request)
+    batch = get_object_or_404(
+        SportsDataImportBatch.objects.select_related('source'),
+        tenant=tenant, pk=batch_pk, status=SportsDataImportBatch.Status.COMPLETED,
+        quality='research_sample', source__code='skillcorner-open',
+    )
+    artifact = get_object_or_404(
+        SportsDataArtifact, tenant=tenant, batch=batch,
+        capability='tracking_frames', status=SportsDataArtifact.Status.READY,
+    )
+    global_analysis = artifact.metadata.get('analysis') or {}
+    analyses_by_team = artifact.metadata.get('analyses_by_team') or {}
+    selected_team = request.GET.get('team', '')
+    analysis = analyses_by_team.get(selected_team, global_analysis)
+    preview = analysis.get('preview') or []
+    teams = sorted(analyses_by_team)
+    return render(request, 'futebol/tracking_analysis_lab.html', {
+        'title': 'Tracking posicional', 'batch': batch, 'artifact': artifact,
+        'analysis': analysis, 'preview': preview, 'teams': teams,
+        'selected_team': selected_team,
     })

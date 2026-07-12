@@ -200,6 +200,17 @@ Pendências deliberadas: paginação/rate-limit avançado, mapeamento canônico 
 entidades e adaptadores comerciais só avançam com credenciais, fixtures e
 contratos reais fornecidos pelo responsável do produto.
 
+### Artefatos de tracking SkillCorner — 12 de julho de 2026
+
+- Tracking é armazenado como artefato privado tenant-scoped, ligado ao lote,
+  com hash, schema, versão, tamanho, frames, status e metadados de cobertura.
+- O JSONL é baixado em blocos e processado linha a linha; frames não viram
+  registros individuais no PostgreSQL.
+- A carga é opt-in por partida e limitada a 150 MB. O sincronizador recorrente
+  continua importando apenas catálogo e metadados leves.
+- A interface apresenta detecção e extrapolação separadamente, mantém direção
+  não inferida e não promove amostras P&D a evidência operacional do clube.
+
 ### Sincronização das fontes gratuitas — 12 de julho de 2026
 
 - football-data.org: Brasileirão Série A operacional, respeitando os cabeçalhos

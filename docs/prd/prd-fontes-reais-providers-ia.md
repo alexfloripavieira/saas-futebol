@@ -153,3 +153,27 @@ licença, limites, ambiente e capacidades habilitadas.
 - A pesquisa existente de fontes gratuitas é referência de descoberta, não autorização automática de uso.
 - A primeira conexão deve ser escolhida pelo melhor equilíbrio entre licença clara, fixture estável, utilidade para o Dossiê e baixo risco operacional.
 - Dependência relacionada: “PRD — Evolução do Treinador Inteligente”.
+
+### Fontes públicas recebidas em 12 de julho de 2026
+
+A imagem fornecida foi validada contra páginas, termos e repositórios oficiais. A
+classificação abaixo é um gate de produto: consulta humana gratuita não equivale
+a API pública, licença aberta ou direito de uso comercial no SaaS.
+
+| Fonte | Classificação inicial | Uso autorizado nesta fase |
+|---|---|---|
+| FotMob | Condicionada a contrato/permissão | Referência humana; sem scraping ou endpoints internos |
+| Sofascore | Condicionada a contrato | Referência humana ou widget autorizado; sem ingestão da base |
+| oGol / zerozero | Condicionada a permissão escrita | Links e checagem humana |
+| WhoScored | Condicionada a licença | Nenhuma ingestão ou engenharia reversa |
+| FBref | Incompatível com o fluxo atual de IA sem licença específica | Não usar como evidência, prompt ou entrada de previsão |
+| Understat | Condicionada a permissão escrita | Pesquisa humana; downloads não entram em produção |
+| Transfermarkt | Condicionada a acordo comercial | Nenhum bot, scraping, treinamento ou uso por IA |
+| “TF”, provavelmente TransferFeed | Identidade pendente e produto comercial | Confirmar a marca e solicitar proposta de integração |
+| CIES Football Observatory | Referência metodológica | Relatórios e métodos citados; sem ingestão da base subjacente |
+| StatsBomb Open Data | P&D/open data com atribuição | Fixtures, protótipos e algoritmos em ambiente `research_sample`; produção após clearance |
+
+A ordem segura permanece: dados internos autorizados; football-data.org para
+agenda/tabela/resultados; StatsBomb Open Data em laboratório; depois negociação
+de feeds comerciais. A análise detalhada e as fontes oficiais estão no relatório
+“Validação das fontes públicas mostradas na imagem”.

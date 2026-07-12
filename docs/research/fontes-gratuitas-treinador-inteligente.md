@@ -1,5 +1,11 @@
 # Fontes gratuitas para o Treinador Inteligente
 
+> Complemento: a lista de FotMob, Sofascore, oGol, WhoScored, FBref, Understat,
+> Transfermarkt, possível TransferFeed, CIES e StatsBomb enviada posteriormente
+> foi verificada em
+> [Validação das fontes públicas mostradas na imagem](fontes-publicas-imagem-validacao.md).
+> Sites públicos não foram classificados automaticamente como dados abertos.
+
 Pesquisa realizada em 12 de julho de 2026, usando apenas documentação, repositórios e termos publicados pelos próprios provedores.
 
 ## Conclusão executiva

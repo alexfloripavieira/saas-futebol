@@ -8,6 +8,7 @@ from futebol.sports_data_views import (
     sports_data_source_list,
     sports_data_source_sync,
 )
+from futebol.tactical_analysis_views import tactical_analysis_lab
 from futebol.intelligent_coach_views import (
     intelligent_coach_apply_draft,
     intelligent_coach_center,
@@ -117,6 +118,11 @@ urlpatterns = [
     path('partidas/nova/', match_create, name='match-create'),
     path('partidas/<int:pk>/editar/', match_edit, name='match-edit'),
     path('ia/treinador/', intelligent_coach_center, name='intelligent-coach-center'),
+    path(
+        'ia/treinador/laboratorio/<int:batch_pk>/',
+        tactical_analysis_lab,
+        name='tactical-analysis-lab',
+    ),
     path('ia/fontes-esportivas/', sports_data_source_list, name='sports-data-source-list'),
     path(
         'ia/fontes-esportivas/<int:pk>/',

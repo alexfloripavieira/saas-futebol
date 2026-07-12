@@ -7,7 +7,9 @@ from django.http import HttpResponseNotAllowed
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from futebol.models import Club, GamePlan, LineupDraft, Match, MatchDossier
+from futebol.models import (
+    Club, GamePlan, LineupDraft, Match, MatchDossier, SportsDataImportBatch,
+)
 from futebol.modules import tenant_has_module
 from futebol.services.intelligent_coach import (
     apply_game_plan_as_draft,
@@ -65,6 +67,10 @@ def intelligent_coach_center(request):
         'title': 'Treinador Inteligente',
         'subtitle': 'Comissão Técnica Digital orientada por dados e decisão humana',
         'rows': rows,
+        'lab_batch': SportsDataImportBatch.objects.filter(
+            tenant=tenant, source__code='statsbomb-open',
+            quality='research_sample', status=SportsDataImportBatch.Status.COMPLETED,
+        ).order_by('-imported_at').first(),
     })
 
 

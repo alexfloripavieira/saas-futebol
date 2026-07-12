@@ -44,7 +44,7 @@ def main():
                     '--competition-id', os.getenv('STATSBOMB_OPEN_COMPETITION_ID', '43'),
                     '--season-id', os.getenv('STATSBOMB_OPEN_SEASON_ID', '106'),
                     '--max-matches', os.getenv('STATSBOMB_OPEN_MAX_MATCHES', '1'),
-                    '--max-events', os.getenv('STATSBOMB_OPEN_MAX_EVENTS', '200'),
+                    '--max-events', os.getenv('STATSBOMB_OPEN_MAX_EVENTS', '5000'),
                 ],
             ),
             run_provider(

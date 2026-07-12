@@ -105,7 +105,7 @@ def sports_data_source_sync(request, pk):
                 competition_id=request.POST.get('competition_id', '43'),
                 season_id=request.POST.get('season_id', '106'),
                 max_matches=1,
-                max_events=200,
+                max_events=5000,
             )
         else:
             batch = sync_skillcorner_open(

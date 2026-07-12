@@ -112,7 +112,7 @@ STATSBOMB_OPEN_BASE_URL = (
     'https://raw.githubusercontent.com/statsbomb/open-data/master/data'
 )
 STATSBOMB_MAX_MATCHES = 3
-STATSBOMB_MAX_EVENTS_PER_MATCH = 500
+STATSBOMB_MAX_EVENTS_PER_MATCH = 5000
 
 
 def provision_provider_catalog(*, tenant):
@@ -612,6 +612,8 @@ def _normalize_statsbomb_event(event, match_id):
     event_type = event.get('type', {})
     player = event.get('player', {})
     team = event.get('team', {})
+    pass_data = event.get('pass') or {}
+    shot_data = event.get('shot') or {}
     return {
         'capability': 'event_stream',
         'provider_record_id': f'event:{match_id}:{event_id}',
@@ -629,6 +631,21 @@ def _normalize_statsbomb_event(event, match_id):
             'player_id': str(player.get('id') or ''),
             'player': player.get('name', ''),
             'location': event.get('location', []),
+            'duration': event.get('duration'),
+            'possession': event.get('possession'),
+            'pass': {
+                'end_location': pass_data.get('end_location', []),
+                'recipient_id': str((pass_data.get('recipient') or {}).get('id') or ''),
+                'recipient': (pass_data.get('recipient') or {}).get('name', ''),
+                'outcome': (pass_data.get('outcome') or {}).get('name', ''),
+            } if pass_data else {},
+            'shot': {
+                'end_location': shot_data.get('end_location', []),
+                'xg': shot_data.get('statsbomb_xg'),
+                'outcome': (shot_data.get('outcome') or {}).get('name', ''),
+                'body_part': (shot_data.get('body_part') or {}).get('name', ''),
+                'technique': (shot_data.get('technique') or {}).get('name', ''),
+            } if shot_data else {},
         },
         'raw_payload': event,
     }

@@ -14,6 +14,15 @@
   </div>
 </section>
 
+{% if lab_batch %}
+<section class="card" style="margin-bottom:1.5rem">
+  <span class="coach-badge">Laboratório de analytics</span>
+  <h2>Mapas, passes e xG com dados de treinamento</h2>
+  <p>Explore o motor visual com uma partida StatsBomb Open Data. A amostra é isolada das recomendações comerciais.</p>
+  <a class="button button-secondary" href="{% url 'tactical-analysis-lab' lab_batch.pk %}">Abrir laboratório tático</a>
+</section>
+{% endif %}
+
 <div class="coach-stepper" aria-label="Etapas do Treinador Inteligente">
   <div class="coach-step"><strong>1 · Partida</strong><span>Escolher confronto</span></div>
   <div class="coach-step"><strong>2 · Dossiê</strong><span>Consolidar os dados</span></div>

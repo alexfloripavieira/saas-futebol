@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from decimal import Decimal
 import hashlib
 import json
 import secrets
@@ -553,6 +554,8 @@ class AthleteMatchAvailability(TenantScopedModel):
 class MatchDossier(TenantScopedModel):
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Rascunho'
+        PROCESSING = 'processing', 'IA em processamento'
+        PARTIAL = 'partial', 'IA parcialmente concluída'
         READY = 'ready', 'Pronto para revisão'
         FAILED = 'failed', 'Falhou'
 
@@ -640,6 +643,11 @@ class SpecialistOpinion(TenantScopedModel):
         default=ExecutionMode.DETERMINISTIC,
     )
     model_name = models.CharField(max_length=120, blank=True, default='')
+    provider_name = models.CharField(max_length=160, blank=True, default='')
+    prompt_version = models.CharField(max_length=64, blank=True, default='')
+    prompt_hash = models.CharField(max_length=64, blank=True, default='')
+    duration_ms = models.PositiveIntegerField(default=0)
+    provider_usage = models.JSONField(default=dict, blank=True)
 
     tenant_bound_fields = ('dossier', 'agent')
 
@@ -1384,6 +1392,11 @@ class TacticalCommissionRun(TenantScopedModel):
 
     artifact = models.ForeignKey(
         SportsDataArtifact, on_delete=models.CASCADE, related_name='commission_runs',
+        null=True, blank=True,
+    )
+    dossier = models.ForeignKey(
+        MatchDossier, on_delete=models.CASCADE, related_name='commission_runs',
+        null=True, blank=True,
     )
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
@@ -1417,7 +1430,7 @@ class TacticalCommissionRun(TenantScopedModel):
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
-    tenant_bound_fields = ('artifact',)
+    tenant_bound_fields = ('artifact', 'dossier')
 
     class Meta:
         ordering = ['-created_at']
@@ -1425,6 +1438,13 @@ class TacticalCommissionRun(TenantScopedModel):
             models.UniqueConstraint(
                 fields=['tenant', 'idempotency_key'],
                 name='uniq_tactical_commission_idempotency',
+            ),
+            models.CheckConstraint(
+                check=(
+                    Q(artifact__isnull=False, dossier__isnull=True)
+                    | Q(artifact__isnull=True, dossier__isnull=False)
+                ),
+                name='commission_run_exactly_one_target',
             ),
         ]
         indexes = [
@@ -1436,6 +1456,13 @@ class TacticalCommissionRun(TenantScopedModel):
 
     def __str__(self):
         return f'Comissão #{self.pk or "nova"} — {self.get_status_display()}'
+
+    def clean(self):
+        super().clean()
+        if bool(self.artifact_id) == bool(self.dossier_id):
+            raise ValidationError(
+                'A execução deve apontar para um artefato ou um Dossiê, exclusivamente.'
+            )
 
 
 class TacticalCommissionTask(TenantScopedModel):
@@ -1462,10 +1489,44 @@ class TacticalCommissionTask(TenantScopedModel):
         TacticalAgentOpinion, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='commission_tasks',
     )
+    specialist_opinion = models.ForeignKey(
+        SpecialistOpinion, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='commission_tasks',
+    )
     execution_mode = models.CharField(max_length=24, blank=True, default='')
     error_code = models.CharField(max_length=64, blank=True, default='')
 
-    tenant_bound_fields = ('run', 'opinion')
+    tenant_bound_fields = ('run', 'opinion', 'specialist_opinion')
+
+    def clean(self):
+        if self.opinion_id and self.specialist_opinion_id:
+            raise ValidationError(
+                'A tarefa não pode vincular simultaneamente parecer tático e parecer de Dossiê.'
+            )
+        super().clean()
+        if not self.run_id:
+            return
+        if self.run.dossier_id:
+            if self.opinion_id:
+                raise ValidationError({
+                    'opinion': 'Uma tarefa de Dossiê aceita somente parecer de Dossiê.',
+                })
+            if (
+                self.specialist_opinion_id
+                and self.specialist_opinion.dossier_id != self.run.dossier_id
+            ):
+                raise ValidationError({
+                    'specialist_opinion': 'O parecer precisa pertencer ao mesmo Dossiê da execução.',
+                })
+        elif self.run.artifact_id:
+            if self.specialist_opinion_id:
+                raise ValidationError({
+                    'specialist_opinion': 'Uma tarefa de artefato aceita somente parecer tático.',
+                })
+            if self.opinion_id and self.opinion.artifact_id != self.run.artifact_id:
+                raise ValidationError({
+                    'opinion': 'O parecer precisa pertencer ao mesmo artefato da execução.',
+                })
 
     class Meta:
         ordering = ['run', 'specialty', 'attempt']
@@ -1957,6 +2018,18 @@ class AIProvider(TenantScopedModel):
     api_base_url = models.URLField(blank=True, default='')
     active = models.BooleanField(default=True)
     notes = models.TextField(blank=True, default='')
+    operational_data_processing_allowed = models.BooleanField(default=False)
+    operational_data_authorization_note = models.CharField(
+        max_length=500, blank=True, default='',
+    )
+    operational_data_authorized_at = models.DateTimeField(null=True, blank=True)
+    operational_data_authorized_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='authorized_operational_ai_providers',
+    )
 
     class Meta:
         ordering = ['name']
@@ -2003,7 +2076,9 @@ class AIAgent(TenantScopedModel):
     purpose = models.CharField(max_length=180, blank=True, default='')
     system_prompt = models.TextField()
     model_override = models.CharField(max_length=120, blank=True, default='')
-    temperature = models.DecimalField(max_digits=3, decimal_places=2, default=0.20)
+    temperature = models.DecimalField(
+        max_digits=3, decimal_places=2, default=Decimal('0.20'),
+    )
     active = models.BooleanField(default=True)
     knowledge_sources = models.ManyToManyField(KnowledgeSource, through='AIAgentSourceLink', related_name='agents', blank=True)
 

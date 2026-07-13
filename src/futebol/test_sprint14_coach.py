@@ -1,5 +1,7 @@
 from datetime import timedelta
 from pathlib import Path
+from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -8,6 +10,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from futebol.models import (
+    AIAgent,
+    AIProvider,
     AthleteMatchAvailability,
     AthleteSportProfile,
     Club,
@@ -28,6 +32,8 @@ from futebol.models import (
     Tenant,
     TenantMembership,
     TenantModuleSubscription,
+    TacticalCommissionRun,
+    TacticalCommissionTask,
 )
 from futebol.services.intelligent_coach import (
     apply_game_plan_as_draft,
@@ -660,9 +666,38 @@ class IntelligentCoachServiceTests(TestCase):
 class IntelligentCoachHTTPTests(IntelligentCoachServiceTests):
     def setUp(self):
         super().setUp()
+        provider = AIProvider.objects.create(
+            tenant=self.tenant,
+            name='Provider operacional',
+            kind=AIProvider.Kind.OPENCODE,
+            model_name='opencode-go/deepseek-v4-flash',
+            active=True,
+            operational_data_processing_allowed=True,
+            operational_data_authorization_note='Teste autorizado do Dossiê.',
+            operational_data_authorized_at=timezone.now(),
+            operational_data_authorized_by=self.user,
+        )
+        specialist_slugs = {
+            'coordinator': 'coach-coordinator', 'tactical': 'coach-tactical',
+            'physical': 'coach-physical', 'defense': 'coach-defense',
+            'attack': 'coach-attack', 'scout': 'coach-scout',
+            'set_pieces': 'coach-set-pieces', 'environment': 'coach-environment',
+        }
+        for specialty, slug in specialist_slugs.items():
+            AIAgent.objects.create(
+                tenant=self.tenant,
+                provider=provider,
+                name=f'Agente {specialty}',
+                slug=slug,
+                purpose=f'Análise {specialty}',
+                system_prompt=f'Atue como especialista {specialty}.',
+                temperature=Decimal('0.20'),
+                active=True,
+            )
         self.client.force_login(self.user)
 
-    def test_usuario_gera_visualiza_e_aplica_rascunho(self):
+    @patch('futebol.services.dossier_ai.run_ai_agent_prompt')
+    def test_usuario_enfileira_ia_sem_chamar_provider_na_requisicao(self, provider_run):
         generate_response = self.client.post(
             reverse('intelligent-coach-generate', args=[self.match.pk]),
             {'club': self.our_club.pk},
@@ -675,16 +710,17 @@ class IntelligentCoachHTTPTests(IntelligentCoachServiceTests):
 
         detail_response = self.client.get(reverse('intelligent-coach-dossier', args=[dossier.pk]))
         self.assertContains(detail_response, 'Sala da Próxima Partida')
-        self.assertContains(detail_response, 'Recomendação de escalação explicável')
-        self.assertContains(detail_response, 'Escalação provável do adversário')
-        self.assertContains(detail_response, 'Plano de treinamento sugerido')
-        self.assertContains(detail_response, 'Sugestão para revisão da comissão')
-        self.assertContains(detail_response, 'Plano equilibrado')
-        self.assertContains(detail_response, 'Dados insuficientes para recomendação espacial')
-        self.assertContains(detail_response, 'Espelho do adversário')
-        self.assertContains(detail_response, 'Movimentos planejados')
-        self.assertContains(detail_response, 'Gols pró/contra')
-        self.assertContains(detail_response, 'Cartões recentes')
+        self.assertContains(detail_response, 'Estamos preparando sua recomendação')
+        self.assertContains(detail_response, 'Reunindo dados do time e do adversário')
+        self.assertNotContains(detail_response, 'Provider de IA obrigatório')
+        self.assertNotContains(detail_response, 'Plano equilibrado')
+        provider_run.assert_not_called()
+        dossier.refresh_from_db()
+        self.assertEqual(dossier.status, MatchDossier.Status.PROCESSING)
+        run = TacticalCommissionRun.objects.get(dossier=dossier)
+        self.assertEqual(run.tasks.count(), 8)
+        self.assertFalse(dossier.opinions.exists())
+        self.assertFalse(dossier.plans.exists())
 
         counts_before = (
             MatchDossier.objects.count(),
@@ -698,29 +734,180 @@ class IntelligentCoachHTTPTests(IntelligentCoachServiceTests):
             GamePlanPlayer.objects.count(),
         ))
 
-        plan = dossier.plans.get(variant=GamePlan.Variant.BALANCED)
-        rejected_response = self.client.post(
-            reverse('intelligent-coach-apply-draft', args=[plan.pk])
+        status_response = self.client.get(
+            reverse('intelligent-coach-dossier-ai-status', args=[dossier.pk]),
+            {'run': run.pk},
         )
-        self.assertRedirects(
-            rejected_response,
-            reverse('intelligent-coach-dossier', args=[dossier.pk]),
+        self.assertEqual(status_response.status_code, 200)
+        self.assertEqual(
+            status_response.json()['dossier_status'],
+            MatchDossier.Status.PROCESSING,
         )
-        self.assertFalse(LineupDraft.objects.filter(plan=plan).exists())
 
-        apply_response = self.client.post(
-            reverse('intelligent-coach-apply-draft', args=[plan.pk]),
-            {'confirm': 'apply-draft'},
-        )
-        draft = LineupDraft.objects.get(plan=plan)
+        failed_task = run.tasks.exclude(specialty='coordinator').first()
+        failed_task.status = TacticalCommissionTask.Status.FAILED
+        failed_task.error_code = 'provider_execution_failed'
+        failed_task.finished_at = timezone.now()
+        failed_task.save(update_fields=['status', 'error_code', 'finished_at', 'updated_at'])
+        dossier.status = MatchDossier.Status.PARTIAL
+        dossier.save(update_fields=['status', 'updated_at'])
+
+        retry_response = self.client.post(reverse(
+            'intelligent-coach-dossier-ai-retry', args=[failed_task.pk],
+        ))
         self.assertRedirects(
-            apply_response,
-            reverse('intelligent-coach-draft', args=[draft.pk]),
+            retry_response, reverse('intelligent-coach-dossier', args=[dossier.pk]),
         )
-        self.assertContains(
-            self.client.get(reverse('intelligent-coach-draft', args=[draft.pk])),
-            'Rascunho de escalação',
+        dossier.refresh_from_db()
+        self.assertEqual(dossier.status, MatchDossier.Status.PROCESSING)
+        self.assertTrue(run.tasks.filter(
+            specialty=failed_task.specialty,
+            attempt=failed_task.attempt + 1,
+            status=TacticalCommissionTask.Status.QUEUED,
+        ).exists())
+
+    def test_dossie_deterministico_nao_e_apresentado_como_resposta_da_ia(self):
+        dossier = generate_match_dossier(
+            match=self.match, club=self.our_club, requested_by=self.user,
         )
+
+        response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+
+        self.assertContains(response, 'Dossiê legado calculado por regras')
+        self.assertContains(response, 'Recomendação calculada por regras explicáveis')
+        self.assertNotContains(response, 'Sugestão produzida pelo Coordenador de IA')
+        self.assertNotContains(response, 'Posições escolhidas pelo Coordenador de IA')
+
+    def test_dossie_provider_pronto_com_proveniencia_identifica_conteudo_da_ia(self):
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+            decision_mode='provider',
+        )
+        coordinator = AIAgent.objects.get(tenant=self.tenant, slug='coach-coordinator')
+        SpecialistOpinion.objects.create(
+            tenant=self.tenant,
+            dossier=dossier,
+            agent=coordinator,
+            specialty=SpecialistOpinion.Specialty.COORDINATOR,
+            summary='Síntese produzida pelo provider.',
+            recommendations=['Submeter a decisão à comissão humana.'],
+            evidence=[{'record_id': f'match:{self.match.pk}'}],
+            confidence=70,
+            execution_mode=SpecialistOpinion.ExecutionMode.PROVIDER,
+            provider_name='Provider operacional',
+            model_name='opencode-go/deepseek-v4-flash',
+            prompt_version='coach-dossier-decision-v1',
+        )
+        snapshot = dict(dossier.data_snapshot)
+        snapshot['decision_engine'] = {
+            'mode': 'provider',
+            'provider': 'Provider operacional',
+            'model': 'opencode-go/deepseek-v4-flash',
+            'generated_at': timezone.now().isoformat(),
+            'requires_human_review': True,
+        }
+        snapshot['lineup_recommendation'] = {
+            'method': 'coach-dossier-decision-v1',
+            'provider': 'Provider operacional',
+            'model': 'opencode-go/deepseek-v4-flash',
+            'requires_human_review': True,
+        }
+        dossier.data_snapshot = snapshot
+        dossier.status = MatchDossier.Status.READY
+        dossier.save(update_fields=['data_snapshot', 'status', 'updated_at'])
+
+        response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+
+        self.assertContains(response, 'Sugestão produzida pelo Coordenador de IA')
+        self.assertNotContains(response, 'Dossiê legado calculado por regras')
+
+    def test_estados_sem_execucao_nao_afirmam_que_a_ia_esta_trabalhando(self):
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+            decision_mode='provider',
+        )
+
+        processing_response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+        self.assertContains(processing_response, 'A análise aguarda o início da execução')
+        self.assertNotContains(
+            processing_response, 'A Comissão Técnica Digital está trabalhando',
+        )
+
+        dossier.status = MatchDossier.Status.PARTIAL
+        dossier.save(update_fields=['status', 'updated_at'])
+        partial_response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+        self.assertContains(partial_response, 'Estado parcial sem execução associada')
+        self.assertNotContains(partial_response, 'A IA interrompeu a análise')
+
+        dossier.status = MatchDossier.Status.FAILED
+        dossier.save(update_fields=['status', 'updated_at'])
+
+        response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+
+        self.assertContains(response, 'Não foi possível iniciar a análise de IA')
+        self.assertContains(response, 'Nenhuma execução foi criada')
+        self.assertNotContains(response, 'A Comissão Técnica Digital está trabalhando')
+        self.assertNotContains(response, 'data-poll-active="true"')
+
+    def test_processamento_expoe_progresso_e_polling_atualizavel(self):
+        response = self.client.post(
+            reverse('intelligent-coach-generate', args=[self.match.pk]),
+            {'club': self.our_club.pk},
+        )
+        dossier = MatchDossier.objects.get(match=self.match, analyzed_club=self.our_club)
+        self.assertRedirects(
+            response, reverse('intelligent-coach-dossier', args=[dossier.pk]),
+        )
+
+        detail = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+
+        self.assertContains(detail, 'id="ai-progress"')
+        self.assertContains(detail, 'id="ai-provider-calls"')
+        self.assertContains(detail, 'data-task-id=')
+        self.assertContains(detail, 'data-poll-active="true"')
+        self.assertContains(detail, 'state.provider_calls.used')
+        self.assertNotContains(detail, 'window.setInterval')
+
+    def test_falha_terminal_traduz_erro_e_nao_mantem_polling(self):
+        self.client.post(
+            reverse('intelligent-coach-generate', args=[self.match.pk]),
+            {'club': self.our_club.pk},
+        )
+        dossier = MatchDossier.objects.get(match=self.match, analyzed_club=self.our_club)
+        run = TacticalCommissionRun.objects.get(dossier=dossier)
+        failed_task = run.tasks.exclude(specialty='coordinator').first()
+        failed_task.status = TacticalCommissionTask.Status.FAILED
+        failed_task.error_code = 'provider_execution_failed'
+        failed_task.finished_at = timezone.now()
+        failed_task.save(update_fields=['status', 'error_code', 'finished_at', 'updated_at'])
+        dossier.status = MatchDossier.Status.PARTIAL
+        dossier.save(update_fields=['status', 'updated_at'])
+
+        response = self.client.get(reverse(
+            'intelligent-coach-dossier', args=[dossier.pk],
+        ))
+        content = response.content.decode()
+
+        self.assertContains(response, 'Análise parcialmente concluída')
+        self.assertContains(response, 'O provider não respondeu corretamente.')
+        self.assertNotIn('provider_execution_failed', content)
+        self.assertNotContains(response, 'data-poll-active="true"')
 
     def test_dossie_renderiza_evidencia_canonica_sem_descricao(self):
         dossier = generate_match_dossier(

@@ -3,7 +3,7 @@
 ## Problem Statement
 
 O Treinador Inteligente já possui Fonte de Dados Esportivos, importação local,
-proveniência e fallback determinístico, mas ainda não dispõe de uma plataforma
+proveniência e tratamento explícito de falhas, mas ainda não dispõe de uma plataforma
 operacional para conectar fontes reais e providers de IA com segurança.
 
 Cada fornecedor pode usar autenticação, limites, licenças, schemas, validade,
@@ -59,7 +59,7 @@ licença, limites, ambiente e capacidades habilitadas.
 32. Como administrador da plataforma, quero configurar timeout, tentativas e fallback por provider, para preservar disponibilidade.
 33. Como administrador da plataforma, quero bloquear modelos não aprovados, para cumprir política e orçamento.
 34. Como gestor, quero definir provider e modelo padrão por capacidade, para adequar qualidade e custo.
-35. Como gestor, quero fallback para outro modelo ou modo determinístico, para concluir o Dossiê quando houver falha.
+35. Como gestor, quero retentar um agente ou rotear para outro provider aprovado quando houver falha, sem fabricar uma decisão determinística.
 36. Como auditor, quero registrar prompt versionado, parâmetros, modelo, tokens, duração e custo, para auditar uma execução.
 37. Como auditor, quero impedir que segredos e dados sensíveis sejam enviados ao provider, para preservar privacidade.
 38. Como responsável por segurança, quero lista de campos permitidos por provider, para aplicar minimização de dados.
@@ -78,7 +78,7 @@ licença, limites, ambiente e capacidades habilitadas.
 
 - Não será criado um novo Módulo Contratado chamado Fontes, Data Hub ou Providers. A solução aprofundará **Integrações**, **IA**, **Automações**, **Auditoria** e **Relatórios/BI**.
 - A plataforma será proprietária da Base Esportiva Global, seus conectores, sincronizações, lotes, cache e reprocessamento. **Integrações** continuará proprietário apenas das conexões e dados privados fornecidos pelo Tenant.
-- O módulo **IA** continuará proprietário do catálogo de providers, modelos, Agentes Especialistas, prompts, roteamento e fallback determinístico.
+- O módulo **IA** continuará proprietário do catálogo de providers, modelos, Agentes Especialistas, prompts, roteamento, retentativas e falhas explícitas.
 - A atualização da Base Esportiva Global é infraestrutura contínua da SaaS e não depende de **Automações** nem de ação do Tenant. Automações permanece responsável somente por rotinas contratadas da operação do clube.
 - O módulo **Auditoria** será proprietário da trilha de credenciais configuradas, ativações, execuções, custos e alterações, sem armazenar o segredo.
 - O módulo **Relatórios/BI** consumirá métricas agregadas de qualidade, cobertura, latência e custo; não será responsável por operar conectores.
@@ -98,9 +98,10 @@ licença, limites, ambiente e capacidades habilitadas.
 - O catálogo atual de providers e Agentes Especialistas será estendido, preservando configuração por Tenant e os tipos já suportados: OpenAI, Anthropic, OpenRouter, Ollama, OpenCode, Gemini e provider customizado.
 - A saída de IA será validada por schema antes de persistir uma contribuição da Comissão Técnica Digital.
 - A política de roteamento escolherá provider/modelo por capacidade, Tenant, sensibilidade, disponibilidade, limite e orçamento.
-- O fallback será explícito e auditável: mesmo provider, provider alternativo ou modo determinístico.
+- O Dossiê operacional poderá retentar o mesmo provider ou usar outro provider aprovado e auditável; modo determinístico não poderá produzir parecer, escalação, treino ou Plano de Jogo.
 - Prompts serão templates versionados; alterações exigirão nova versão e não modificarão execuções históricas.
 - O pacote enviado ao provider será montado por allowlist de campos e classificação de sensibilidade.
+- Providers usados no Dossiê operacional exigirão autorização específica para dados do clube, registrando ator, instante e fundamento; apenas marcar o provider como ativo não será suficiente.
 - A execução assíncrona usará chaves idempotentes, retry com backoff, circuit breaker e fila de falhas.
 - Cache de provider público será global por fonte, dataset, capacidade e parâmetros; cache de conexão privada ou de execução de IA permanecerá isolado por Tenant. A validade virá da fonte ou de política mais restritiva.
 - Telemetria armazenará identificadores técnicos e métricas, nunca credenciais ou conteúdo sensível completo.
@@ -122,7 +123,7 @@ licença, limites, ambiente e capacidades habilitadas.
 - Concorrência será testada com duas sincronizações da mesma fonte e janela.
 - Mapeamento de entidades terá testes para associação confirmada, ambiguidade, rejeição e isolamento por Tenant.
 - Validade terá testes para datas ausentes permitidas, datas inválidas, vencimento, reprocessamento e conflito entre fontes.
-- Roteamento de IA terá testes de provider principal, timeout, rate limit, orçamento esgotado, fallback alternativo e fallback determinístico.
+- Roteamento de IA terá testes de provider principal, timeout, rate limit, orçamento esgotado, provider alternativo e garantia de ausência de resultado quando todos falharem.
 - Saídas fora do schema serão rejeitadas e não criarão parecer pronto.
 - Testes de integração HTTP usarão servidor falso local ou transporte mockado; a suíte não acessará vendors reais.
 - Smoke tests reais serão executados separadamente, somente em ambiente autorizado, com orçamento mínimo e credenciais de teste.

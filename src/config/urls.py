@@ -17,6 +17,9 @@ from futebol.intelligent_coach_views import (
     intelligent_coach_apply_draft,
     intelligent_coach_center,
     intelligent_coach_dossier,
+    intelligent_coach_dossier_ai_status,
+    intelligent_coach_dossier_ai_retry,
+    intelligent_coach_dossier_ai_start,
     intelligent_coach_draft,
     intelligent_coach_generate,
     intelligent_coach_public_rehearsal,
@@ -129,6 +132,16 @@ urlpatterns = [
     path('partidas/<int:pk>/editar/', match_edit, name='match-edit'),
     path('ia/treinador/', intelligent_coach_center, name='intelligent-coach-center'),
     path(
+        'ia/treinador/agentes/tarefas/<int:task_pk>/repetir/',
+        intelligent_coach_dossier_ai_retry,
+        name='intelligent-coach-dossier-ai-retry',
+    ),
+    path(
+        'ia/treinador/dossies/<int:pk>/ia/iniciar/',
+        intelligent_coach_dossier_ai_start,
+        name='intelligent-coach-dossier-ai-start',
+    ),
+    path(
         'ia/treinador/partidas/<int:pk>/ensaio-publico/',
         intelligent_coach_public_rehearsal,
         name='intelligent-coach-public-rehearsal',
@@ -182,6 +195,11 @@ urlpatterns = [
         'ia/treinador/dossies/<int:pk>/',
         intelligent_coach_dossier,
         name='intelligent-coach-dossier',
+    ),
+    path(
+        'ia/treinador/dossies/<int:pk>/ia/status/',
+        intelligent_coach_dossier_ai_status,
+        name='intelligent-coach-dossier-ai-status',
     ),
     path(
         'ia/treinador/planos/<int:pk>/aplicar-rascunho/',

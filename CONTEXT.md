@@ -48,6 +48,10 @@ _Avoid_: setup wizard (acceptable only in technical docs)
 
 ## Inteligência esportiva
 
+**Sala da Próxima Partida**:
+Interface principal do Treinador Inteligente, orientada às decisões da próxima partida. Apresenta uma ação principal e responde, em linguagem esportiva, quem deve começar, como o adversário tende a jogar, onde atacar e defender, o que treinar, como adaptar o plano e o que fazer nas bolas paradas. Providers, tarefas, Agentes Especialistas e Fontes de Dados Esportivos permanecem rastreáveis, mas não são pré-requisitos de navegação para o treinador.
+_Avoid_: Centro de IA, laboratório, painel de providers (esses termos descrevem a implementação ou áreas administrativas, não a interface de decisão)
+
 **Comissão Técnica Digital**:
 Conjunto coordenado de Agentes Especialistas que analisa o mesmo contexto de uma partida e produz recomendações complementares para a comissão humana.
 _Avoid_: chatbot, IA genérica, vários bots independentes

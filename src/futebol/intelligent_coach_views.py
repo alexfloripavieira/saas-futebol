@@ -1,10 +1,11 @@
 from functools import wraps
 import json
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import HttpResponseNotAllowed
+from django.http import HttpResponseNotAllowed, JsonResponse
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -13,7 +14,7 @@ from django.utils import timezone
 from futebol.models import (
     AIAgent, AIProvider, Club, Contract, GamePlan, LineupDraft, Match, MatchDossier,
     SpecialistOpinion, SportsDataImportBatch,
-    TacticalBoard, TacticalBoardVersion,
+    TacticalBoard, TacticalBoardVersion, TacticalCommissionRun, TacticalCommissionTask,
 )
 from futebol.modules import tenant_has_module
 from futebol.services.intelligent_coach import (
@@ -29,6 +30,9 @@ from futebol.services.sports_catalog import latest_records_for
 from futebol.services.tenancy import active_tenant
 from futebol.services.tactical_board import (
     get_or_create_board, restore_board_version, save_and_publish_board, save_board,
+)
+from futebol.services.tactical_commission import (
+    enqueue_dossier_commission, retry_task, serialize_run_status,
 )
 
 
@@ -110,6 +114,9 @@ def intelligent_coach_center(request):
             'match': match,
             'dossier': latest_by_match.get(match.pk),
             'club': selected_club,
+            'competition_name': match.phase.edition.competition.name.replace(
+                ' — dados básicos do provider', ''
+            ),
             'opponent': (
                 match.away_club if match.home_club_id == selected_club.pk else match.home_club
             ),
@@ -180,13 +187,41 @@ def intelligent_coach_generate(request, pk):
         Match.objects.select_related('home_club', 'away_club'), tenant=tenant, pk=pk
     )
     club = get_object_or_404(Club, tenant=tenant, pk=request.POST.get('club'))
+    active_dossier = MatchDossier.objects.filter(
+        tenant=tenant,
+        match=match,
+        analyzed_club=club,
+        status=MatchDossier.Status.PROCESSING,
+        generated_at__gte=timezone.now() - timedelta(minutes=2),
+        commission_runs__finished_at__isnull=True,
+    ).order_by('-generated_at').first()
+    if active_dossier:
+        messages.info(request, 'A Comissão Técnica Digital já está processando esta partida.')
+        return redirect('intelligent-coach-dossier', pk=active_dossier.pk)
+    dossier = None
     try:
-        dossier = generate_match_dossier(match=match, club=club, requested_by=request.user)
+        dossier = generate_match_dossier(
+            match=match,
+            club=club,
+            requested_by=request.user,
+            decision_mode='provider',
+        )
+        enqueue_dossier_commission(
+            dossier=dossier,
+            actor=request.user,
+            idempotency_key=f'dossier-{dossier.pk}-v{dossier.version}',
+            max_provider_calls=16,
+        )
     except (ValidationError, PermissionDenied) as exc:
+        if dossier is not None:
+            dossier.status = MatchDossier.Status.FAILED
+            dossier.save(update_fields=['status', 'updated_at'])
         message = '; '.join(exc.messages) if isinstance(exc, ValidationError) else str(exc)
         messages.error(request, message)
+        if dossier is not None:
+            return redirect('intelligent-coach-dossier', pk=dossier.pk)
         return redirect('intelligent-coach-center')
-    messages.success(request, 'Dossiê e três Planos de Jogo gerados para revisão.')
+    messages.success(request, 'Comissão Técnica Digital enviada ao provider de IA.')
     return redirect('intelligent-coach-dossier', pk=dossier.pk)
 
 
@@ -211,17 +246,83 @@ def intelligent_coach_dossier(request, pk):
     plans = list(
         dossier.plans.prefetch_related('players', 'players__player').order_by('variant')
     )
+    commission_run = dossier.commission_runs.order_by('-created_at').first()
+    commission_status = serialize_run_status(commission_run) if commission_run else None
     return render(request, 'futebol/intelligent_coach_dossier.html', {
         'title': 'Dossiê da Partida',
         'subtitle': str(dossier.match),
         'dossier': dossier,
         'opinions': dossier.opinions.all(),
         'plans': plans,
+        'commission_run': commission_run,
+        'commission_status': commission_status,
         'form_sequence': (
             dossier.data_snapshot.get('external_form')
             or dossier.data_snapshot.get('recent_form', {})
         ).get('sequence', []),
     })
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_dossier_ai_status(request, pk):
+    tenant = active_tenant(request)
+    dossier = get_object_or_404(MatchDossier, tenant=tenant, pk=pk)
+    run = get_object_or_404(
+        TacticalCommissionRun,
+        tenant=tenant,
+        dossier=dossier,
+        pk=request.GET.get('run'),
+    )
+    payload = serialize_run_status(run)
+    payload['dossier_status'] = dossier.status
+    payload['dossier_status_label'] = dossier.get_status_display()
+    return JsonResponse(payload)
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_dossier_ai_retry(request, task_pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    task = get_object_or_404(
+        TacticalCommissionTask.objects.select_related('run__dossier'),
+        tenant=tenant,
+        pk=task_pk,
+        run__dossier__isnull=False,
+    )
+    dossier = task.run.dossier
+    try:
+        retry_task(task=task, actor=request.user)
+        dossier.status = MatchDossier.Status.PROCESSING
+        dossier.save(update_fields=['status', 'updated_at'])
+        messages.success(request, 'Agente de IA recolocado na fila sem apagar o histórico.')
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+    return redirect('intelligent-coach-dossier', pk=dossier.pk)
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_dossier_ai_start(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    dossier = get_object_or_404(MatchDossier, tenant=tenant, pk=pk)
+    try:
+        enqueue_dossier_commission(
+            dossier=dossier,
+            actor=request.user,
+            idempotency_key=f'dossier-{dossier.pk}-v{dossier.version}',
+            max_provider_calls=16,
+        )
+        messages.success(request, 'Comissão Técnica Digital enviada ao provider de IA.')
+    except ValidationError as exc:
+        dossier.status = MatchDossier.Status.FAILED
+        dossier.save(update_fields=['status', 'updated_at'])
+        messages.error(request, '; '.join(exc.messages))
+    return redirect('intelligent-coach-dossier', pk=dossier.pk)
 
 
 @login_required

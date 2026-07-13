@@ -153,19 +153,19 @@ class RealCoachJourneyTests(TestCase):
         self.assertIn('/ia/treinador/?club=', text)
         self.assertIn('elenco privado real', text)
 
-    def test_central_guia_adversario_e_modo_operacional(self):
+    def test_central_guia_decisoes_da_proxima_partida(self):
         result = prepare_real_coach_journey(tenant=self.tenant, actor=self.user)
         self.client.force_login(self.user)
 
         response = self.client.get(reverse('intelligent-coach-center'), {'club': result.club.pk})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '1 · Adversário')
-        self.assertContains(response, '2 · Dossiê')
-        self.assertContains(response, '3 · Plano')
-        self.assertContains(response, '4 · Prancheta')
-        self.assertContains(response, 'Modo operacional')
-        self.assertContains(response, '11 contratos privados reais')
+        self.assertContains(response, 'Sala da Próxima Partida')
+        self.assertContains(response, 'A IA responde estas perguntas para você')
+        self.assertContains(response, 'Quem deve começar e por quê?')
+        self.assertContains(response, 'Como o adversário tende a jogar?')
+        self.assertContains(response, 'O que treinar até a partida?')
+        self.assertContains(response, 'configure pelo menos 11 atletas')
 
     def test_ensaio_com_elenco_publico_nao_cria_dado_privado(self):
         for index in range(11):

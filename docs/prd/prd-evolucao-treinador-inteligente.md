@@ -56,7 +56,7 @@ Reais e Providers de IA”.
 24. Como gestor, quero configurar uma janela de atualização automática, para manter o Dossiê atual sem gerar análises em excesso.
 25. Como gestor, quero limites de custo e uso por Tenant, para controlar providers e processamento.
 26. Como auditor, quero rastrear dados, regras, providers e versões usados em cada recomendação, para reconstruir a decisão.
-27. Como auditor, quero diferenciar fallback determinístico de execução por provider, para saber como cada parecer foi produzido.
+27. Como auditor, quero comprovar provider, modelo, agente e evidências de cada parecer, para impedir que uma regra fixa seja apresentada como IA.
 28. Como treinador, quero revisar e aprovar o rascunho sem alterar a escalação oficial, para preservar o fluxo operacional existente.
 29. Como treinador, quero comparar o rascunho revisado com o Plano original, para entender as alterações humanas.
 30. Como treinador, quero registrar o motivo de uma alteração humana, para alimentar a avaliação pós-jogo.
@@ -89,7 +89,7 @@ Reais e Providers de IA”.
 - A geração assíncrona será modelada como uma execução rastreável, com estados `queued`, `running`, `partial`, `completed`, `failed` e `cancelled`.
 - Cada contribuição registrará modo de execução, versão de prompt, provider, modelo, evidências, confiança, limitações, duração e custo estimado.
 - O Coordenador Técnico consumirá contribuições concluídas, explicitará conflitos e produzirá cenários comparáveis; não terá autoridade para confirmar escalação oficial.
-- O fallback determinístico continuará disponível quando providers estiverem indisponíveis, desativados ou fora do orçamento.
+- O Dossiê operacional não terá fallback determinístico. Provider indisponível, resposta inválida, evidência desconhecida ou orçamento esgotado produzirão falha explícita e retentável, sem criar parecer, treino, escalação ou Plano de Jogo.
 - A prancheta salvará versões imutáveis de posições, linhas, setas, zonas e anotações, mantendo uma versão ativa editável.
 - Elementos da prancheta terão classificação explícita: observado, calculado, recomendado ou hipótese.
 - Mapas de calor, redes de passe e pitch control somente serão gerados quando a Fonte de Dados Esportivos declarar capacidade e cobertura suficientes.
@@ -111,7 +111,7 @@ Reais e Providers de IA”.
 - O seam de domínio continuará sendo o serviço de geração e revisão do Dossiê, reutilizando os testes atuais do Treinador Inteligente.
 - A prancheta será testada por contrato de persistência: versões, elementos, classificação da evidência e isolamento por Tenant.
 - Cálculos espaciais usarão fixtures pequenas e determinísticas com resultados conhecidos; nenhum teste acessará a internet.
-- Jobs serão testados com filas e providers falsos, incluindo sucesso, resposta parcial, timeout, repetição, cancelamento e fallback.
+- Jobs serão testados com filas e providers falsos, incluindo sucesso, resposta parcial, timeout, repetição e cancelamento; falhas nunca poderão persistir uma decisão fabricada.
 - Permissões terão testes de matriz para treinador, gestor, Preparador Físico, auditor e usuário sem acesso.
 - Dados sensíveis terão testes de não exposição em logs, notificações, auditoria serializada e respostas HTTP.
 - A avaliação pós-jogo terá testes de vínculo entre recomendação, decisão humana e evento realizado.
@@ -144,7 +144,7 @@ Reais e Providers de IA”.
 - O Motor de Momentos Táticos v1 detecta pressão, transição ofensiva, bloco baixo e ataque por corredor apenas quando posse e direção estão disponíveis. Cada momento gera evidência canônica com descrição, frames, algoritmo, hash, licença, limitações e roteamento para Coordenador Técnico, Analista Tático, Preparadores de Ataque/Defesa/Físico e Olheiro.
 - Amostras `research_sample` alimentam somente laboratório e agentes em modo treinamento; `eligible_for_operational_use=false` impede que esses momentos sustentem automaticamente Dossiês comerciais ou alterem planos e escalações.
 - Provider de IA conectado ao Motor Tático em julho de 2026: cada Fonte de Dados Esportivos possui autorização explícita e fail-closed para processamento externo. O pacote enviado contém somente momentos, métricas agregadas, licença, limitações e IDs de evidência; nunca inclui frames, arquivo bruto ou identidade pessoal.
-- Os Agentes Especialistas ativos do Tenant usam o provider e modelo já configurados. A resposta deve obedecer ao schema `tactical-agent-insight-v1`, citar somente evidências recebidas e manter `requires_human_review=true`; JSON inválido, evidência inventada, timeout ou provider indisponível acionam fallback determinístico.
+- No laboratório, os Agentes Especialistas usam o provider e modelo configurados e o schema `tactical-agent-insight-v1`. No Dossiê operacional, o contrato é mais estrito: JSON inválido, evidência inventada, timeout ou provider indisponível falham sem gerar decisão substituta.
 - Pareceres do provider registram agente, provider, modelo, versão/hash do prompt, evidências, modo de execução e auditoria, sem persistir credencial, prompt integral ou resposta bruta. A execução é idempotente por artefato, agente, modelo e hash do pacote.
 - Primeira validação real: OpenCode Go com `opencode-go/deepseek-v4-flash`; quatro personas concluíram em modo provider e duas usaram fallback determinístico, demonstrando degradação parcial sem indisponibilizar a Comissão Técnica Digital.
 - A autorização de processamento externo registra ator, instante, fundamento e escopo de provider, além de evento append-only na Auditoria. Apenas administrador do Tenant, gestor do clube, administrador da plataforma ou superusuário pode iniciar chamadas.
@@ -171,6 +171,9 @@ Reais e Providers de IA”.
 - O motor rejeita a geração quando não existe goleiro apto com perfil esportivo cadastrado. Demais improvisações continuam visíveis na justificativa posicional e dependem de revisão humana.
 - O microciclo `match-relative-microcycle-v1` organiza sessões D-5 a D-1 como apoio à decisão da comissão. Sem GPS, bem-estar e carga interna/externa, não produz prescrição individual e expõe essa limitação na interface e no snapshot.
 - A forma `W,D,L` do football-data.org é normalizada para pontos comparáveis no Dossiê. A busca de evidências passa a filtrar pelos clubes antes de materializar registros, evitando perder dados relevantes por truncamento global arbitrário.
-- Pendência imediata do próximo ciclo: conectar a fila/provider já existente ao Dossiê operacional. Nesta entrega os oito pareceres do Dossiê permanecem determinísticos; a interface usa o nome canônico Comissão Técnica Digital e não afirma que houve execução de modelo externo.
+- Ciclo provider-first implementado em julho de 2026: o Dossiê operacional entra em `processing`, sete Agentes Especialistas executam pela fila PostgreSQL e o Coordenador de IA só é liberado após todos concluírem em modo provider. O Coordenador produz o microciclo, a escalação e os três Planos de Jogo; respostas inválidas ou fallback do adaptador deixam o Dossiê `partial`/`failed`, com retentativa seletiva e sem decisão determinística persistida.
+- A interface acompanha o estado por polling e identifica provider/modelo no resultado. Abrir o Dossiê por `GET` é somente leitura. Setas, movimentos ou espelhamento não sustentados foram retirados da Sala da Próxima Partida e só poderão voltar quando fizerem parte do schema estruturado da IA ou de evidência espacial observada.
+- Chamadas externas e persistência foram separadas: o worker revalida lease e cancelamento sob lock antes de gravar qualquer parecer ou decisão. Respostas atrasadas são descartadas, execuções totalmente falhas terminam em `failed` e execuções com contribuição parcial terminam em `partial`, sem permanecer abertas indefinidamente.
+- O envio de posição, prontidão e limite de minutos exige autorização operacional explícita no cadastro do provider, com ator, instante e fundamento. Cada parecer provider-first congela provider, modelo, versão/hash do prompt, duração e usage disponível; credenciais, prompt integral e resposta bruta não são persistidos.
 - Os critérios de go/no-go devem incluir utilidade percebida pela comissão, segurança, tempo de resposta, custo, disponibilidade e capacidade de rollback.
 - Dependência: “PRD — Fontes Reais e Providers de IA”.

@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.validators import URLValidator
+from django.utils import timezone
 
 from .models import (
     AIAgent,
@@ -646,12 +647,20 @@ class AIProviderForm(TenantScopedForm):
 
     class Meta:
         model = AIProvider
-        fields = ['name', 'kind', 'model_name', 'api_base_url', 'active', 'notes']
+        fields = [
+            'name', 'kind', 'model_name', 'api_base_url', 'active',
+            'operational_data_processing_allowed',
+            'operational_data_authorization_note', 'notes',
+        ]
         labels = {
             'name': 'Nome do provider',
             'kind': 'Fornecedor',
             'model_name': 'Modelo padrão',
             'active': 'Ativo',
+            'operational_data_processing_allowed': (
+                'Autorizar envio minimizado de dados operacionais ao provider'
+            ),
+            'operational_data_authorization_note': 'Fundamento e escopo da autorização',
             'notes': 'Observações',
         }
         widgets = {
@@ -679,6 +688,21 @@ class AIProviderForm(TenantScopedForm):
             self.fields['api_base_url'].widget.attrs['placeholder'] = 'Não usado no OpenCode Go'
             self.fields['api_base_url'].widget.attrs['disabled'] = True
 
+    def clean(self):
+        cleaned = super().clean()
+        kind = cleaned.get('kind')
+        if kind == AIProvider.Kind.OPENCODE:
+            cleaned['api_base_url'] = ''
+        if (
+            cleaned.get('operational_data_processing_allowed')
+            and not (cleaned.get('operational_data_authorization_note') or '').strip()
+        ):
+            self.add_error(
+                'operational_data_authorization_note',
+                'Informe o fundamento e o escopo antes de autorizar dados operacionais.',
+            )
+        return cleaned
+
     def clean_api_base_url(self):
         api_base_url = (self.cleaned_data.get('api_base_url') or '').strip()
         kind = self.cleaned_data.get('kind')
@@ -696,12 +720,19 @@ class AIProviderForm(TenantScopedForm):
                 )
         return api_base_url
 
-    def clean(self):
-        cleaned = super().clean()
-        kind = cleaned.get('kind')
-        if kind == AIProvider.Kind.OPENCODE:
-            cleaned['api_base_url'] = ''
-        return cleaned
+    def save(self, commit=True):
+        provider = super().save(commit=False)
+        if provider.operational_data_processing_allowed:
+            if not provider.operational_data_authorized_at:
+                provider.operational_data_authorized_at = timezone.now()
+            provider.operational_data_authorized_by = self.user
+        else:
+            provider.operational_data_authorized_at = None
+            provider.operational_data_authorized_by = None
+        if commit:
+            provider.save()
+            self.save_m2m()
+        return provider
 
 
 class KnowledgeSourceForm(TenantScopedForm):

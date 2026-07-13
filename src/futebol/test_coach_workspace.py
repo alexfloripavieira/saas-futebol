@@ -167,12 +167,14 @@ class CoachWorkspaceHTTPTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Preparação de Partida')
-        self.assertContains(response, 'Nosso FC contra Adversário FC')
+        self.assertContains(response, 'Sala da Próxima Partida')
+        self.assertContains(response, 'Nosso FC × Adversário FC')
         self.assertContains(response, '1 atleta elegível')
-        self.assertContains(response, 'Motor de regras')
-        self.assertContains(response, 'Provider não acionado')
-        self.assertContains(response, 'Completar elenco de Nosso FC')
+        self.assertContains(response, 'Quem deve começar e por quê?')
+        self.assertContains(response, 'Como o adversário tende a jogar?')
+        self.assertContains(response, 'O que treinar até a partida?')
+        self.assertContains(response, 'Configurar time para esta partida')
+        self.assertNotContains(response, 'IA provider-first')
         self.assertNotContains(response, 'Analisar Adversário FC')
 
     def test_servico_bloqueia_dossie_com_menos_de_onze_elegiveis(self):

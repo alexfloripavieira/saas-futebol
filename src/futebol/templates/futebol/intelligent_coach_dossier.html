@@ -16,9 +16,11 @@
 </section>
 
 <nav class="room-nav" aria-label="Decisões da sala da partida">
-  <a href="#decisao">Decisão</a><a href="#treino">Treino</a><a href="#planos">Planos de jogo</a><a href="#comissao">Comissão Técnica Digital</a><a href="#fontes">Fontes</a>
+  <a href="#decisao">Quem começa?</a><a href="#treino">O que treinar?</a><a href="#planos">Como jogar?</a><a href="#comissao">Como chegamos à recomendação?</a><a href="#fontes">Quais evidências?</a>
 </nav>
 
+<details class="panel-toggle">
+<summary><h2 class="section-title">Dados usados nesta análise</h2></summary>
 <div class="metric-grid">
   <div class="metric"><span>Atletas elegíveis</span><strong>{{ dossier.data_snapshot.available_players }}</strong></div>
   <div class="metric"><span>Com restrição</span><strong>{{ dossier.data_snapshot.limited_players }}</strong></div>
@@ -41,11 +43,107 @@
 {% if not dossier.data_snapshot.spatial_coverage %}
 <p class="warning"><strong>Dados insuficientes para recomendação espacial.</strong> As orientações de corredor e zona permanecem hipóteses até existirem eventos coordenados, tracking ou vídeo anotado recente.</p>
 {% endif %}
+</details>
 
+{% if dossier.status != 'ready' %}
+<section class="opinion" id="ai-run-status" aria-live="polite" data-dossier-status="{{ dossier.status }}"{% if commission_run %} data-status-url="{% url 'intelligent-coach-dossier-ai-status' dossier.pk %}?run={{ commission_run.pk }}"{% endif %}{% if commission_run and dossier.status == 'processing' %} data-poll-active="true"{% endif %}>
+  <span class="eyebrow">Preparação da partida · {{ dossier.get_status_display }}</span>
+  {% if dossier.status == 'processing' %}
+    {% if commission_run %}
+    <h2>Estamos preparando sua recomendação</h2>
+    <p>A Comissão Técnica Digital reúne os dados, consulta os especialistas e consolida treino, escalação e Plano de Jogo.</p>
+    <ol><li>Reunindo dados do time e do adversário</li><li>Especialistas analisando a partida</li><li>Coordenador consolidando as decisões</li></ol>
+    {% else %}
+    <h2>A análise aguarda o início da execução</h2>
+    <p class="warning">A execução ainda não foi criada. Verifique a configuração dos agentes e do provider antes de tentar gerar uma nova análise.</p>
+    {% endif %}
+  {% elif dossier.status == 'partial' %}
+    {% if commission_run %}
+    <h2>Análise parcialmente concluída</h2>
+    <p>A IA interrompeu a análise antes da decisão final. Nenhum Plano de Jogo incompleto foi apresentado como recomendação.</p>
+    {% else %}
+    <h2>Estado parcial sem execução associada</h2>
+    <p class="warning">Não há histórico de tarefas para explicar este estado. Gere uma nova versão da análise depois de revisar a configuração do provider.</p>
+    {% endif %}
+  {% elif dossier.status == 'failed' %}
+    {% if commission_run %}
+    <h2>A análise de IA falhou</h2>
+    <p>A execução terminou sem uma resposta válida. Consulte as falhas abaixo e repita apenas as etapas disponíveis.</p>
+    {% else %}
+    <h2>Não foi possível iniciar a análise de IA</h2>
+    <p class="warning">Nenhuma execução foi criada. Verifique agentes ativos, provider, credenciais e orçamento antes de gerar uma nova análise.</p>
+    <p><a class="button button-secondary" href="{% url 'ai-provider-list' %}">Revisar providers e autorização</a></p>
+    <form method="post" action="{% url 'intelligent-coach-dossier-ai-start' dossier.pk %}">{% csrf_token %}<button class="button" type="submit">Tentar iniciar novamente</button></form>
+    {% endif %}
+  {% else %}
+  <h2>A análise aguarda processamento</h2>
+  <p>Os resultados aparecerão somente depois que o provider concluir respostas válidas.</p>
+  {% endif %}
+  {% if commission_run %}
+  <details class="technical-details">
+  <summary>Detalhes técnicos da execução</summary>
+  <p class="evidence">Execução #{{ commission_run.pk }} · chamadas <span id="ai-provider-calls">{{ commission_status.provider_calls.used }}/{{ commission_status.provider_calls.limit }}</span></p>
+  <label for="ai-progress">Progresso da execução: <strong id="ai-progress-label">{{ commission_status.progress }}%</strong></label>
+  <progress id="ai-progress" max="100" value="{{ commission_status.progress }}">{{ commission_status.progress }}%</progress>
+  <ul>{% for task in commission_status.tasks %}<li data-task-id="{{ task.id }}">{{ task.specialty_label }} — <span class="task-status">{{ task.status_label }}</span><span class="task-error">{% if task.error_code %} · {{ task.error_label|default:'Falha técnica não detalhada' }}{% endif %}</span>{% if task.can_retry %}<form method="post" action="{% url 'intelligent-coach-dossier-ai-retry' task.id %}" style="display:inline">{% csrf_token %}<button class="button button-secondary" type="submit">Tentar novamente</button></form>{% endif %}</li>{% endfor %}</ul>
+  {% if dossier.status == 'partial' or dossier.status == 'failed' %}<p class="warning">Não foi aplicado fallback determinístico. Uma nova tentativa preservará o histórico desta execução.</p>{% endif %}
+  </details>
+  {% endif %}
+  <p class="evidence" id="ai-poll-feedback"></p>
+</section>
+{% if commission_run and dossier.status == 'processing' %}
+<script>
+  (() => {
+    const box = document.getElementById('ai-run-status');
+    const url = box?.dataset.statusUrl;
+    if (!url) return;
+    const terminalStates = new Set(['ready', 'partial', 'failed']);
+    const feedback = document.getElementById('ai-poll-feedback');
+    let timer;
+    const schedule = (delay = 4000) => { timer = window.setTimeout(poll, delay); };
+    const poll = async () => {
+      try {
+        const response = await fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
+        if (!response.ok) throw new Error('status_unavailable');
+        const state = await response.json();
+        document.getElementById('ai-progress').value = state.progress;
+        document.getElementById('ai-progress-label').textContent = `${state.progress}%`;
+        document.getElementById('ai-provider-calls').textContent = `${state.provider_calls.used}/${state.provider_calls.limit}`;
+        state.tasks.forEach((task) => {
+          const row = box.querySelector(`[data-task-id="${task.id}"]`);
+          if (!row) return;
+          row.querySelector('.task-status').textContent = task.status_label;
+          row.querySelector('.task-error').textContent = task.error_code ? ` · ${task.error_label || 'Falha técnica não detalhada'}` : '';
+        });
+        feedback.textContent = `Atualizado agora · ${state.progress}% concluído`;
+        if (terminalStates.has(state.dossier_status)) {
+          window.clearTimeout(timer);
+          window.location.reload();
+          return;
+        }
+        schedule();
+      } catch (_) {
+        feedback.textContent = 'Atualização temporariamente indisponível. Nova tentativa em instantes.';
+        schedule(8000);
+      }
+    };
+    schedule();
+  })();
+</script>
+{% endif %}
+{% else %}
+{% if dossier.data_snapshot.decision_engine.mode != 'provider' %}
+<p class="warning"><strong>Dossiê legado calculado por regras.</strong> Este conteúdo não é uma resposta do provider de IA; mantenha-o apenas como apoio determinístico e gere uma nova versão para obter a análise da Comissão Técnica Digital.</p>
+{% endif %}
 <section id="decisao">
-  <h2 class="section-title">Recomendação de escalação explicável</h2>
-  <p><strong>Sugestão para revisão da comissão.</strong> A escolha pondera posição, prontidão, disponibilidade e titularidade recente; nunca altera a escalação oficial automaticamente.</p>
-  <p class="evidence">Método {{ dossier.data_snapshot.lineup_recommendation.method }} · prontidão neutra {{ dossier.data_snapshot.lineup_recommendation.default_readiness }}/100 quando não há medição.</p>
+  {% if dossier.data_snapshot.decision_engine.mode == 'provider' %}
+  <h2 class="section-title">Quem deve começar e por quê?</h2>
+  <p><strong>Sugestão produzida pelo Coordenador de IA para revisão da comissão.</strong> O provider recebe posição, prontidão, disponibilidade, histórico e análises dos especialistas; nunca altera a escalação oficial automaticamente.</p>
+  {% else %}
+  <h2 class="section-title">Recomendação calculada por regras explicáveis</h2>
+  <p><strong>Apoio determinístico para revisão da comissão.</strong> A seleção usa os fatores registrados no método abaixo e não representa uma resposta de IA nem altera a escalação oficial automaticamente.</p>
+  {% endif %}
+  <p class="evidence">Método {{ dossier.data_snapshot.lineup_recommendation.method }}{% if dossier.data_snapshot.lineup_recommendation.provider %} · {{ dossier.data_snapshot.lineup_recommendation.provider }} / {{ dossier.data_snapshot.lineup_recommendation.model }}{% endif %} · revisão humana obrigatória.</p>
   <h3>Escalação provável do adversário</h3>
   <p>{{ dossier.data_snapshot.opponent_prediction.label }}</p>
   <p class="evidence">Método {{ dossier.data_snapshot.opponent_prediction.method }} · {{ dossier.data_snapshot.opponent_prediction.sample_matches }} jogo(s) · cobertura {{ dossier.data_snapshot.opponent_prediction.coverage }}%. {{ dossier.data_snapshot.opponent_prediction.coverage_label }}</p>
@@ -54,7 +152,7 @@
 </section>
 
 <section id="treino">
-  <h2 class="section-title">Plano de treinamento sugerido</h2>
+  <h2 class="section-title">O que treinar até a partida?</h2>
   <p><strong>Sugestão para revisão da comissão.</strong> Microciclo relativo à partida, com {{ dossier.data_snapshot.training_microcycle.restricted_players }} atleta(s) sob restrição registrada.</p>
   <div class="microcycle-grid">
     {% for session in dossier.data_snapshot.training_microcycle.sessions %}
@@ -70,7 +168,7 @@
 </section>
 
 <details class="panel-toggle" id="comissao">
-<summary><h2 class="section-title">Conselho da Comissão Técnica Digital</h2></summary>
+<summary><h2 class="section-title">{% if dossier.data_snapshot.decision_engine.mode == 'provider' %}Conselho da Comissão Técnica Digital{% else %}Análises determinísticas de apoio{% endif %}</h2></summary>
 <div class="opinion-grid">
   {% for opinion in opinions %}
   <article class="opinion">
@@ -86,46 +184,21 @@
 </div>
 </details>
 
-<h2 class="section-title" id="planos">Comparação dos Planos de Jogo</h2>
+<h2 class="section-title" id="planos">Como devemos jogar?</h2>
 <div class="plan-grid">
   {% for plan in plans %}
   <details class="plan" data-variant="{{ plan.variant }}"{% if plan.variant == 'balanced' %} open{% endif %}>
     <summary><span class="eyebrow">{{ plan.formation }} · confiança {{ plan.confidence }}%</span><h2>Plano {{ plan.get_variant_display|lower }}</h2></summary>
     <p>{{ plan.summary }}</p>
-    <div class="pitch" aria-label="Prancheta tática com adversário espelhado">
+    <div class="pitch" aria-label="{% if dossier.data_snapshot.decision_engine.mode == 'provider' %}Posicionamento recomendado pela IA{% else %}Posicionamento calculado por regras{% endif %}">
       <span class="pitch-label ours">{{ dossier.analyzed_club.name }} →</span>
-      <span class="pitch-label opponent">← Espelho do adversário</span>
       <span class="pitch-box left"></span><span class="pitch-box right"></span>
-      <svg class="pitch-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Movimentos planejados">
-        <defs>
-          <marker id="arrow-{{ plan.pk }}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#66b2ff"/></marker>
-          <marker id="opp-arrow-{{ plan.pk }}" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#ff8e98"/></marker>
-        </defs>
-        <line x1="23" y1="12" x2="23" y2="88" stroke="#66b2ff" stroke-width=".7" stroke-dasharray="2 2" opacity=".8"/>
-        <line x1="77" y1="12" x2="77" y2="88" stroke="#ff8e98" stroke-width=".7" stroke-dasharray="2 2" opacity=".65"/>
-        {% if plan.variant == 'offensive' %}
-          <path d="M45 50 C58 42,68 30,82 18" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
-          <path d="M46 62 C62 65,72 70,84 82" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
-        {% elif plan.variant == 'conservative' %}
-          <path d="M28 38 C42 38,58 40,76 38" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
-          <path d="M28 62 C42 62,58 60,76 62" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
-        {% else %}
-          <path d="M48 50 C60 48,70 45,84 50" fill="none" stroke="#66b2ff" stroke-width="1.1" marker-end="url(#arrow-{{ plan.pk }})"/>
-          <path d="M55 30 C64 28,72 23,80 18" fill="none" stroke="#66b2ff" stroke-width=".9" marker-end="url(#arrow-{{ plan.pk }})"/>
-        {% endif %}
-        <path d="M72 30 C62 35,57 42,51 48" fill="none" stroke="#ff8e98" stroke-width=".8" stroke-dasharray="2 1" marker-end="url(#opp-arrow-{{ plan.pk }})" opacity=".75"/>
-      </svg>
       {% for selection in plan.players.all %}
         {% if selection.is_starter %}<span class="player-chip" style="left:{{ selection.pitch_x }}%;top:{{ selection.pitch_y }}%"><b>{{ selection.position }}</b>{{ selection.player.full_name }}</span>{% endif %}
       {% endfor %}
-      {% for opponent in dossier.data_snapshot.opponent_shape.players %}
-        <span class="opponent-chip" style="left:{{ opponent.x }}%;top:{{ opponent.y }}%"><b>{{ opponent.position }}</b>{{ opponent.name }}</span>
-      {% endfor %}
     </div>
     <div class="pitch-legend">
-      <span><i class="legend-dot ours"></i>Nosso plano e movimentos</span>
-      <span><i class="legend-dot opponent"></i>Espelho do adversário — movimento estimado</span>
-      <span>{{ dossier.data_snapshot.opponent_shape.label }}</span>
+      <span><i class="legend-dot ours"></i>{% if dossier.data_snapshot.decision_engine.mode == 'provider' %}Posições escolhidas pelo Coordenador de IA{% else %}Posições calculadas pelo método determinístico{% endif %}</span>
     </div>
     {% if plan.variant == 'balanced' %}
     <h3>Por que estes titulares?</h3>
@@ -133,7 +206,6 @@
       {% for selection in plan.players.all %}{% if selection.is_starter %}<li><strong>{{ selection.player.full_name }} · {{ selection.position }}</strong> — {{ selection.rationale }}</li>{% endif %}{% endfor %}
     </ul>
     {% endif %}
-    <p class="evidence"><strong>Movimentos planejados:</strong> setas azuis são instruções do plano; linhas vermelhas tracejadas representam a resposta adversária estimada.</p>
     <h3>Com a bola</h3><ul>{% for item in plan.attacking_plan %}<li>{{ item }}</li>{% endfor %}</ul>
     <h3>Sem a bola</h3><ul>{% for item in plan.defensive_plan %}<li>{{ item }}</li>{% endfor %}</ul>
     <h3>Transições</h3><ul>{% for item in plan.transitions %}<li>{{ item }}</li>{% endfor %}</ul>
@@ -147,6 +219,7 @@
   </details>
   {% endfor %}
 </div>
+{% endif %}
 
 <h2 class="section-title" id="fontes">Proveniência dos dados</h2>
 {% if dossier.data_snapshot.external_sources %}

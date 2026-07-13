@@ -74,16 +74,24 @@ NAV_GROUPS = (
     },
     {
         'module': 'ia',
-        'label': 'Inteligência esportiva',
+        'label': 'Decisão esportiva',
         'icon': '🧠',
         'open': True,
         'items': (
-            {'label': 'Treinador Inteligente', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
-            {'label': 'Cobertura dos dados', 'url_name': 'sports-data-source-list', 'icon': '📡'},
-            {'label': 'Laboratório de IA', 'url_name': 'ai-center', 'icon': '✨'},
-            {'label': 'Configuração · Providers', 'url_name': 'ai-provider-list', 'icon': '🔌'},
-            {'label': 'Configuração · Agentes', 'url_name': 'ai-agent-list', 'icon': '🤖'},
-            {'label': 'Configuração · Conhecimento', 'url_name': 'knowledge-source-list', 'icon': '📚'},
+            {'label': 'Próxima partida', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
+            {'label': 'Dados atualizados', 'url_name': 'sports-data-source-list', 'icon': '📡'},
+        ),
+    },
+    {
+        'module': 'ia',
+        'label': 'Administração da IA',
+        'icon': '⚙️',
+        'open': False,
+        'items': (
+            {'label': 'Testar agentes', 'url_name': 'ai-center', 'icon': '✨'},
+            {'label': 'Providers', 'url_name': 'ai-provider-list', 'icon': '🔌'},
+            {'label': 'Agentes especialistas', 'url_name': 'ai-agent-list', 'icon': '🤖'},
+            {'label': 'Fontes de conhecimento', 'url_name': 'knowledge-source-list', 'icon': '📚'},
         ),
     },
     {

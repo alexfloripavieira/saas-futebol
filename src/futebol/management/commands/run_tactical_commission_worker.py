@@ -30,7 +30,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--lease-seconds',
             type=int,
-            default=120,
+            default=360,
             help='Duração do lease exclusivo adquirido para cada tarefa.',
         )
 

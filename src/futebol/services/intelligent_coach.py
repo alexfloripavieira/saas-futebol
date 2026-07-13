@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -869,12 +870,25 @@ def eligible_player_count(*, match, club):
 
 
 @transaction.atomic
-def generate_match_dossier(*, match, club, requested_by):
+def generate_match_dossier(*, match, club, requested_by, decision_mode='deterministic'):
+    if decision_mode not in {'deterministic', 'provider'}:
+        raise ValidationError('Modo de decisão do Dossiê inválido.')
+    provider_mode = decision_mode == 'provider'
     match = Match.objects.select_for_update().select_related('home_club', 'away_club').get(
         pk=match.pk
     )
     _validate_match_club(match, club)
     _require_manager(requested_by, match.tenant_id)
+    if provider_mode:
+        active_dossier = MatchDossier.objects.filter(
+            tenant=match.tenant,
+            match=match,
+            analyzed_club=club,
+            status=MatchDossier.Status.PROCESSING,
+            generated_at__gte=timezone.now() - timedelta(minutes=2),
+        ).order_by('-generated_at').first()
+        if active_dossier:
+            return active_dossier
     eligible, availability = _eligible_players(match, club)
     if len(eligible) < MINIMUM_LINEUP_PLAYERS:
         raise ValidationError(
@@ -922,8 +936,11 @@ def generate_match_dossier(*, match, club, requested_by):
         version=previous_version + 1,
         generated_by=requested_by,
         generated_at=timezone.now(),
-        status=MatchDossier.Status.READY,
-        confidence=45,
+        status=(
+            MatchDossier.Status.PROCESSING if provider_mode
+            else MatchDossier.Status.READY
+        ),
+        confidence=0 if provider_mode else 45,
         data_snapshot={
             'data_quality': data_quality,
             'spatial_coverage': False,
@@ -940,7 +957,7 @@ def generate_match_dossier(*, match, club, requested_by):
             'opponent_prediction': opponent_prediction,
             # Compatibilidade com a prancheta já persistida em versões anteriores.
             'opponent_shape': opponent_prediction,
-            'lineup_recommendation': {
+            'lineup_recommendation': ({
                 'method': LINEUP_SCORING_POLICY['method'],
                 'status': 'decision_support_for_staff_review',
                 'factors': ['posição', 'prontidão', 'disponibilidade', 'titularidade recente'],
@@ -950,18 +967,47 @@ def generate_match_dossier(*, match, club, requested_by):
                     'Prontidão ausente recebe valor neutro explícito; não é uma medição inferida.',
                     'A recomendação não altera a escalação oficial sem revisão humana.',
                 ],
+            } if not provider_mode else {
+                'method': 'provider_pending',
+                'status': 'waiting_for_configured_ai_provider',
+            }),
+            'training_microcycle': training_microcycle if not provider_mode else {
+                'status': 'waiting_for_configured_ai_provider',
+                'sessions': [],
+                'limitations': [],
             },
-            'training_microcycle': training_microcycle,
+            'decision_engine': {
+                'mode': 'provider',
+                'status': 'queued',
+                'requires_human_review': True,
+            } if provider_mode else {
+                'mode': 'deterministic',
+                'status': 'completed',
+                'requires_human_review': True,
+            },
             'availability': [
                 {
                     'player_id': player.pk,
                     'status': availability[player.pk].status if player.pk in availability else 'available',
                     'max_minutes': availability[player.pk].max_minutes if player.pk in availability else None,
+                    'readiness': availability[player.pk].readiness if player.pk in availability else None,
+                    'primary_position': profiles[player.pk].primary_position if player.pk in profiles else '',
+                    'secondary_positions': profiles[player.pk].secondary_positions if player.pk in profiles else [],
                 }
                 for player in eligible
             ],
         },
     )
+
+    if provider_mode:
+        log_audit_event(
+            tenant=match.tenant,
+            actor=requested_by,
+            action='create',
+            obj=dossier,
+            after_state=snapshot_instance(dossier),
+        )
+        return dossier
 
     opinion_specs, opinion_confidence = _opinion_specs(
         available_count=len(eligible),

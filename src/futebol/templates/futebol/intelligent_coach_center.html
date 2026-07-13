@@ -2,124 +2,122 @@
 
 {% block content %}
 <style>
-  .prep-hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.5fr);gap:1.25rem;align-items:end}.prep-hero h1{font-size:clamp(2rem,5vw,4.2rem);line-height:.98;margin:.35rem 0}.team-switcher{padding:1rem;border:1px solid rgba(123,180,255,.18);border-radius:16px;background:rgba(255,255,255,.04)}.team-switcher label{display:block;margin-bottom:.45rem}.team-switcher form{display:flex;gap:.6rem}.team-switcher select{min-width:0}.journey{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;margin:1.35rem 0}.journey-step{position:relative;padding:1rem;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.025)}.journey-step b{display:block;color:var(--tenant-accent);margin-bottom:.25rem}.journey-step span{font-size:.84rem;color:var(--tenant-muted)}.journey-step:not(:last-child):after{content:"";position:absolute;right:-.72rem;top:50%;width:.72rem;border-top:1px solid rgba(123,180,255,.3)}.readiness{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:1rem 0 1.5rem}.ready-item{padding:1rem;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09)}.ready-item strong{display:block;font-size:1.4rem;margin:.2rem 0}.status-ok{color:#7ee2b8}.status-warn{color:#ffd084}.match-focus{padding:clamp(1rem,3vw,2rem);border-radius:22px;border:1px solid color-mix(in srgb,var(--tenant-accent) 35%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--tenant-accent) 12%,transparent),rgba(255,255,255,.025));margin-bottom:1rem}.match-focus header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.match-focus h2{font-size:clamp(1.5rem,3vw,2.4rem);margin:.35rem 0}.match-meta{color:var(--tenant-muted)}.next-action{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.2rem}.truth-panel{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem}.truth-panel article{padding:1.1rem;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1)}.truth-panel h3{margin:.2rem 0}.technical-details{margin-top:1.4rem;padding:1rem;border:1px dashed rgba(255,255,255,.18);border-radius:14px}.technical-details summary{cursor:pointer;font-weight:800}.empty-focus{text-align:center;padding:2rem;border:1px dashed rgba(255,255,255,.2);border-radius:18px}.badge{display:inline-flex;padding:.32rem .64rem;border-radius:999px;background:rgba(85,167,255,.13);color:var(--tenant-accent);font-size:.78rem;font-weight:800}
-  @media(max-width:900px){.prep-hero,.truth-panel{grid-template-columns:1fr}.readiness,.journey{grid-template-columns:1fr 1fr}.journey-step:after{display:none}}
-  @media(max-width:560px){.readiness,.journey{grid-template-columns:1fr}.team-switcher form,.match-focus header{display:block}.team-switcher button{margin-top:.6rem}}
+  .room-hero{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,.4fr);gap:1.2rem;align-items:end;margin-bottom:1.2rem}.room-hero h1{font-size:clamp(2.2rem,5vw,4.4rem);line-height:.96;margin:.35rem 0}.room-hero p{max-width:760px;font-size:1.05rem}.team-switcher{padding:1rem;border:1px solid rgba(123,180,255,.18);border-radius:16px;background:rgba(255,255,255,.04)}.team-switcher form{display:flex;gap:.6rem;align-items:end}.team-switcher .field{flex:1}.match-room{padding:clamp(1.2rem,4vw,2.4rem);border-radius:24px;border:1px solid color-mix(in srgb,var(--tenant-accent) 45%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--tenant-accent) 15%,transparent),rgba(255,255,255,.025));box-shadow:0 22px 60px rgba(0,0,0,.26)}.match-room h2{font-size:clamp(1.7rem,4vw,3rem);margin:.35rem 0}.match-meta{color:var(--tenant-muted);font-size:1rem}.signals{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin:1.2rem 0}.signal{padding:1rem;border-radius:14px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.09)}.signal strong{display:block;margin-bottom:.25rem}.primary-action{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;margin-top:1.1rem}.primary-action .button-primary,.primary-action button{font-size:1rem;padding:.85rem 1.1rem}.questions{margin-top:1.7rem}.questions header{max-width:760px;margin-bottom:1rem}.question-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.8rem}.question{padding:1.05rem;border-radius:16px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.035)}.question span{display:block;font-size:1.35rem;margin-bottom:.4rem}.question strong{display:block;line-height:1.25}.question small{display:block;color:var(--tenant-muted);margin-top:.35rem}.setup-warning{margin-top:1rem;padding:1rem;border-radius:14px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#fde68a}.technical-details{margin-top:1.5rem;padding:1rem;border:1px dashed rgba(255,255,255,.18);border-radius:14px}.technical-details summary{cursor:pointer;font-weight:800}.technical-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem;margin:1rem 0}.technical-grid article{padding:.9rem;border-radius:12px;background:rgba(255,255,255,.035)}.technical-links{display:flex;gap:.6rem;flex-wrap:wrap}.other-matches{margin-top:1rem}.other-match{display:flex;justify-content:space-between;gap:1rem;padding:.75rem 0;border-bottom:1px solid rgba(255,255,255,.08)}.empty-focus{text-align:center;padding:2.4rem;border:1px dashed rgba(255,255,255,.2);border-radius:18px}.badge{display:inline-flex;padding:.32rem .64rem;border-radius:999px;background:rgba(85,167,255,.13);color:var(--tenant-accent);font-size:.78rem;font-weight:800}
+  @media(max-width:900px){.room-hero{grid-template-columns:1fr}.question-grid{grid-template-columns:1fr 1fr}.technical-grid{grid-template-columns:1fr}.signals{grid-template-columns:1fr}}
+  @media(max-width:560px){.question-grid{grid-template-columns:1fr}.team-switcher form,.other-match{display:block}.team-switcher button{margin-top:.6rem}}
 </style>
 
-<section class="prep-hero">
+<section class="room-hero">
   <div>
-    <span class="eyebrow">Comissão Técnica Digital · Preparação de Partida</span>
-    <h1>Treinador Inteligente</h1>
-    <p>Uma jornada única: escolher o time, conferir os dados, ouvir a comissão e transformar recomendações em uma decisão tática revisável.</p>
+    <span class="eyebrow">Treinador Inteligente</span>
+    <h1>Sala da Próxima Partida</h1>
+    <p>Você escolhe a partida. A Comissão Técnica Digital transforma os dados do adversário e do seu time em treino, escalação e Plano de Jogo para revisão humana.</p>
   </div>
-  {% if clubs %}
+  {% if clubs|length > 1 %}
   <aside class="team-switcher">
     <form method="get">
-      <div style="flex:1">
-        <label for="club">Time que estamos preparando</label>
+      <div class="field">
+        <label for="club">Time que vamos preparar</label>
         <select id="club" name="club">
           {% for club in clubs %}<option value="{{ club.pk }}" {% if selected_club.pk == club.pk %}selected{% endif %}>{{ club.name }}</option>{% endfor %}
         </select>
       </div>
-      <button class="button button-secondary" type="submit">Selecionar</button>
+      <button class="button button-secondary" type="submit">Trocar</button>
     </form>
   </aside>
   {% endif %}
 </section>
 
-<div class="journey" aria-label="Jornada da preparação">
-  <div class="journey-step"><b>1 · Adversário</b><span>Confronto real, atualidade e fontes</span></div>
-  <div class="journey-step"><b>2 · Dossiê</b><span>Comissão, evidências e limitações</span></div>
-  <div class="journey-step"><b>3 · Plano</b><span>Cenários equilibrado, ofensivo e conservador</span></div>
-  <div class="journey-step"><b>4 · Prancheta</b><span>Escalação, movimentos e versões humanas</span></div>
-</div>
-
-{% if selected_club %}
-<section class="card {% if operational_ready %}status-ok{% else %}status-warn{% endif %}" style="margin-bottom:1rem" data-testid="coach-operational-mode">
-  <span class="badge">Modo operacional</span>
-  {% if operational_ready %}
-    <h2>Elenco privado pronto para decisões do clube</h2>
-    <p>Os contratos e a disponibilidade pertencem ao tenant. A base pública acrescenta o confronto e as evidências do adversário.</p>
-  {% else %}
-    <h2>Aguardando elenco privado real</h2>
-    <p>Para gerar uma escalação operacional, informe pelo menos <strong>11 contratos privados reais</strong> do time analisado. A plataforma não cria contratos ou disponibilidade a partir de dados públicos.</p>
-  {% endif %}
-</section>
-{% endif %}
-
-{% if selected_club %}
-<section aria-labelledby="readiness-title">
-  <span class="eyebrow" id="readiness-title">Prontidão de {{ selected_club.name }}</span>
-  <div class="readiness">
-    <div class="ready-item"><small>Elenco para a partida</small><strong>{{ active_roster_count }}</strong><span class="{% if active_roster_count >= 11 %}status-ok{% else %}status-warn{% endif %}">{{ active_roster_count }} {% if active_roster_count == 1 %}atleta elegível{% else %}atletas elegíveis{% endif %}</span></div>
-    <div class="ready-item"><small>Histórico operacional</small><strong>{{ played_match_count }}</strong><span>partida{% if played_match_count != 1 %}s{% endif %} concluída{% if played_match_count != 1 %}s{% endif %} no tenant</span></div>
-    <div class="ready-item"><small>Motor atual</small><strong>Regras</strong><span class="status-ok">Motor de regras explicável</span></div>
-    <div class="ready-item"><small>Agentes de IA configurados</small><strong>{{ agent_count }}</strong><span>{% if provider_was_used %}Provider acionado e auditado{% else %}Provider não acionado nesta jornada{% endif %}</span></div>
-  </div>
-</section>
-{% endif %}
-
 {% if rows %}
-  {% for row in rows %}
-  <article class="match-focus">
-    <header>
-      <div>
-        <span class="badge">{{ row.match.phase.edition.competition.name }}</span>
-        <h2>{{ row.club.name }} contra {{ row.opponent.name }}</h2>
-        <p class="match-meta">{{ row.match.scheduled_at|date:'d/m/Y H:i' }} · {{ row.match.venue|default:'Local a confirmar' }}</p>
-      </div>
-      {% if row.dossier %}<span class="badge">Dossiê v{{ row.dossier.version }} · {{ row.dossier.confidence }}%</span>{% endif %}
-    </header>
-    {% if row.eligible_player_count < 11 %}
-      <p class="status-warn"><strong>Falta completar o elenco.</strong> O Treinador precisa de pelo menos 11 atletas elegíveis para propor uma escalação responsável.</p>
-    {% elif row.dossier %}
-      <p>A preparação já possui análise. Continue pela síntese da comissão, compare cenários e registre a decisão na prancheta.</p>
-    {% else %}
-      <p>Os dados mínimos estão disponíveis. O próximo passo cria um Dossiê versionado e três cenários para revisão humana.</p>
-    {% endif %}
-    <div class="next-action">
-      {% if row.dossier %}
-        <a class="button button-primary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Continuar preparação</a>
-      {% elif row.eligible_player_count >= 11 %}
-        <form method="post" action="{% url 'intelligent-coach-generate' row.match.pk %}">{% csrf_token %}<input type="hidden" name="club" value="{{ row.club.pk }}"><button class="button button-primary" type="submit">Preparar {{ row.club.name }}</button></form>
-      {% else %}
-        <a class="button button-primary" href="{% url 'person-list' %}">Completar elenco de {{ row.club.name }}</a>
-        {% if row.public_squad_count >= 11 %}<a class="button button-secondary" href="{% url 'intelligent-coach-public-rehearsal' row.match.pk %}?club={{ row.club.pk }}">Ensaiar com elenco público não confirmado</a>{% endif %}
-      {% endif %}
-      <a class="button button-secondary" href="{% url 'match-list' %}">Ver dados da partida</a>
+{% with row=rows.0 %}
+<section class="match-room" data-testid="coach-decision-room">
+  <span class="badge">Próxima partida</span>
+  <h2>{{ row.club.name }} × {{ row.opponent.name }}</h2>
+  <p class="match-meta">{{ row.match.scheduled_at|date:'l, d/m · H:i' }} · {{ row.competition_name }} · {{ row.match.venue|default:'Local a confirmar' }}</p>
+
+  <div class="signals">
+    <div class="signal">
+      <strong>Dados da plataforma</strong>
+      <span>Confronto e informações públicas do adversário são atualizados pela SaaS.</span>
     </div>
-  </article>
-  {% endfor %}
-{% else %}
-<div class="empty-focus">
-  <h2>Nenhuma próxima partida para {{ selected_club.name|default:'este time' }}</h2>
-  <p>Cadastre uma partida ou integre um confronto real antes de iniciar a preparação.</p>
-  <a class="button button-primary" href="{% url 'match-create' %}">Cadastrar partida</a>
-</div>
-{% endif %}
-
-<div class="truth-panel">
-  <article>
-    <span class="badge">O que o sistema faz hoje</span>
-    <h3>Análise determinística e explicável</h3>
-    <p>Regras do domínio cruzam contratos, disponibilidade, forma, eventos e fontes válidas. Cada recomendação informa evidências, confiança e limitações.</p>
-  </article>
-  <article>
-    <span class="badge">Próxima evolução</span>
-    <h3>Provider dentro da Comissão</h3>
-    <p>Os {{ provider_count }} provider{% if provider_count != 1 %}s{% endif %} e {{ agent_count }} agentes configurados serão acionados por especialidade. Até essa integração ocorrer, a tela identifica honestamente o Motor de regras.</p>
-  </article>
-</div>
-
-{% if global_lab_batch or tracking_batch %}
-<details class="technical-details">
-  <summary>Ambiente de pesquisa e validação visual</summary>
-  <p>Mapas, redes de passes, xG e tracking usam amostras públicas de pesquisa e não são misturados silenciosamente às decisões operacionais.</p>
-  <div class="next-action">
-    {% if global_lab_batch %}<a class="button button-secondary" href="{% url 'global-tactical-analysis-lab' global_lab_batch.pk %}">Analytics StatsBomb global</a>{% endif %}
-    {% if tracking_batch %}<a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Tracking privado do tenant</a>{% endif %}
+    <div class="signal">
+      <strong>Dados internos do clube</strong>
+      <span>{% if row.eligible_player_count == 1 %}1 atleta elegível{% else %}{{ row.eligible_player_count }} atletas elegíveis{% endif %}; contratos e disponibilidade permanecem privados.</span>
+    </div>
   </div>
+
+  {% if row.eligible_player_count < 11 %}
+  <div class="setup-warning">
+    <strong>Antes da recomendação:</strong> configure pelo menos 11 atletas, com contrato, posição e disponibilidade para esta partida. A IA não inventa o elenco do clube.
+  </div>
+  {% endif %}
+
+  <div class="primary-action">
+    {% if row.dossier %}
+      {% if row.dossier.status == 'processing' %}
+        <a class="button button-primary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Acompanhar preparação em andamento</a>
+      {% elif row.dossier.status == 'failed' or row.dossier.status == 'partial' %}
+        <a class="button button-primary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Revisar falha e tentar novamente</a>
+      {% else %}
+        <a class="button button-primary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Ver recomendação para esta partida</a>
+      {% endif %}
+    {% elif row.eligible_player_count >= 11 %}
+      <form method="post" action="{% url 'intelligent-coach-generate' row.match.pk %}">{% csrf_token %}<input type="hidden" name="club" value="{{ row.club.pk }}"><button type="submit">Gerar preparação com IA</button></form>
+    {% else %}
+      <a class="button button-primary" href="{% url 'person-list' %}">Configurar time para esta partida</a>
+      {% if row.public_squad_count >= 11 %}<a class="button button-secondary" href="{% url 'intelligent-coach-public-rehearsal' row.match.pk %}?club={{ row.club.pk }}">Visualizar com elenco público — não operacional</a>{% endif %}
+    {% endif %}
+  </div>
+</section>
+
+<section class="questions" aria-labelledby="questions-title">
+  <header>
+    <span class="eyebrow">O que você recebe</span>
+    <h2 id="questions-title">A IA responde estas perguntas para você</h2>
+    <p>Não é preciso escolher agente, provider ou escrever o prompt certo. A preparação reúne as respostas numa única sala.</p>
+  </header>
+  <div class="question-grid">
+    <article class="question"><span>👥</span><strong>Quem deve começar e por quê?</strong><small>Onze sugeridos, função, posição e restrições de cada atleta.</small></article>
+    <article class="question"><span>🔎</span><strong>Como o adversário tende a jogar?</strong><small>Estrutura provável, comportamento e limitações das evidências.</small></article>
+    <article class="question"><span>🎯</span><strong>Onde atacar e como defender?</strong><small>Plano com bola, sem bola, pressão e transições.</small></article>
+    <article class="question"><span>🏋️</span><strong>O que treinar até a partida?</strong><small>Microciclo, carga, objetivos e cuidados individuais.</small></article>
+    <article class="question"><span>↕️</span><strong>Como mudar durante o jogo?</strong><small>Cenários equilibrado, mais agressivo e mais seguro.</small></article>
+    <article class="question"><span>🚩</span><strong>O que fazer nas bolas paradas?</strong><small>Prioridades ofensivas, defensivas e responsabilidades.</small></article>
+  </div>
+</section>
+
+{% if rows|length > 1 %}
+<details class="technical-details other-matches">
+  <summary>Trocar a partida em foco</summary>
+  {% for option in rows %}{% if not forloop.first %}
+  <div class="other-match"><span>{{ option.club.name }} × {{ option.opponent.name }} · {{ option.match.scheduled_at|date:'d/m H:i' }}</span><a href="?club={{ option.club.pk }}&match={{ option.match.pk }}">Preparar esta</a></div>
+  {% endif %}{% endfor %}
 </details>
 {% endif %}
+{% endwith %}
+{% else %}
+<div class="empty-focus">
+  <h2>Ainda não há próxima partida definida</h2>
+  <p>Adicione ou sincronize o próximo confronto para a Comissão Técnica Digital começar a preparação.</p>
+  <a class="button button-primary" href="{% url 'match-create' %}">Adicionar próxima partida</a>
+</div>
+{% endif %}
+
+<details class="technical-details">
+  <summary>Como a recomendação é construída e administrada</summary>
+  <div class="technical-grid">
+    <article><strong>1 · Reunir</strong><p>Partida e adversário vêm da base atualizada da plataforma; elenco e disponibilidade vêm do clube.</p></article>
+    <article><strong>2 · Analisar</strong><p>Agentes Especialistas avaliam tática, físico, defesa, ataque, scout, ambiente e bola parada.</p></article>
+    <article><strong>3 · Decidir</strong><p>O Coordenador de IA consolida treino, escalação e três Planos de Jogo, sempre sujeitos à comissão humana.</p></article>
+  </div>
+  <p><strong>Estado técnico:</strong> {{ provider_count }} provider{% if provider_count != 1 %}s{% endif %}, {{ agent_count }} agentes e {{ active_roster_count }} atletas elegíveis. Nenhuma recomendação operacional é substituída por regra determinística quando a IA falha.</p>
+  <div class="technical-links">
+    <a class="button button-secondary" href="{% url 'sports-data-source-list' %}">Atualidade dos dados</a>
+    <a class="button button-secondary" href="{% url 'ai-provider-list' %}">Administrar providers</a>
+    <a class="button button-secondary" href="{% url 'ai-agent-list' %}">Administrar agentes</a>
+    <a class="button button-secondary" href="{% url 'knowledge-source-list' %}">Administrar conhecimento</a>
+    {% if global_lab_batch %}<a class="button button-secondary" href="{% url 'global-tactical-analysis-lab' global_lab_batch.pk %}">Laboratório de eventos</a>{% endif %}
+    {% if tracking_batch %}<a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Laboratório de tracking</a>{% endif %}
+  </div>
+</details>
 {% endblock %}

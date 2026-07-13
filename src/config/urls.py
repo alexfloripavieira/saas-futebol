@@ -20,6 +20,11 @@ from futebol.intelligent_coach_views import (
     intelligent_coach_draft,
     intelligent_coach_generate,
     intelligent_coach_review_draft,
+    intelligent_coach_board,
+    intelligent_coach_board_open,
+    intelligent_coach_board_publish,
+    intelligent_coach_board_restore,
+    intelligent_coach_board_save,
 )
 
 from futebol.views import (
@@ -177,6 +182,11 @@ urlpatterns = [
         intelligent_coach_apply_draft,
         name='intelligent-coach-apply-draft',
     ),
+    path('ia/treinador/rascunhos/<int:pk>/prancheta/abrir/', intelligent_coach_board_open, name='intelligent-coach-board-open'),
+    path('ia/treinador/pranchetas/<int:pk>/', intelligent_coach_board, name='intelligent-coach-board'),
+    path('ia/treinador/pranchetas/<int:pk>/salvar/', intelligent_coach_board_save, name='intelligent-coach-board-save'),
+    path('ia/treinador/pranchetas/<int:pk>/publicar/', intelligent_coach_board_publish, name='intelligent-coach-board-publish'),
+    path('ia/treinador/pranchetas/versoes/<int:pk>/restaurar/', intelligent_coach_board_restore, name='intelligent-coach-board-restore'),
     path(
         'ia/treinador/rascunhos/<int:pk>/',
         intelligent_coach_draft,

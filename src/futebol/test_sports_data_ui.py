@@ -1,4 +1,7 @@
+from io import StringIO
+
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
@@ -85,3 +88,25 @@ class SportsDataSourceUITests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response.url)
+
+    def test_sincronizacao_recorrente_respeita_modulo_automacoes(self):
+        output = StringIO()
+
+        call_command(
+            'sync_sports_provider',
+            tenant=self.tenant.slug,
+            provider='football-data-org',
+            user=self.user.username,
+            scheduled=True,
+            stdout=output,
+        )
+
+        self.assertIn('módulo Automações desativado', output.getvalue())
+
+    def test_centro_exibe_estado_verificavel_da_sincronizacao(self):
+        response = self.client.get(reverse('sports-data-source-list'))
+
+        self.assertContains(response, 'Sincronização')
+        self.assertContains(response, 'Controlada')
+        self.assertContains(response, 'Última checagem confirmada')
+        self.assertNotContains(response, 'próxima prevista')

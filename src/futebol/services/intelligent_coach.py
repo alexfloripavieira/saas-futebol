@@ -487,6 +487,14 @@ def _opponent_shape(match, analyzed_club):
     }
 
 
+MINIMUM_LINEUP_PLAYERS = 11
+
+
+def eligible_player_count(*, match, club):
+    players, _availability = _eligible_players(match, club)
+    return len(players)
+
+
 @transaction.atomic
 def generate_match_dossier(*, match, club, requested_by):
     match = Match.objects.select_for_update().select_related('home_club', 'away_club').get(
@@ -495,8 +503,10 @@ def generate_match_dossier(*, match, club, requested_by):
     _validate_match_club(match, club)
     _require_manager(requested_by, match.tenant_id)
     eligible, availability = _eligible_players(match, club)
-    if not eligible:
-        raise ValidationError('Não há atletas elegíveis com contrato ativo para gerar o Dossiê.')
+    if len(eligible) < MINIMUM_LINEUP_PLAYERS:
+        raise ValidationError(
+            f'O Dossiê exige pelo menos {MINIMUM_LINEUP_PLAYERS} atletas elegíveis para a partida.'
+        )
     profiles = _profile_map(match.tenant, eligible)
     form = _recent_form(match, club)
     limited_count = sum(

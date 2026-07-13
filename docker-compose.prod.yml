@@ -65,6 +65,25 @@ services:
       db:
         condition: service_healthy
 
+  sports-sync:
+    build:
+      context: .
+    restart: unless-stopped
+    env_file:
+      - ${PRODUCTION_ENV_FILE:-.env.production}
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings_production
+      DB_HOST: db
+      DB_PORT: 5432
+      SPORTS_SYNC_PROJECT_ROOT: /app
+      SPORTS_SYNC_TENANT: ${SPORTS_SYNC_TENANT:?SPORTS_SYNC_TENANT obrigatório}
+      SPORTS_SYNC_USER: ${SPORTS_SYNC_USER:?SPORTS_SYNC_USER obrigatório}
+      SPORTS_SYNC_INTERVAL_SECONDS: ${SPORTS_SYNC_INTERVAL_SECONDS:-21600}
+    command: python scripts/watch_sports_sources.py
+    depends_on:
+      db:
+        condition: service_healthy
+
   backup:
     image: postgres:16-alpine
     profiles: ["ops"]

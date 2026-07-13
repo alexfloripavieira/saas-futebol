@@ -44,6 +44,8 @@ from .models import (
     TacticalAgentOpinion,
     TacticalCommissionRun,
     TacticalCommissionTask,
+    TacticalBoard,
+    TacticalBoardVersion,
     Tenant,
     TenantBranding,
     TenantMembership,
@@ -252,6 +254,34 @@ class LineupDraftAdmin(admin.ModelAdmin):
     list_display = ('match', 'club', 'plan', 'status', 'created_by')
     list_filter = ('status',)
     inlines = [LineupDraftPlayerInline]
+
+
+class TacticalBoardVersionInline(admin.TabularInline):
+    model = TacticalBoardVersion
+    extra = 0
+    can_delete = False
+    fields = ('version', 'content_hash', 'change_note', 'created_by', 'created_at')
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(TacticalBoard)
+class TacticalBoardAdmin(admin.ModelAdmin):
+    list_display = ('draft', 'revision', 'tenant', 'updated_by', 'updated_at')
+    search_fields = ('draft__match__reference_code', 'draft__club__name')
+    readonly_fields = (
+        'tenant', 'draft', 'document', 'revision', 'updated_by',
+        'updated_at', 'created_at',
+    )
+    inlines = [TacticalBoardVersionInline]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SportsDataSource)

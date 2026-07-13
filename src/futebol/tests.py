@@ -1573,6 +1573,10 @@ class WhiteLabelPhase1Tests(TestCase):
         self.assertContains(response, 'Comissão Técnica Digital')
         self.assertContains(response, 'Prancheta temporal')
         self.assertContains(response, 'Revisão humana')
+        self.assertContains(response, 'CALOR DE AÇÕES')
+        self.assertContains(response, 'REDE DE PASSES')
+        self.assertContains(response, 'xG acumulado')
+        self.assertContains(response, 'prévia ilustrativa')
         for module_name in MODULE_NAMES.values():
             self.assertContains(response, module_name)
         self.assertEqual(

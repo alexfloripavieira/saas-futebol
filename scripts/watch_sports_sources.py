@@ -30,7 +30,7 @@ def main():
     user = os.getenv('SPORTS_SYNC_USER', 'demo_admin')
     interval = max(900, int(os.getenv('SPORTS_SYNC_INTERVAL_SECONDS', '21600')))
     once = '--once' in sys.argv
-    common = ['--tenant', tenant, '--user', user]
+    common = ['--tenant', tenant, '--user', user, '--scheduled']
 
     while True:
         statuses = [

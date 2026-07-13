@@ -2,73 +2,110 @@
 
 {% block content %}
 <style>
-  .coach-stepper,.coach-grid{display:grid;gap:1rem}.coach-stepper{grid-template-columns:repeat(4,1fr);margin:1rem 0 1.5rem}.coach-step{padding:.8rem;border:1px solid color-mix(in srgb,var(--tenant-accent) 30%,transparent);border-radius:12px;background:rgba(255,255,255,.04)}.coach-step strong{display:block;color:var(--tenant-accent)}.coach-grid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}.coach-match{padding:1.2rem;border:1px solid rgba(255,255,255,.12);border-radius:16px;background:rgba(255,255,255,.035)}.coach-match h2{margin:.35rem 0}.coach-actions{display:flex;gap:.65rem;flex-wrap:wrap;margin-top:1rem}.coach-actions form{margin:0}.coach-badge{display:inline-flex;padding:.3rem .6rem;border-radius:999px;background:rgba(85,167,255,.14);color:var(--tenant-accent);font-size:.8rem}.coach-empty{padding:2rem;text-align:center;border:1px dashed rgba(255,255,255,.2);border-radius:16px}
-  @media(max-width:760px){.coach-stepper{grid-template-columns:1fr 1fr}}
+  .prep-hero{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.5fr);gap:1.25rem;align-items:end}.prep-hero h1{font-size:clamp(2rem,5vw,4.2rem);line-height:.98;margin:.35rem 0}.team-switcher{padding:1rem;border:1px solid rgba(123,180,255,.18);border-radius:16px;background:rgba(255,255,255,.04)}.team-switcher label{display:block;margin-bottom:.45rem}.team-switcher form{display:flex;gap:.6rem}.team-switcher select{min-width:0}.journey{display:grid;grid-template-columns:repeat(4,1fr);gap:.7rem;margin:1.35rem 0}.journey-step{position:relative;padding:1rem;border-radius:14px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.025)}.journey-step b{display:block;color:var(--tenant-accent);margin-bottom:.25rem}.journey-step span{font-size:.84rem;color:var(--tenant-muted)}.journey-step:not(:last-child):after{content:"";position:absolute;right:-.72rem;top:50%;width:.72rem;border-top:1px solid rgba(123,180,255,.3)}.readiness{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:1rem 0 1.5rem}.ready-item{padding:1rem;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09)}.ready-item strong{display:block;font-size:1.4rem;margin:.2rem 0}.status-ok{color:#7ee2b8}.status-warn{color:#ffd084}.match-focus{padding:clamp(1rem,3vw,2rem);border-radius:22px;border:1px solid color-mix(in srgb,var(--tenant-accent) 35%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--tenant-accent) 12%,transparent),rgba(255,255,255,.025));margin-bottom:1rem}.match-focus header{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.match-focus h2{font-size:clamp(1.5rem,3vw,2.4rem);margin:.35rem 0}.match-meta{color:var(--tenant-muted)}.next-action{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1.2rem}.truth-panel{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem}.truth-panel article{padding:1.1rem;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.1)}.truth-panel h3{margin:.2rem 0}.technical-details{margin-top:1.4rem;padding:1rem;border:1px dashed rgba(255,255,255,.18);border-radius:14px}.technical-details summary{cursor:pointer;font-weight:800}.empty-focus{text-align:center;padding:2rem;border:1px dashed rgba(255,255,255,.2);border-radius:18px}.badge{display:inline-flex;padding:.32rem .64rem;border-radius:999px;background:rgba(85,167,255,.13);color:var(--tenant-accent);font-size:.78rem;font-weight:800}
+  @media(max-width:900px){.prep-hero,.truth-panel{grid-template-columns:1fr}.readiness,.journey{grid-template-columns:1fr 1fr}.journey-step:after{display:none}}
+  @media(max-width:560px){.readiness,.journey{grid-template-columns:1fr}.team-switcher form,.match-focus header{display:block}.team-switcher button{margin-top:.6rem}}
 </style>
 
-<section class="hero">
+<section class="prep-hero">
   <div>
     <span class="eyebrow">Comissão Técnica Digital</span>
-    <h1>Treinador Inteligente</h1>
-    <p>Selecione a próxima partida, gere um dossiê explicável e compare três Planos de Jogo antes de criar um rascunho.</p>
+    <h1>Preparação de Partida</h1>
+    <p>Uma jornada única: escolher o time, conferir os dados, ouvir a comissão e transformar recomendações em uma decisão tática revisável.</p>
   </div>
+  {% if clubs %}
+  <aside class="team-switcher">
+    <form method="get">
+      <div style="flex:1">
+        <label for="club">Time que estamos preparando</label>
+        <select id="club" name="club">
+          {% for club in clubs %}<option value="{{ club.pk }}" {% if selected_club.pk == club.pk %}selected{% endif %}>{{ club.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="button button-secondary" type="submit">Selecionar</button>
+    </form>
+  </aside>
+  {% endif %}
 </section>
 
-{% if lab_batch %}
-<section class="card" style="margin-bottom:1.5rem">
-  <span class="coach-badge">Laboratório de analytics</span>
-  <h2>Mapas, passes e xG com dados de treinamento</h2>
-  <p>Explore o motor visual com uma partida StatsBomb Open Data. A amostra é isolada das recomendações comerciais.</p>
-  <a class="button button-secondary" href="{% url 'tactical-analysis-lab' lab_batch.pk %}">Abrir laboratório tático</a>
-</section>
-{% endif %}
-
-{% if tracking_batch %}
-<section class="card" style="margin-bottom:1.5rem">
-  <span class="coach-badge">Tracking posicional</span>
-  <h2>Ocupação e movimentos com frames posicionais</h2>
-  <p>Explore posições observadas da amostra SkillCorner, isoladas do ambiente operacional.</p>
-  <a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Abrir tracking</a>
-</section>
-{% endif %}
-
-<div class="coach-stepper" aria-label="Etapas do Treinador Inteligente">
-  <div class="coach-step"><strong>1 · Partida</strong><span>Escolher confronto</span></div>
-  <div class="coach-step"><strong>2 · Dossiê</strong><span>Consolidar os dados</span></div>
-  <div class="coach-step"><strong>3 · Planos</strong><span>Comparar cenários</span></div>
-  <div class="coach-step"><strong>4 · Rascunho</strong><span>Revisão humana</span></div>
+<div class="journey" aria-label="Jornada da preparação">
+  <div class="journey-step"><b>1 · Dados</b><span>Elenco, partida, adversário e fontes</span></div>
+  <div class="journey-step"><b>2 · Comissão</b><span>Pareceres com evidências e limites</span></div>
+  <div class="journey-step"><b>3 · Cenários</b><span>Planos equilibrado, ofensivo e conservador</span></div>
+  <div class="journey-step"><b>4 · Decisão</b><span>Escalação, prancheta e versões humanas</span></div>
 </div>
 
+{% if selected_club %}
+<section aria-labelledby="readiness-title">
+  <span class="eyebrow" id="readiness-title">Prontidão de {{ selected_club.name }}</span>
+  <div class="readiness">
+    <div class="ready-item"><small>Elenco para a partida</small><strong>{{ active_roster_count }}</strong><span class="{% if active_roster_count >= 11 %}status-ok{% else %}status-warn{% endif %}">{{ active_roster_count }} {% if active_roster_count == 1 %}atleta elegível{% else %}atletas elegíveis{% endif %}</span></div>
+    <div class="ready-item"><small>Histórico operacional</small><strong>{{ played_match_count }}</strong><span>partida{% if played_match_count != 1 %}s{% endif %} concluída{% if played_match_count != 1 %}s{% endif %} no tenant</span></div>
+    <div class="ready-item"><small>Motor atual</small><strong>Regras</strong><span class="status-ok">Motor de regras explicável</span></div>
+    <div class="ready-item"><small>Agentes de IA configurados</small><strong>{{ agent_count }}</strong><span>{% if provider_was_used %}Provider acionado e auditado{% else %}Provider não acionado nesta jornada{% endif %}</span></div>
+  </div>
+</section>
+{% endif %}
+
 {% if rows %}
-<div class="coach-grid">
   {% for row in rows %}
-  <article class="coach-match">
-    <span class="coach-badge">{{ row.match.phase.edition.competition.name }}</span>
-    <h2>{{ row.match.home_club.name }} × {{ row.match.away_club.name }}</h2>
-    <p>{{ row.match.scheduled_at|date:'d/m/Y H:i' }} · {{ row.match.venue|default:'Local a confirmar' }}</p>
-    {% if row.dossier %}
-      <p><strong>Dossiê v{{ row.dossier.version }}</strong> · {{ row.dossier.get_status_display }} · confiança {{ row.dossier.confidence }}%</p>
-      <a class="button button-secondary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Abrir análise</a>
+  <article class="match-focus">
+    <header>
+      <div>
+        <span class="badge">{{ row.match.phase.edition.competition.name }}</span>
+        <h2>{{ row.club.name }} contra {{ row.opponent.name }}</h2>
+        <p class="match-meta">{{ row.match.scheduled_at|date:'d/m/Y H:i' }} · {{ row.match.venue|default:'Local a confirmar' }}</p>
+      </div>
+      {% if row.dossier %}<span class="badge">Dossiê v{{ row.dossier.version }} · {{ row.dossier.confidence }}%</span>{% endif %}
+    </header>
+    {% if row.eligible_player_count < 11 %}
+      <p class="status-warn"><strong>Falta completar o elenco.</strong> O Treinador precisa de pelo menos 11 atletas elegíveis para propor uma escalação responsável.</p>
+    {% elif row.dossier %}
+      <p>A preparação já possui análise. Continue pela síntese da comissão, compare cenários e registre a decisão na prancheta.</p>
     {% else %}
-      <p class="muted">Ainda não há análise para esta partida.</p>
+      <p>Os dados mínimos estão disponíveis. O próximo passo cria um Dossiê versionado e três cenários para revisão humana.</p>
     {% endif %}
-    <div class="coach-actions">
-      {% for club in row.clubs %}
-      <form method="post" action="{% url 'intelligent-coach-generate' row.match.pk %}">
-        {% csrf_token %}
-        <input type="hidden" name="club" value="{{ club.pk }}">
-        <button class="button {% if forloop.first %}button-primary{% else %}button-secondary{% endif %}" type="submit">Analisar {{ club.name }}</button>
-      </form>
-      {% endfor %}
+    <div class="next-action">
+      {% if row.dossier %}
+        <a class="button button-primary" href="{% url 'intelligent-coach-dossier' row.dossier.pk %}">Continuar preparação</a>
+      {% elif row.eligible_player_count >= 11 %}
+        <form method="post" action="{% url 'intelligent-coach-generate' row.match.pk %}">{% csrf_token %}<input type="hidden" name="club" value="{{ row.club.pk }}"><button class="button button-primary" type="submit">Preparar {{ row.club.name }}</button></form>
+      {% else %}
+        <a class="button button-primary" href="{% url 'person-list' %}">Completar elenco de {{ row.club.name }}</a>
+      {% endif %}
+      <a class="button button-secondary" href="{% url 'match-list' %}">Ver dados da partida</a>
     </div>
   </article>
   {% endfor %}
-</div>
 {% else %}
-<div class="coach-empty">
-  <h2>Sem partidas futuras</h2>
-  <p>Cadastre ou confirme uma partida futura para iniciar a preparação inteligente.</p>
-  <a class="button button-primary" href="{% url 'match-create' %}">Nova partida</a>
+<div class="empty-focus">
+  <h2>Nenhuma próxima partida para {{ selected_club.name|default:'este time' }}</h2>
+  <p>Cadastre uma partida ou integre um confronto real antes de iniciar a preparação.</p>
+  <a class="button button-primary" href="{% url 'match-create' %}">Cadastrar partida</a>
 </div>
+{% endif %}
+
+<div class="truth-panel">
+  <article>
+    <span class="badge">O que o sistema faz hoje</span>
+    <h3>Análise determinística e explicável</h3>
+    <p>Regras do domínio cruzam contratos, disponibilidade, forma, eventos e fontes válidas. Cada recomendação informa evidências, confiança e limitações.</p>
+  </article>
+  <article>
+    <span class="badge">Próxima evolução</span>
+    <h3>Provider dentro da Comissão</h3>
+    <p>Os {{ provider_count }} provider{% if provider_count != 1 %}s{% endif %} e {{ agent_count }} agentes configurados serão acionados por especialidade. Até essa integração ocorrer, a tela identifica honestamente o Motor de regras.</p>
+  </article>
+</div>
+
+{% if lab_batch or tracking_batch %}
+<details class="technical-details">
+  <summary>Ambiente de pesquisa e validação visual</summary>
+  <p>Mapas, redes de passes, xG e tracking usam amostras públicas de pesquisa e não são misturados silenciosamente às decisões operacionais.</p>
+  <div class="next-action">
+    {% if lab_batch %}<a class="button button-secondary" href="{% url 'tactical-analysis-lab' lab_batch.pk %}">Analytics StatsBomb</a>{% endif %}
+    {% if tracking_batch %}<a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Tracking SkillCorner</a>{% endif %}
+  </div>
+</details>
 {% endif %}
 {% endblock %}

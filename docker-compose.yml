@@ -86,8 +86,7 @@ services:
   sports-sync:
     build:
       context: .
-    profiles:
-      - watchers
+    restart: unless-stopped
     command: python scripts/watch_sports_sources.py
     env_file:
       - .env

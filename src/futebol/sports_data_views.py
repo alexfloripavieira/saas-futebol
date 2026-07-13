@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import timedelta
 from functools import wraps
 
 from django.contrib import messages
@@ -39,7 +40,20 @@ def sports_data_module_required(view_func):
 
 def _source_summary(source, now):
     latest_batch = source.import_batches.order_by('-imported_at', '-created_at').first()
-    records = source.records.all()
+    records = latest_batch.records.all() if latest_batch else source.records.none()
+    freshness_age = now - source.last_sync_at if source.last_sync_at else None
+    if source.kind == SportsDataSource.Kind.CLUB_INTERNAL:
+        freshness_status, freshness_label = 'live', 'Atualização transacional'
+    elif source.operational_status == SportsDataSource.OperationalStatus.CONTRACT_REQUIRED:
+        freshness_status, freshness_label = 'disconnected', 'Não conectada'
+    elif freshness_age is None:
+        freshness_status, freshness_label = 'pending', 'Nunca sincronizada'
+    elif freshness_age <= timedelta(hours=8):
+        freshness_status, freshness_label = 'fresh', 'Atualizada'
+    elif freshness_age <= timedelta(hours=24):
+        freshness_status, freshness_label = 'attention', 'Atualização próxima do limite'
+    else:
+        freshness_status, freshness_label = 'stale', 'Desatualizada'
     return {
         'source': source,
         'latest_batch': latest_batch,
@@ -47,6 +61,8 @@ def _source_summary(source, now):
         'valid_record_count': records.filter(expires_at__gt=now).count()
         + records.filter(expires_at__isnull=True).count(),
         'expired_record_count': records.filter(expires_at__lte=now).count(),
+        'freshness_status': freshness_status,
+        'freshness_label': freshness_label,
     }
 
 

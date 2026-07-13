@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
+import json
 import secrets
 import string
 import uuid
@@ -824,6 +826,97 @@ class LineupDraftPlayer(TenantScopedModel):
             ).exists()
             if is_unavailable:
                 raise ValidationError({'player': 'O atleta está indisponível para esta partida.'})
+
+
+class TacticalBoard(TenantScopedModel):
+    draft = models.OneToOneField(
+        LineupDraft,
+        on_delete=models.CASCADE,
+        related_name='tactical_board',
+    )
+    document = models.JSONField(default=dict, blank=True)
+    revision = models.PositiveIntegerField(default=1)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='updated_tactical_boards',
+    )
+
+    tenant_bound_fields = ('draft',)
+
+    class Meta:
+        ordering = ['-updated_at']
+        verbose_name = 'Prancheta tática'
+        verbose_name_plural = 'Pranchetas táticas'
+
+    def __str__(self):
+        return f'Prancheta — {self.draft.match}'
+
+    def clean(self):
+        super().clean()
+        if self.draft_id:
+            from futebol.services.tactical_board import validate_board_document
+            self.document = validate_board_document(self.document, self)
+
+
+class TacticalBoardVersion(TenantScopedModel):
+    board = models.ForeignKey(
+        TacticalBoard,
+        on_delete=models.CASCADE,
+        related_name='versions',
+    )
+    version = models.PositiveIntegerField()
+    document = models.JSONField(default=dict)
+    content_hash = models.CharField(max_length=64)
+    change_note = models.TextField(blank=True, default='')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='created_tactical_board_versions',
+    )
+
+    tenant_bound_fields = ('board',)
+
+    class Meta:
+        ordering = ['-version']
+        verbose_name = 'Versão da prancheta tática'
+        verbose_name_plural = 'Versões da prancheta tática'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tenant', 'board', 'version'],
+                name='uniq_tactical_board_version',
+            ),
+            models.UniqueConstraint(
+                fields=['tenant', 'board', 'content_hash'],
+                name='uniq_tactical_board_hash',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk:
+            raise ValidationError('A versão da prancheta é imutável e não pode ser atualizada.')
+        return super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+        if not self.board_id:
+            return
+        from futebol.services.tactical_board import validate_board_document
+        self.document = validate_board_document(self.document, self.board)
+        expected_hash = hashlib.sha256(
+            json.dumps(
+                self.document, ensure_ascii=False, sort_keys=True, separators=(',', ':'),
+            ).encode(),
+        ).hexdigest()
+        if self.content_hash and self.content_hash != expected_hash:
+            raise ValidationError({'content_hash': 'Hash não corresponde ao conteúdo da versão.'})
+        self.content_hash = expected_hash
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('A versão da prancheta é imutável e não pode ser excluída.')
+
+    def __str__(self):
+        return f'{self.board} · v{self.version}'
 
 
 class SportsDataSource(TenantScopedModel):

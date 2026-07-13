@@ -1,22 +1,30 @@
 from functools import wraps
+import json
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponseNotAllowed
+from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from futebol.models import (
-    Club, GamePlan, LineupDraft, Match, MatchDossier, SportsDataImportBatch,
+    AIAgent, AIProvider, Club, Contract, GamePlan, LineupDraft, Match, MatchDossier,
+    SpecialistOpinion, SportsDataImportBatch,
+    TacticalBoard, TacticalBoardVersion,
 )
 from futebol.modules import tenant_has_module
 from futebol.services.intelligent_coach import (
     apply_game_plan_as_draft,
+    eligible_player_count,
     generate_match_dossier,
     review_lineup_draft,
 )
 from futebol.services.tenancy import active_tenant
+from futebol.services.tactical_board import (
+    get_or_create_board, restore_board_version, save_and_publish_board, save_board,
+)
 
 
 def intelligent_coach_module_required(view_func):
@@ -39,8 +47,37 @@ def intelligent_coach_module_required(view_func):
 @intelligent_coach_module_required
 def intelligent_coach_center(request):
     tenant = active_tenant(request)
+    clubs = list(
+        Club.objects.filter(tenant=tenant, active=True)
+        .order_by('name')
+    )
+    selected_club = None
+    requested_club_id = request.GET.get('club')
+    if requested_club_id:
+        selected_club = next(
+            (club for club in clubs if str(club.pk) == requested_club_id), None,
+        )
+    if selected_club is None:
+        selected_club = next(
+            (club for club in clubs if club.registration_code.startswith('football-data:')),
+            None,
+        )
+    if selected_club is None:
+        selected_club = next(
+            (
+                club for club in clubs
+                if Contract.objects.filter(
+                    tenant=tenant, club=club, status=Contract.Status.ACTIVE,
+                ).exists()
+            ),
+            clubs[0] if clubs else None,
+        )
+    match_filters = Q()
+    if selected_club:
+        match_filters = Q(home_club=selected_club) | Q(away_club=selected_club)
     matches = list(
         Match.objects.filter(
+            match_filters,
             tenant=tenant,
             scheduled_at__gte=timezone.now(),
             status__in=[Match.Status.SCHEDULED, Match.Status.CONFIRMED],
@@ -52,20 +89,38 @@ def intelligent_coach_center(request):
     )
     latest_by_match = {}
     for dossier in MatchDossier.objects.filter(
-        tenant=tenant, match__in=matches
+        tenant=tenant, match__in=matches, analyzed_club=selected_club,
     ).select_related('analyzed_club').order_by('match_id', '-version'):
         latest_by_match.setdefault(dossier.match_id, dossier)
     rows = [
         {
             'match': match,
             'dossier': latest_by_match.get(match.pk),
-            'clubs': (match.home_club, match.away_club),
+            'club': selected_club,
+            'opponent': (
+                match.away_club if match.home_club_id == selected_club.pk else match.home_club
+            ),
+            'eligible_player_count': eligible_player_count(match=match, club=selected_club),
         }
         for match in matches
     ]
     return render(request, 'futebol/intelligent_coach_center.html', {
-        'title': 'Treinador Inteligente',
-        'subtitle': 'Comissão Técnica Digital orientada por dados e decisão humana',
+        'title': 'Preparação de Partida',
+        'subtitle': 'Do dado disponível à decisão da comissão técnica',
+        'clubs': clubs,
+        'selected_club': selected_club,
+        'active_roster_count': rows[0]['eligible_player_count'] if rows else 0,
+        'played_match_count': Match.objects.filter(
+            Q(home_club=selected_club) | Q(away_club=selected_club),
+            tenant=tenant, status=Match.Status.PLAYED,
+        ).count() if selected_club else 0,
+        'provider_count': AIProvider.objects.filter(tenant=tenant, active=True).count(),
+        'agent_count': AIAgent.objects.filter(tenant=tenant, active=True).count(),
+        'provider_was_used': SpecialistOpinion.objects.filter(
+            tenant=tenant,
+            dossier__analyzed_club=selected_club,
+            execution_mode=SpecialistOpinion.ExecutionMode.PROVIDER,
+        ).exists() if selected_club else False,
         'rows': rows,
         'lab_batch': SportsDataImportBatch.objects.filter(
             tenant=tenant, source__code='statsbomb-open',
@@ -198,3 +253,110 @@ def intelligent_coach_review_draft(request, pk):
             'Rascunho revisado pela comissão; a escalação oficial continua inalterada.',
         )
     return redirect('intelligent-coach-draft', pk=draft.pk)
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_board_open(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    draft = get_object_or_404(
+        LineupDraft.objects.prefetch_related('players'), tenant=tenant, pk=pk,
+    )
+    try:
+        board = get_or_create_board(draft=draft, actor=request.user)
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+        return redirect('intelligent-coach-draft', pk=draft.pk)
+    return redirect('intelligent-coach-board', pk=board.pk)
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_board(request, pk):
+    tenant = active_tenant(request)
+    board = get_object_or_404(
+        TacticalBoard.objects.select_related(
+            'draft', 'draft__plan', 'draft__match', 'draft__club', 'updated_by',
+        ).prefetch_related('draft__players', 'draft__players__player', 'versions'),
+        tenant=tenant, pk=pk,
+    )
+    return render(request, 'futebol/intelligent_coach_board.html', {
+        'title': 'Prancheta tática', 'subtitle': str(board.draft.match),
+        'board': board, 'draft': board.draft,
+        'players': board.draft.players.select_related('player').all(),
+        'player_labels': {
+            str(item.player_id): {
+                'name': item.player.full_name, 'position': item.position,
+            }
+            for item in board.draft.players.select_related('player').all()
+        },
+        'versions': board.versions.select_related('created_by').all(),
+    })
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_board_save(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    board = get_object_or_404(TacticalBoard, tenant=tenant, pk=pk)
+    try:
+        document = json.loads(request.POST.get('document') or '{}')
+        save_board(
+            board=board, document=document,
+            expected_revision=int(request.POST.get('expected_revision') or 0),
+            actor=request.user,
+        )
+        messages.success(request, 'Prancheta salva como estado editável.')
+    except (json.JSONDecodeError, ValueError, ValidationError) as exc:
+        message = '; '.join(exc.messages) if isinstance(exc, ValidationError) else 'Documento da prancheta inválido.'
+        messages.error(request, message)
+    return redirect('intelligent-coach-board', pk=board.pk)
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_board_publish(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    board = get_object_or_404(TacticalBoard, tenant=tenant, pk=pk)
+    try:
+        document = json.loads(request.POST.get('document') or '{}')
+        version = save_and_publish_board(
+            board=board, document=document,
+            expected_revision=int(request.POST.get('expected_revision') or 0), actor=request.user,
+            change_note=request.POST.get('change_note', ''),
+        )
+        if getattr(version, 'already_existed', False):
+            messages.info(request, f'O mesmo conteúdo já estava preservado na versão v{version.version}.')
+        else:
+            messages.success(request, f'Versão imutável v{version.version} criada.')
+    except (json.JSONDecodeError, ValueError, ValidationError) as exc:
+        message = '; '.join(exc.messages) if isinstance(exc, ValidationError) else 'Documento da prancheta inválido.'
+        messages.error(request, message)
+    return redirect('intelligent-coach-board', pk=board.pk)
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_board_restore(request, pk):
+    if request.method != 'POST':
+        return HttpResponseNotAllowed(['POST'])
+    tenant = active_tenant(request)
+    version = get_object_or_404(
+        TacticalBoardVersion.objects.select_related('board'), tenant=tenant, pk=pk,
+    )
+    try:
+        restore_board_version(
+            version=version, actor=request.user,
+            expected_revision=int(request.POST.get('expected_revision') or 0),
+        )
+        messages.success(request, f'Versão v{version.version} restaurada como novo estado editável.')
+    except (ValueError, ValidationError) as exc:
+        message = '; '.join(exc.messages) if isinstance(exc, ValidationError) else 'Revisão inválida.'
+        messages.error(request, message)
+    return redirect('intelligent-coach-board', pk=version.board_id)

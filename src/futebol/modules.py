@@ -74,16 +74,16 @@ NAV_GROUPS = (
     },
     {
         'module': 'ia',
-        'label': 'IA',
+        'label': 'Inteligência esportiva',
         'icon': '🧠',
         'open': True,
         'items': (
-            {'label': 'Treinador Inteligente', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
-            {'label': 'Fontes esportivas', 'url_name': 'sports-data-source-list', 'icon': '📡'},
-            {'label': 'Centro de IA', 'url_name': 'ai-center', 'icon': '✨'},
-            {'label': 'Providers IA', 'url_name': 'ai-provider-list', 'icon': '🔌'},
-            {'label': 'Agentes IA', 'url_name': 'ai-agent-list', 'icon': '🤖'},
-            {'label': 'Fontes IA', 'url_name': 'knowledge-source-list', 'icon': '📚'},
+            {'label': 'Preparação de Partida', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
+            {'label': 'Atualização de dados', 'url_name': 'sports-data-source-list', 'icon': '📡'},
+            {'label': 'Laboratório de IA', 'url_name': 'ai-center', 'icon': '✨'},
+            {'label': 'Configuração · Providers', 'url_name': 'ai-provider-list', 'icon': '🔌'},
+            {'label': 'Configuração · Agentes', 'url_name': 'ai-agent-list', 'icon': '🤖'},
+            {'label': 'Configuração · Conhecimento', 'url_name': 'knowledge-source-list', 'icon': '📚'},
         ),
     },
     {

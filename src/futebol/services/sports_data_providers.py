@@ -532,7 +532,7 @@ def sync_football_data_org(*, tenant, imported_by, api_key, competition_code='BS
     records = _normalize_matches(matches_payload) + _normalize_standings(
         standings_payload, competition_code
     )
-    return _persist_football_data_sync(
+    batch = _persist_football_data_sync(
         tenant=tenant,
         imported_by=imported_by,
         source=source,
@@ -542,6 +542,9 @@ def sync_football_data_org(*, tenant, imported_by, api_key, competition_code='BS
         records=records,
         rate_limit={'matches': matches_rate, 'standings': standings_rate},
     )
+    from futebol.services.coach_workspace import refresh_materialized_provider_matches
+    refresh_materialized_provider_matches(tenant=tenant)
+    return batch
 
 
 @transaction.atomic
@@ -587,6 +590,17 @@ def _persist_football_data_sync(
         content_hash=content_hash, status=SportsDataImportBatch.Status.COMPLETED,
     ).first()
     if existing:
+        now = timezone.now()
+        existing.records.update(observed_at=now, expires_at=now + timedelta(hours=24))
+        existing.imported_at = now
+        existing.save(update_fields=['imported_at', 'updated_at'])
+        source.active = True
+        source.operational_status = SportsDataSource.OperationalStatus.ACTIVE
+        source.last_sync_at = now
+        source.last_error = ''
+        source.save(update_fields=[
+            'active', 'operational_status', 'last_sync_at', 'last_error', 'updated_at',
+        ])
         return existing
 
     now = timezone.now()
@@ -674,6 +688,15 @@ def _persist_skillcorner_open_sync(
         status=SportsDataImportBatch.Status.COMPLETED,
     ).first()
     if existing:
+        now = timezone.now()
+        existing.imported_at = now
+        existing.save(update_fields=['imported_at', 'updated_at'])
+        source.last_sync_at = now
+        source.last_error = ''
+        source.operational_status = SportsDataSource.OperationalStatus.RESEARCH_ONLY
+        source.save(update_fields=[
+            'last_sync_at', 'last_error', 'operational_status', 'updated_at',
+        ])
         return existing
 
     now = timezone.now()
@@ -911,6 +934,15 @@ def _persist_statsbomb_open_sync(
         content_hash=content_hash, status=SportsDataImportBatch.Status.COMPLETED,
     ).first()
     if existing:
+        now = timezone.now()
+        existing.imported_at = now
+        existing.save(update_fields=['imported_at', 'updated_at'])
+        source.last_sync_at = now
+        source.last_error = ''
+        source.operational_status = SportsDataSource.OperationalStatus.RESEARCH_ONLY
+        source.save(update_fields=[
+            'last_sync_at', 'last_error', 'operational_status', 'updated_at',
+        ])
         return existing
 
     now = timezone.now()

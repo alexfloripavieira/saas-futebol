@@ -12,6 +12,7 @@
   </div>
 </section>
 <p class="draft-banner"><strong>Decisão humana obrigatória.</strong> Este rascunho é editável e não alterou a escalação oficial da partida.</p>
+<form method="post" action="{% url 'intelligent-coach-board-open' draft.pk %}">{% csrf_token %}<button class="button button-primary" type="submit">Abrir prancheta editável</button></form>
 <form method="post" action="{% url 'intelligent-coach-review-draft' draft.pk %}">
 {% csrf_token %}
 <p>Marque os 11 titulares. Desmarcar um titular e marcar um reserva realiza a substituição no rascunho.</p>

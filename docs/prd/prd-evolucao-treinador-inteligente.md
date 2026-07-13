@@ -1,5 +1,8 @@
 # PRD — Evolução do Treinador Inteligente
 
+> Jornada demonstrável e operação das fontes: consulte também
+> `docs/runbooks/jornada-apresentacao-academica.md`.
+
 ## Problem Statement
 
 A primeira versão do Treinador Inteligente já produz um Dossiê da Partida,
@@ -152,6 +155,10 @@ Reais e Providers de IA”.
 - Especialistas executam independentemente e o Coordenador Técnico somente é liberado após todas as contribuições chegarem a estado terminal. A consolidação preserva concordâncias/evidências, explicita conflitos para decisão humana e produz cenários equilibrado, ofensivo e conservador sem alterar plano ou escalação oficial.
 - Limites atuais controlam quantidade de chamadas por execução. Orçamento monetário permanece indisponível enquanto o provider não informar usage/preço confiável; nesse caso o produto apresenta consumo de chamadas, tokens conhecidos e custo desconhecido, sem fabricar estimativa financeira.
 - Primeira validação real da fila: seis tarefas chegaram a 100% com três workers paralelos; três respostas pelo provider e três fallbacks determinísticos. A execução terminou `partial`, manteve retentativa seletiva e gerou os três cenários com revisão humana obrigatória.
+- Prancheta tática editável v1 implementada em julho de 2026 e vinculada ao rascunho do plano de jogo. Ela permite mover atletas e desenhar setas, linhas, zonas e anotações, sempre classificadas como observado, calculado, recomendado ou hipótese.
+- O estado editável usa revisão otimista para impedir sobrescrita silenciosa. Publicações geram versões imutáveis e auditáveis, que podem ser restauradas como uma nova edição sem alterar escalações oficiais.
+- A primeira fatia da prancheta editável ainda não inclui espelhamento automático contra o adversário, redimensionamento avançado de zonas nem edição direta de textos já inseridos. Essas interações permanecem no próximo incremento do campo tático.
+- A landing apresenta uma composição demonstrativa das capacidades analíticas — calor de ações, rede de passes, xG, pressão e tracking — e explicita que a disponibilidade depende da cobertura e da qualidade da fonte conectada.
 - Os dados abertos são dados reais de partidas disponibilizados para pesquisa e desenvolvimento; no produto, também funcionam como base de treinamento, homologação dos cálculos e testes dos Agentes Especialistas. Não devem ser apresentados como dados operacionais do clube do Tenant.
 - Esta PRD consolida as pendências já registradas como 14.2.3 (execução assíncrona por provider), 14.4.3 (mapas, redes e interação com dados reais) e a evolução de GPS/RPE e avaliação pós-jogo descrita no plano da Sprint 14.
 - A ativação comercial não substitui a pendência 13.6.3: restauração em ambiente descartável, observabilidade externa e assinatura formal de go/no-go continuam bloqueadores do piloto.

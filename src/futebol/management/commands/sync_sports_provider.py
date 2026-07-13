@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from futebol.models import Tenant, TenantMembership
+from futebol.modules import tenant_has_module
 from futebol.services.sports_data_providers import (
     sync_football_data_org,
     sync_skillcorner_open,
@@ -28,12 +29,24 @@ class Command(BaseCommand):
         parser.add_argument('--max-matches', type=int, default=1)
         parser.add_argument('--max-events', type=int, default=200)
         parser.add_argument('--tracking-match-id')
+        parser.add_argument(
+            '--scheduled',
+            action='store_true',
+            help='Identifica execução recorrente, condicionada ao módulo Automações.',
+        )
 
     def handle(self, *args, **options):
         try:
             tenant = Tenant.objects.get(slug=options['tenant'], active=True)
         except Tenant.DoesNotExist as exc:
             raise CommandError('Tenant ativo não encontrado.') from exc
+        if options['scheduled'] and not tenant_has_module(tenant, 'automacoes'):
+            self.stdout.write(
+                self.style.WARNING(
+                    'Sincronização recorrente ignorada: módulo Automações desativado.'
+                )
+            )
+            return
         user_model = get_user_model()
         try:
             user = user_model.objects.get(username=options['user'], is_active=True)

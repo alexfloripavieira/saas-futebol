@@ -7,6 +7,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponseNotAllowed
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from futebol.models import (
@@ -21,6 +22,10 @@ from futebol.services.intelligent_coach import (
     generate_match_dossier,
     review_lineup_draft,
 )
+from futebol.services.real_coach_journey import (
+    SEEDED_MATCH_REFERENCES, build_public_rehearsal, public_squad_players,
+)
+from futebol.services.sports_catalog import latest_records_for
 from futebol.services.tenancy import active_tenant
 from futebol.services.tactical_board import (
     get_or_create_board, restore_board_version, save_and_publish_board, save_board,
@@ -82,16 +87,24 @@ def intelligent_coach_center(request):
             scheduled_at__gte=timezone.now(),
             status__in=[Match.Status.SCHEDULED, Match.Status.CONFIRMED],
         )
+        .exclude(reference_code__in=SEEDED_MATCH_REFERENCES)
         .select_related(
             'home_club', 'away_club', 'phase', 'phase__edition', 'phase__edition__competition'
         )
         .order_by('scheduled_at')[:12]
     )
+    requested_match_id = request.GET.get('match')
+    if requested_match_id:
+        matches.sort(key=lambda item: str(item.pk) != requested_match_id)
     latest_by_match = {}
     for dossier in MatchDossier.objects.filter(
         tenant=tenant, match__in=matches, analyzed_club=selected_club,
     ).select_related('analyzed_club').order_by('match_id', '-version'):
         latest_by_match.setdefault(dossier.match_id, dossier)
+    public_squad_count = (
+        len(public_squad_players(tenant=tenant, club=selected_club))
+        if selected_club else 0
+    )
     rows = [
         {
             'match': match,
@@ -101,11 +114,15 @@ def intelligent_coach_center(request):
                 match.away_club if match.home_club_id == selected_club.pk else match.home_club
             ),
             'eligible_player_count': eligible_player_count(match=match, club=selected_club),
+            'public_squad_count': public_squad_count,
         }
         for match in matches
     ]
+    global_lab_record = latest_records_for(
+        tenant, provider_code='statsbomb-open', capability='event_stream',
+    ).select_related('batch').order_by('-batch__published_at').first()
     return render(request, 'futebol/intelligent_coach_center.html', {
-        'title': 'Preparação de Partida',
+        'title': 'Treinador Inteligente',
         'subtitle': 'Do dado disponível à decisão da comissão técnica',
         'clubs': clubs,
         'selected_club': selected_club,
@@ -122,15 +139,34 @@ def intelligent_coach_center(request):
             execution_mode=SpecialistOpinion.ExecutionMode.PROVIDER,
         ).exists() if selected_club else False,
         'rows': rows,
-        'lab_batch': SportsDataImportBatch.objects.filter(
-            tenant=tenant, source__code='statsbomb-open',
-            quality='research_sample', status=SportsDataImportBatch.Status.COMPLETED,
-        ).order_by('-imported_at').first(),
+        'operational_ready': bool(rows and rows[0]['eligible_player_count'] >= 11),
+        'global_lab_batch': global_lab_record.batch if global_lab_record else None,
         'tracking_batch': SportsDataImportBatch.objects.filter(
             tenant=tenant, source__code='skillcorner-open',
             artifacts__capability='tracking_frames', artifacts__status='ready',
             status=SportsDataImportBatch.Status.COMPLETED,
         ).order_by('-imported_at').first(),
+    })
+
+
+@login_required
+@intelligent_coach_module_required
+def intelligent_coach_public_rehearsal(request, pk):
+    tenant = active_tenant(request)
+    match = get_object_or_404(
+        Match.objects.select_related('home_club', 'away_club', 'phase__edition__competition'),
+        tenant=tenant, pk=pk,
+    )
+    club = get_object_or_404(Club, tenant=tenant, pk=request.GET.get('club'))
+    try:
+        rehearsal = build_public_rehearsal(match=match, club=club)
+    except ValidationError as exc:
+        messages.error(request, '; '.join(exc.messages))
+        return redirect(f'{reverse("intelligent-coach-center")}?club={club.pk}&match={match.pk}')
+    return render(request, 'futebol/intelligent_coach_public_rehearsal.html', {
+        'title': 'Ensaio com elenco público',
+        'subtitle': str(match),
+        'rehearsal': rehearsal,
     })
 
 

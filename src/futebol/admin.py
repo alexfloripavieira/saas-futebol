@@ -23,6 +23,10 @@ from .models import (
     KnowledgeSource,
     GamePlan,
     GamePlanPlayer,
+    GlobalSportsDataBatch,
+    GlobalSportsDataRecord,
+    GlobalSportsDataSource,
+    GlobalSportsSyncRun,
     LineupDraft,
     LineupDraftPlayer,
     Match,
@@ -295,6 +299,53 @@ class SportsDataSourceAdmin(admin.ModelAdmin):
         'external_ai_processing_allowed', 'external_ai_provider_scope',
         'external_ai_authorization_note', 'external_ai_authorized_at',
         'external_ai_authorized_by',
+    )
+
+
+@admin.register(GlobalSportsDataSource)
+class GlobalSportsDataSourceAdmin(admin.ModelAdmin):
+    list_display = (
+        'name', 'kind', 'quality', 'operational_status', 'last_success_at', 'active',
+    )
+    list_filter = ('kind', 'quality', 'operational_status', 'active')
+    search_fields = ('name', 'code')
+
+
+@admin.register(GlobalSportsDataBatch)
+class GlobalSportsDataBatchAdmin(admin.ModelAdmin):
+    list_display = (
+        'dataset_id', 'dataset_version', 'source', 'status', 'record_count',
+        'published_at',
+    )
+    list_filter = ('status', 'quality', 'source')
+    readonly_fields = (
+        'source', 'dataset_id', 'content_hash', 'manifest', 'published_at',
+    )
+
+
+@admin.register(GlobalSportsDataRecord)
+class GlobalSportsDataRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        'provider_record_id', 'capability', 'source', 'provider_updated_at',
+        'observed_at', 'expires_at',
+    )
+    list_filter = ('capability', 'source')
+    search_fields = ('provider_record_id',)
+    readonly_fields = (
+        'source', 'batch', 'capability', 'provider_record_id', 'payload',
+        'raw_payload', 'content_hash', 'ingested_at',
+    )
+
+
+@admin.register(GlobalSportsSyncRun)
+class GlobalSportsSyncRunAdmin(admin.ModelAdmin):
+    list_display = (
+        'source', 'dataset_id', 'trigger', 'status', 'started_at', 'finished_at',
+    )
+    list_filter = ('status', 'source', 'trigger')
+    readonly_fields = (
+        'source', 'batch', 'dataset_id', 'trigger', 'status', 'started_at',
+        'finished_at', 'rate_limit', 'error',
     )
 
 

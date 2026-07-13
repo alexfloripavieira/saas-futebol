@@ -76,8 +76,6 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       SPORTS_SYNC_PROJECT_ROOT: /app
-      SPORTS_SYNC_TENANT: ${SPORTS_SYNC_TENANT:?SPORTS_SYNC_TENANT obrigatório}
-      SPORTS_SYNC_USER: ${SPORTS_SYNC_USER:?SPORTS_SYNC_USER obrigatório}
       SPORTS_SYNC_INTERVAL_SECONDS: ${SPORTS_SYNC_INTERVAL_SECONDS:-21600}
     command: python scripts/watch_sports_sources.py
     depends_on:

@@ -45,6 +45,22 @@
       .content { padding: 32px; }
       .brand { display: flex; flex-direction: column; gap: 6px; margin-bottom: 24px; }
       .brand strong { font-size: 22px; letter-spacing: .08em; text-transform: uppercase; }
+      .coach-primary-shortcut {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        color: #fff;
+        background: linear-gradient(135deg, rgba(29,111,232,.95), rgba(85,167,255,.72));
+        border: 1px solid rgba(199,228,255,.36);
+        box-shadow: 0 14px 32px rgba(29,111,232,.28);
+      }
+      .coach-primary-shortcut:hover { text-decoration: none; transform: translateY(-1px); }
+      .coach-primary-shortcut-icon { font-size: 22px; }
+      .coach-primary-shortcut-copy { display: grid; gap: 2px; }
+      .coach-primary-shortcut-copy strong { font-size: 14px; letter-spacing: .02em; text-transform: none; }
+      .coach-primary-shortcut-copy small { color: #e4f3ff; }
       .topbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
       .badge, .pill {
         display: inline-flex;
@@ -298,6 +314,15 @@
           <strong>{{ branding.public_title|default:'SaaS do Futebol' }}</strong>
           <span class="muted">{{ branding.public_subtitle|default:'Operação multi-tenant' }}</span>
         </div>
+        {% if coach_module_enabled %}
+          <a class="coach-primary-shortcut" data-testid="coach-primary-shortcut" href="{% url 'intelligent-coach-center' %}">
+            <span class="coach-primary-shortcut-icon">🧑‍🏫</span>
+            <span class="coach-primary-shortcut-copy">
+              <strong>Treinador Inteligente</strong>
+              <small>Abrir preparação da partida</small>
+            </span>
+          </a>
+        {% endif %}
         <nav class="nav">
           {% for group in nav_groups %}
           <details class="menu-group"{% if group.open %} open{% endif %}>

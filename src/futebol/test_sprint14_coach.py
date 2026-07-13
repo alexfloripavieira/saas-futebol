@@ -68,6 +68,12 @@ class IntelligentCoachServiceTests(TestCase):
             user=self.user,
             role=TenantMembership.Role.GESTOR_CLUBE,
         )
+        TenantModuleSubscription.objects.create(
+            tenant=self.tenant,
+            module_code='ia',
+            module_name='IA',
+            enabled=True,
+        )
         self.our_club = Club.objects.create(tenant=self.tenant, name='Nosso FC', slug='nosso-fc')
         self.opponent = Club.objects.create(tenant=self.tenant, name='Adversário FC', slug='adversario-fc')
         competition = Competition.objects.create(
@@ -389,9 +395,6 @@ class IntelligentCoachServiceTests(TestCase):
 class IntelligentCoachHTTPTests(IntelligentCoachServiceTests):
     def setUp(self):
         super().setUp()
-        TenantModuleSubscription.objects.create(
-            tenant=self.tenant, module_code='ia', module_name='IA', enabled=True
-        )
         self.client.force_login(self.user)
 
     def test_usuario_gera_visualiza_e_aplica_rascunho(self):

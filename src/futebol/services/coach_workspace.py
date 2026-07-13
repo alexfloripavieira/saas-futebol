@@ -12,8 +12,13 @@ from futebol.models import (
     CompetitionEdition,
     CompetitionPhase,
     CompetitionRuleSet,
+    GlobalSportsDataRecord,
     Match,
-    SportsDataRecord,
+    Tenant,
+)
+from futebol.services.sports_catalog import (
+    latest_records_for,
+    tenant_has_sports_intelligence,
 )
 
 
@@ -60,7 +65,7 @@ def _provider_club(*, tenant, provider_team_id, name):
 
 
 @transaction.atomic
-def materialize_provider_match(*, record):
+def materialize_provider_match(*, record, tenant=None):
     """Cria o confronto operacional a partir de um registro normalizado e auditável.
 
     O registro esportivo permanece como fonte de verdade externa. A referência do
@@ -78,7 +83,17 @@ def materialize_provider_match(*, record):
     if timezone.is_naive(scheduled_at):
         scheduled_at = timezone.make_aware(scheduled_at, timezone.utc)
 
-    tenant = record.tenant
+    tenant = tenant or getattr(record, 'tenant', None)
+    if tenant is None:
+        raise ValidationError('Informe o Tenant que receberá a projeção da partida global.')
+    if isinstance(record, GlobalSportsDataRecord) and not latest_records_for(
+        tenant,
+        provider_code=record.source.code,
+        capability=record.capability,
+    ).filter(pk=record.pk).exists():
+        raise ValidationError(
+            'O contrato atual do Tenant não autoriza este registro global.'
+        )
     reference_code = f'FD-{provider_match_id}'
     home_club = _provider_club(
         tenant=tenant,
@@ -160,6 +175,8 @@ def materialize_provider_match(*, record):
 
 def refresh_materialized_provider_matches(*, tenant):
     """Atualiza somente partidas já promovidas ao domínio operacional."""
+    if not tenant_has_sports_intelligence(tenant):
+        return 0
     refreshed = 0
     references = Match.objects.filter(
         tenant=tenant, reference_code__startswith='FD-',
@@ -167,17 +184,26 @@ def refresh_materialized_provider_matches(*, tenant):
     for reference in references:
         provider_match_id = reference.removeprefix('FD-')
         record = (
-            SportsDataRecord.objects.filter(
-                tenant=tenant,
-                source__code='football-data-org',
+            latest_records_for(
+                tenant,
+                provider_code='football-data-org',
                 capability='fixtures_results',
-                provider_record_id=f'match:{provider_match_id}',
-            )
-            .select_related('source', 'tenant')
-            .order_by('-observed_at', '-created_at')
+            ).filter(provider_record_id=f'match:{provider_match_id}')
+            .select_related('source', 'batch')
+            .order_by('-batch__published_at', '-observed_at')
             .first()
         )
         if record:
-            materialize_provider_match(record=record)
+            materialize_provider_match(record=record, tenant=tenant)
             refreshed += 1
     return refreshed
+
+
+def refresh_all_materialized_provider_matches():
+    tenant_ids = Match.objects.filter(
+        reference_code__startswith='FD-',
+    ).values_list('tenant_id', flat=True).distinct()
+    return sum(
+        refresh_materialized_provider_matches(tenant=tenant)
+        for tenant in Tenant.objects.filter(pk__in=tenant_ids, active=True)
+    )

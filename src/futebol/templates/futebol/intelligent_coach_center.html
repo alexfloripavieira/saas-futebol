@@ -9,8 +9,8 @@
 
 <section class="prep-hero">
   <div>
-    <span class="eyebrow">Comissão Técnica Digital</span>
-    <h1>Preparação de Partida</h1>
+    <span class="eyebrow">Comissão Técnica Digital · Preparação de Partida</span>
+    <h1>Treinador Inteligente</h1>
     <p>Uma jornada única: escolher o time, conferir os dados, ouvir a comissão e transformar recomendações em uma decisão tática revisável.</p>
   </div>
   {% if clubs %}
@@ -29,11 +29,24 @@
 </section>
 
 <div class="journey" aria-label="Jornada da preparação">
-  <div class="journey-step"><b>1 · Dados</b><span>Elenco, partida, adversário e fontes</span></div>
-  <div class="journey-step"><b>2 · Comissão</b><span>Pareceres com evidências e limites</span></div>
-  <div class="journey-step"><b>3 · Cenários</b><span>Planos equilibrado, ofensivo e conservador</span></div>
-  <div class="journey-step"><b>4 · Decisão</b><span>Escalação, prancheta e versões humanas</span></div>
+  <div class="journey-step"><b>1 · Adversário</b><span>Confronto real, atualidade e fontes</span></div>
+  <div class="journey-step"><b>2 · Dossiê</b><span>Comissão, evidências e limitações</span></div>
+  <div class="journey-step"><b>3 · Plano</b><span>Cenários equilibrado, ofensivo e conservador</span></div>
+  <div class="journey-step"><b>4 · Prancheta</b><span>Escalação, movimentos e versões humanas</span></div>
 </div>
+
+{% if selected_club %}
+<section class="card {% if operational_ready %}status-ok{% else %}status-warn{% endif %}" style="margin-bottom:1rem" data-testid="coach-operational-mode">
+  <span class="badge">Modo operacional</span>
+  {% if operational_ready %}
+    <h2>Elenco privado pronto para decisões do clube</h2>
+    <p>Os contratos e a disponibilidade pertencem ao tenant. A base pública acrescenta o confronto e as evidências do adversário.</p>
+  {% else %}
+    <h2>Aguardando elenco privado real</h2>
+    <p>Para gerar uma escalação operacional, informe pelo menos <strong>11 contratos privados reais</strong> do time analisado. A plataforma não cria contratos ou disponibilidade a partir de dados públicos.</p>
+  {% endif %}
+</section>
+{% endif %}
 
 {% if selected_club %}
 <section aria-labelledby="readiness-title">
@@ -72,6 +85,7 @@
         <form method="post" action="{% url 'intelligent-coach-generate' row.match.pk %}">{% csrf_token %}<input type="hidden" name="club" value="{{ row.club.pk }}"><button class="button button-primary" type="submit">Preparar {{ row.club.name }}</button></form>
       {% else %}
         <a class="button button-primary" href="{% url 'person-list' %}">Completar elenco de {{ row.club.name }}</a>
+        {% if row.public_squad_count >= 11 %}<a class="button button-secondary" href="{% url 'intelligent-coach-public-rehearsal' row.match.pk %}?club={{ row.club.pk }}">Ensaiar com elenco público não confirmado</a>{% endif %}
       {% endif %}
       <a class="button button-secondary" href="{% url 'match-list' %}">Ver dados da partida</a>
     </div>
@@ -98,13 +112,13 @@
   </article>
 </div>
 
-{% if lab_batch or tracking_batch %}
+{% if global_lab_batch or tracking_batch %}
 <details class="technical-details">
   <summary>Ambiente de pesquisa e validação visual</summary>
   <p>Mapas, redes de passes, xG e tracking usam amostras públicas de pesquisa e não são misturados silenciosamente às decisões operacionais.</p>
   <div class="next-action">
-    {% if lab_batch %}<a class="button button-secondary" href="{% url 'tactical-analysis-lab' lab_batch.pk %}">Analytics StatsBomb</a>{% endif %}
-    {% if tracking_batch %}<a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Tracking SkillCorner</a>{% endif %}
+    {% if global_lab_batch %}<a class="button button-secondary" href="{% url 'global-tactical-analysis-lab' global_lab_batch.pk %}">Analytics StatsBomb global</a>{% endif %}
+    {% if tracking_batch %}<a class="button button-secondary" href="{% url 'tracking-analysis-lab' tracking_batch.pk %}">Tracking privado do tenant</a>{% endif %}
   </div>
 </details>
 {% endif %}

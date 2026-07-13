@@ -10,10 +10,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from futebol.models import (
-    SportsDataArtifact, SportsDataImportBatch, SportsDataRecord,
+    GlobalSportsDataBatch, GlobalSportsDataSource, SportsDataArtifact,
+    SportsDataImportBatch, SportsDataRecord,
     TacticalCommissionRun, TacticalCommissionTask, TacticalInsightReview, TenantMembership,
 )
 from futebol.modules import tenant_has_module
+from futebol.services.sports_catalog import latest_records_for, sources_for
 from futebol.services.spatial_analytics import build_event_analysis
 from futebol.services.tactical_engine import (
     build_agent_training_insights, detect_tactical_moments,
@@ -148,7 +150,15 @@ def tactical_analysis_lab(request, batch_pk):
         tenant=tenant, pk=batch_pk, status=SportsDataImportBatch.Status.COMPLETED,
         quality='research_sample',
     )
-    event_records = batch.records.filter(capability='event_stream').order_by('id')
+    return _render_event_analysis(request, batch)
+
+
+def _render_event_analysis(request, batch, event_records=None):
+    event_records = (
+        event_records
+        if event_records is not None
+        else batch.records.filter(capability='event_stream')
+    ).order_by('id')
     match_ids = list(dict.fromkeys(
         str(payload.get('provider_match_id'))
         for payload in event_records.values_list('payload', flat=True)
@@ -177,6 +187,45 @@ def tactical_analysis_lab(request, batch_pk):
             if record.payload.get('period')
         }),
     })
+
+
+@login_required
+@_ia_required
+def global_tactical_analysis_lab(request, batch_pk):
+    """Expõe o laboratório compartilhado sem copiar eventos para o Tenant."""
+    tenant = active_tenant(request)
+    if request.user.is_superuser:
+        entitled_sources = GlobalSportsDataSource.objects.values_list('id', flat=True)
+        entitled_records = None
+    else:
+        entitled_sources = sources_for(tenant).values_list('id', flat=True)
+        entitled_records = latest_records_for(
+            tenant,
+            provider_code='statsbomb-open',
+            capability='event_stream',
+            include_expired=True,
+        )
+    batch = get_object_or_404(
+        GlobalSportsDataBatch.objects.select_related('source'),
+        pk=batch_pk,
+        source_id__in=entitled_sources,
+        source__code='statsbomb-open',
+        status=GlobalSportsDataBatch.Status.COMPLETED,
+        quality='research_sample',
+    )
+    if entitled_records is not None:
+        entitled_records = entitled_records.filter(batch=batch)
+        if not entitled_records.exists():
+            return render(
+                request,
+                'futebol/module_unavailable.html',
+                {
+                    'title': 'Capacidade não contratada',
+                    'module_name': 'Eventos táticos StatsBomb',
+                },
+                status=403,
+            )
+    return _render_event_analysis(request, batch, event_records=entitled_records)
 
 
 @login_required

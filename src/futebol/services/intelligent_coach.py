@@ -24,6 +24,7 @@ from futebol.models import (
     TenantMembership,
 )
 from futebol.services.audit import log_audit_event, snapshot_instance
+from futebol.services.sports_catalog import latest_records_for
 
 
 ALLOWED_MANAGER_ROLES = (
@@ -70,7 +71,17 @@ def _record_mentions_club(record, club_names):
 def _external_evidence(match, club):
     opponent = match.away_club if club.pk == match.home_club_id else match.home_club
     club_names = {club.name.casefold(), opponent.name.casefold()}
-    records = list(
+    global_records = list(
+        latest_records_for(
+            match.tenant, include_expired=True,
+        ).filter(
+            source__active=True,
+            source__quality__in=(
+                'production_primary', 'production_basic', 'licensed_production',
+            ),
+        ).select_related('source', 'batch')[:100]
+    )
+    legacy_records = list(
         SportsDataRecord.objects.filter(
             tenant=match.tenant,
             source__active=True,
@@ -82,6 +93,15 @@ def _external_evidence(match, club):
         .select_related('source', 'batch')
         .order_by('-observed_at', '-batch__imported_at')[:100]
     )
+    records_by_identity = {
+        (record.source.code, record.capability, record.provider_record_id): record
+        for record in legacy_records
+    }
+    records_by_identity.update({
+        (record.source.code, record.capability, record.provider_record_id): record
+        for record in global_records
+    })
+    records = list(records_by_identity.values())
     relevant = [record for record in records if _record_mentions_club(record, club_names)]
     now = timezone.now()
     valid_records = [
@@ -106,7 +126,13 @@ def _external_evidence(match, club):
 
     evidence = [serialize_evidence(record, 'valid') for record in valid_records]
     expired_evidence = [serialize_evidence(record, 'expired') for record in expired_records]
-    batches = {record.batch_id: record.batch for record in relevant}
+    batches = {
+        (record.batch._meta.label_lower, record.batch_id): record.batch
+        for record in relevant
+    }
+    def batch_timestamp(batch):
+        return getattr(batch, 'published_at', None) or getattr(batch, 'imported_at', None)
+
     sources = [
         {
             'code': batch.source.code,
@@ -115,13 +141,18 @@ def _external_evidence(match, club):
             'quality': batch.quality,
             'license_id': batch.license_id,
             'attribution': batch.attribution,
-            'imported_at': batch.imported_at.isoformat() if batch.imported_at else None,
+            'imported_at': (
+                batch_timestamp(batch).isoformat() if batch_timestamp(batch) else None
+            ),
             'age_days': (
-                (timezone.now() - batch.imported_at).days if batch.imported_at else None
+                (timezone.now() - batch_timestamp(batch)).days
+                if batch_timestamp(batch) else None
             ),
         }
         for batch in sorted(
-            batches.values(), key=lambda item: item.imported_at or item.created_at, reverse=True
+            batches.values(),
+            key=lambda item: batch_timestamp(item) or item.created_at,
+            reverse=True,
         )
     ]
     def form_for(team):

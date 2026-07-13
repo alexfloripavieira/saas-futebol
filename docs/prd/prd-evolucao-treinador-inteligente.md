@@ -64,7 +64,7 @@ Reais e Providers de IA”.
 32. Como analista, quero registrar quais hipóteses foram confirmadas ou refutadas, para melhorar análises futuras.
 33. Como Coordenador Técnico, quero produzir uma avaliação pós-jogo, para transformar resultado em aprendizado institucional.
 34. Como gestor, quero métricas de adoção, tempo de geração, falhas e custo, para decidir sobre expansão do módulo.
-35. Como administrador do Tenant, quero ativar capacidades gradualmente, para conduzir um piloto controlado.
+35. Como administrador da plataforma, quero restringir capacidades por Tenant quando contrato ou piloto exigir, sem tornar o cliente responsável pela ingestão.
 36. Como administrador da plataforma, quero desativar uma capacidade ou provider sem indisponibilizar o restante do módulo, para reduzir risco operacional.
 37. Como equipe do piloto, quero executar ensaio de rollback e checklist de aceite, para tomar decisão formal de go/no-go.
 38. Como usuário, quero explicações em português claro, para compreender recomendações sem conhecer detalhes técnicos dos modelos.
@@ -75,15 +75,15 @@ Reais e Providers de IA”.
 - O módulo **IA** será proprietário do Treinador Inteligente, Dossiê da Partida, Comissão Técnica Digital, Planos de Jogo, prancheta e revisão do rascunho.
 - O módulo **Operação** continuará proprietário dos dados oficiais de clubes, pessoas, competições, partidas, escalações e eventos; o Treinador Inteligente apenas os consumirá.
 - O módulo **Transferências** continuará proprietário de contratos e vínculos usados na elegibilidade dos atletas; não haverá um segundo cadastro esportivo dentro da IA.
-- O módulo **Integrações** será proprietário da entrada, normalização, qualidade e reprocessamento de Fontes de Dados Esportivos reais.
+- A plataforma será proprietária da Base Esportiva Global e de sua atualização contínua. **Integrações** será proprietário somente da entrada, normalização e reprocessamento de fontes privadas do Tenant.
 - O módulo **Relatórios/BI** será proprietário de histórico, comparação Plano de Jogo × execução e avaliação pós-jogo. O Dossiê poderá apontar para essas análises sem duplicá-las.
 - O módulo **Previsões** será proprietário de tendências entre partidas e riscos futuros. A recomendação para uma partida específica continuará pertencendo ao Treinador Inteligente.
-- O módulo **Automações** será proprietário da programação recorrente, gatilhos, notificações e reprocessamento automático. A geração manual do Dossiê continuará funcionando apenas com o módulo IA.
+- A atualização pública global será infraestrutura da SaaS, independente de **Automações**. O módulo continuará proprietário da programação recorrente do Tenant; a geração manual do Dossiê continuará funcionando apenas com IA.
 - O módulo **Aprovações** poderá formalizar a escalação quando contratado e configurado pelo Tenant; a revisão humana simples continuará disponível sem obrigar um Fluxo de Aprovação.
 - O módulo **Auditoria** continuará proprietário da trilha de dados, execuções, decisões humanas, alterações e custos.
 - O Centro de Scouting existente será aprofundado como visão especializada do Dossiê e do Olheiro, e não como um décimo módulo.
 - Capacidades cruzadas terão uma interface pequena: cada módulo proprietário expõe dados ou ações estáveis, sem compartilhar regras internas nem criar dependência circular.
-- O gating seguirá o contrato comercial: IA habilita o Treinador; Integrações habilita fontes reais; Relatórios habilita avaliação histórica; Automações habilita execução programada; Aprovações habilita o gate formal opcional.
+- O gating seguirá o contrato comercial: IA habilita o Treinador e a Base Esportiva Global compartilhada; entitlements internos podem restringir fonte/capacidade sem criar novos módulos; Integrações habilita dados privados externos do Tenant; Relatórios habilita avaliação histórica; Automações habilita execução programada do clube; Aprovações habilita o gate formal opcional.
 - O Dossiê da Partida continuará sendo o snapshot versionado compartilhado pela Comissão Técnica Digital.
 - A evolução estenderá os modelos existentes de Dossiê, parecer, Plano de Jogo e rascunho; não criará um segundo fluxo de inteligência esportiva em paralelo.
 - A geração assíncrona será modelada como uma execução rastreável, com estados `queued`, `running`, `partial`, `completed`, `failed` e `cancelled`.
@@ -163,6 +163,6 @@ Reais e Providers de IA”.
 - Esta PRD consolida as pendências já registradas como 14.2.3 (execução assíncrona por provider), 14.4.3 (mapas, redes e interação com dados reais) e a evolução de GPS/RPE e avaliação pós-jogo descrita no plano da Sprint 14.
 - A ativação comercial não substitui a pendência 13.6.3: restauração em ambiente descartável, observabilidade externa e assinatura formal de go/no-go continuam bloqueadores do piloto.
 - A plataforma deve preferir ausência explícita de dado a estimativas sem evidência.
-- A primeira implantação deverá manter as capacidades avançadas desligadas por padrão e ativadas por Tenant.
+- A primeira implantação libera a base pública compartilhada aos Tenants com Inteligência Esportiva. Capacidades licenciadas, sensíveis ou em piloto permanecem desligadas por padrão e são liberadas pela plataforma.
 - Os critérios de go/no-go devem incluir utilidade percebida pela comissão, segurança, tempo de resposta, custo, disponibilidade e capacidade de rollback.
 - Dependência: “PRD — Fontes Reais e Providers de IA”.

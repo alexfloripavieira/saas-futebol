@@ -919,6 +919,192 @@ class TacticalBoardVersion(TenantScopedModel):
         return f'{self.board} · v{self.version}'
 
 
+class PlatformOwnedModel(models.Model):
+    """Base para ativos operados pela SaaS e deliberadamente sem tenant."""
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class GlobalSportsDataSource(PlatformOwnedModel):
+    class Kind(models.TextChoices):
+        FOOTBALL_DATA_ORG = 'football_data_org', 'football-data.org'
+        STATSBOMB_OPEN = 'statsbomb_open', 'StatsBomb Open Data'
+        SKILLCORNER_OPEN = 'skillcorner_open', 'SkillCorner Open Data'
+        LICENSED_PROVIDER = 'licensed_provider', 'Provider licenciado'
+
+    class OperationalStatus(models.TextChoices):
+        DRAFT = 'draft', 'Rascunho'
+        ACTIVE = 'active', 'Ativa'
+        DEGRADED = 'degraded', 'Degradada'
+        DISABLED = 'disabled', 'Desabilitada'
+        RESEARCH_ONLY = 'research_only', 'Somente P&D'
+        CONTRACT_REQUIRED = 'contract_required', 'Contrato necessário'
+
+    code = models.SlugField(max_length=80, unique=True)
+    name = models.CharField(max_length=160)
+    kind = models.CharField(max_length=32, choices=Kind.choices)
+    capabilities = models.JSONField(default=list)
+    license_id = models.CharField(max_length=80)
+    license_url = models.URLField(blank=True, default='')
+    attribution = models.CharField(max_length=240)
+    quality = models.CharField(max_length=40)
+    active = models.BooleanField(default=False)
+    operational_status = models.CharField(
+        max_length=24, choices=OperationalStatus.choices,
+        default=OperationalStatus.DRAFT,
+    )
+    adapter_version = models.CharField(max_length=32, blank=True, default='')
+    schema_version = models.CharField(max_length=32, blank=True, default='')
+    last_checked_at = models.DateTimeField(null=True, blank=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.CharField(max_length=240, blank=True, default='')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Fonte da Base Esportiva Global'
+        verbose_name_plural = 'Fontes da Base Esportiva Global'
+
+    def __str__(self):
+        return self.name
+
+
+class GlobalSportsDataBatch(PlatformOwnedModel):
+    class Status(models.TextChoices):
+        PROCESSING = 'processing', 'Processando'
+        COMPLETED = 'completed', 'Concluído'
+        FAILED = 'failed', 'Falhou'
+
+    source = models.ForeignKey(
+        GlobalSportsDataSource, on_delete=models.PROTECT, related_name='batches',
+    )
+    dataset_id = models.CharField(max_length=120)
+    dataset_version = models.CharField(max_length=80)
+    content_hash = models.CharField(max_length=64)
+    status = models.CharField(max_length=16, choices=Status.choices)
+    record_count = models.PositiveIntegerField(default=0)
+    manifest = models.JSONField(default=dict)
+    license_id = models.CharField(max_length=80)
+    attribution = models.CharField(max_length=240)
+    quality = models.CharField(max_length=40)
+    published_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-published_at', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['source', 'dataset_id', 'content_hash'],
+                name='uniq_global_sports_data_content',
+            ),
+        ]
+        verbose_name = 'Versão da Base Esportiva Global'
+        verbose_name_plural = 'Versões da Base Esportiva Global'
+
+    def clean(self):
+        errors = {}
+        if self.pk:
+            persisted = type(self).objects.filter(pk=self.pk).values(
+                'source_id', 'dataset_id',
+            ).first()
+            has_dependents = self.records.exists() or self.sync_runs.exists()
+            if persisted and has_dependents:
+                if persisted['source_id'] != self.source_id:
+                    errors['source'] = 'A fonte não pode mudar após a versão ser utilizada.'
+                if persisted['dataset_id'] != self.dataset_id:
+                    errors['dataset_id'] = (
+                        'O dataset não pode mudar após a versão ser utilizada.'
+                    )
+        if errors:
+            raise ValidationError(errors)
+
+
+class GlobalSportsDataRecord(PlatformOwnedModel):
+    source = models.ForeignKey(
+        GlobalSportsDataSource, on_delete=models.PROTECT, related_name='records',
+    )
+    batch = models.ForeignKey(
+        GlobalSportsDataBatch, on_delete=models.CASCADE, related_name='records',
+    )
+    capability = models.CharField(max_length=64)
+    provider_record_id = models.CharField(max_length=160)
+    provider_updated_at = models.DateTimeField(null=True, blank=True)
+    observed_at = models.DateTimeField()
+    ingested_at = models.DateTimeField()
+    expires_at = models.DateTimeField(null=True, blank=True)
+    payload = models.JSONField(default=dict)
+    raw_payload = models.JSONField(default=dict, blank=True)
+    source_url = models.URLField(blank=True, default='')
+    content_hash = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ['capability', 'provider_record_id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['batch', 'capability', 'provider_record_id'],
+                name='uniq_global_sports_record_per_batch',
+            ),
+        ]
+        verbose_name = 'Registro da Base Esportiva Global'
+        verbose_name_plural = 'Registros da Base Esportiva Global'
+
+    def clean(self):
+        errors = {}
+        if self.source_id and self.batch_id and self.source_id != self.batch.source_id:
+            errors['source'] = 'A fonte do registro diverge da fonte da versão.'
+        if self.expires_at and self.expires_at < self.observed_at:
+            errors['expires_at'] = 'A validade não pode anteceder a observação.'
+        if errors:
+            raise ValidationError(errors)
+
+
+class GlobalSportsSyncRun(PlatformOwnedModel):
+    class Status(models.TextChoices):
+        PROCESSING = 'processing', 'Processando'
+        COMPLETED = 'completed', 'Concluída'
+        FAILED = 'failed', 'Falhou'
+
+    source = models.ForeignKey(
+        GlobalSportsDataSource, on_delete=models.PROTECT, related_name='sync_runs',
+    )
+    batch = models.ForeignKey(
+        GlobalSportsDataBatch, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='sync_runs',
+    )
+    dataset_id = models.CharField(max_length=120)
+    trigger = models.CharField(max_length=32, default='scheduler')
+    status = models.CharField(
+        max_length=16, choices=Status.choices, default=Status.PROCESSING,
+    )
+    started_at = models.DateTimeField()
+    finished_at = models.DateTimeField(null=True, blank=True)
+    rate_limit = models.JSONField(default=dict, blank=True)
+    error = models.CharField(max_length=240, blank=True, default='')
+
+    class Meta:
+        ordering = ['-started_at', '-created_at']
+        verbose_name = 'Execução de Atualização da Plataforma'
+        verbose_name_plural = 'Execuções de Atualização da Plataforma'
+
+    def clean(self):
+        errors = {}
+        if self.batch_id:
+            if self.source_id != self.batch.source_id:
+                errors['source'] = 'A fonte da execução diverge da fonte da versão.'
+            if self.dataset_id != self.batch.dataset_id:
+                errors['dataset_id'] = 'O dataset da execução diverge da versão publicada.'
+        if self.status == self.Status.COMPLETED and not self.batch_id:
+            errors['batch'] = 'Uma execução concluída precisa indicar a versão publicada.'
+        if errors:
+            raise ValidationError(errors)
+
+
 class SportsDataSource(TenantScopedModel):
     class Kind(models.TextChoices):
         LOCAL_DATASET = 'local_dataset', 'Dataset local'

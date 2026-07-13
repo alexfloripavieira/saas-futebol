@@ -1,52 +1,44 @@
-import os
-
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
 from futebol.models import Tenant, TenantMembership
-from futebol.modules import tenant_has_module
-from futebol.services.sports_data_providers import (
-    sync_football_data_org,
-    sync_skillcorner_open,
-    sync_skillcorner_tracking,
-    sync_statsbomb_open,
-)
+from futebol.services.sports_data_providers import sync_skillcorner_tracking
+
+
+PUBLIC_PROVIDERS = {'football-data-org', 'statsbomb-open', 'skillcorner-open'}
 
 
 class Command(BaseCommand):
-    help = 'Sincroniza um provider esportivo autorizado para um tenant.'
+    help = 'Importa tracking privado da SkillCorner para um Tenant.'
 
     def add_arguments(self, parser):
-        parser.add_argument('--tenant', required=True)
+        parser.add_argument('--tenant')
         parser.add_argument(
             '--provider', required=True,
-            choices=['football-data-org', 'statsbomb-open', 'skillcorner-open'],
+            choices=[*sorted(PUBLIC_PROVIDERS), 'skillcorner-tracking'],
         )
-        parser.add_argument('--user', required=True)
-        parser.add_argument('--competition', default='BSA')
-        parser.add_argument('--competition-id')
-        parser.add_argument('--season-id')
-        parser.add_argument('--max-matches', type=int, default=1)
-        parser.add_argument('--max-events', type=int, default=200)
+        parser.add_argument('--user')
         parser.add_argument('--tracking-match-id')
-        parser.add_argument(
-            '--scheduled',
-            action='store_true',
-            help='Identifica execução recorrente, condicionada ao módulo Automações.',
-        )
 
     def handle(self, *args, **options):
+        if options['provider'] in PUBLIC_PROVIDERS:
+            raise CommandError(
+                'Dados públicos pertencem à Base Esportiva Global. Use '
+                '`sync_platform_sports_provider --provider '
+                f"{options['provider']}` sem --tenant e --user."
+            )
+        if not options['tenant'] or not options['user']:
+            raise CommandError(
+                'Tracking privado exige --tenant e --user.'
+            )
+        if not options['tracking_match_id']:
+            raise CommandError(
+                'Tracking privado exige --tracking-match-id.'
+            )
         try:
             tenant = Tenant.objects.get(slug=options['tenant'], active=True)
         except Tenant.DoesNotExist as exc:
             raise CommandError('Tenant ativo não encontrado.') from exc
-        if options['scheduled'] and not tenant_has_module(tenant, 'automacoes'):
-            self.stdout.write(
-                self.style.WARNING(
-                    'Sincronização recorrente ignorada: módulo Automações desativado.'
-                )
-            )
-            return
         user_model = get_user_model()
         try:
             user = user_model.objects.get(username=options['user'], is_active=True)
@@ -57,38 +49,11 @@ class Command(BaseCommand):
         ).exists():
             raise CommandError('O usuário informado não pertence ao tenant.')
 
-        if options['provider'] == 'football-data-org':
-            batch = sync_football_data_org(
-                tenant=tenant,
-                imported_by=user,
-                api_key=os.getenv('FOOTBALL_DATA_ORG_API_KEY', ''),
-                competition_code=options['competition'],
-            )
-        elif options['provider'] == 'statsbomb-open':
-            if not options['competition_id'] or not options['season_id']:
-                raise CommandError(
-                    'StatsBomb exige --competition-id e --season-id.'
-                )
-            batch = sync_statsbomb_open(
-                tenant=tenant,
-                imported_by=user,
-                competition_id=options['competition_id'],
-                season_id=options['season_id'],
-                max_matches=options['max_matches'],
-                max_events=options['max_events'],
-            )
-        else:
-            if options['tracking_match_id']:
-                batch = sync_skillcorner_tracking(
-                    tenant=tenant, imported_by=user,
-                    match_id=options['tracking_match_id'],
-                )
-            else:
-                batch = sync_skillcorner_open(
-                    tenant=tenant,
-                    imported_by=user,
-                    max_matches=options['max_matches'],
-                )
+        batch = sync_skillcorner_tracking(
+            tenant=tenant,
+            imported_by=user,
+            match_id=options['tracking_match_id'],
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 f'Lote {batch.pk} concluído: {batch.record_count} registros de {batch.source.name}.'

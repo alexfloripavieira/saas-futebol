@@ -1,0 +1,50 @@
+{% extends 'futebol/base.html' %}
+
+{% block content %}
+<style>
+  .rehearsal-warning{padding:1.1rem;border:1px solid #dca83f;border-radius:16px;background:rgba(220,168,63,.12)}
+  .rehearsal-steps,.rehearsal-plans{display:grid;grid-template-columns:repeat(4,1fr);gap:.8rem;margin:1rem 0}.rehearsal-step,.rehearsal-plan{padding:1rem;border:1px solid rgba(255,255,255,.12);border-radius:14px;background:rgba(255,255,255,.035)}
+  .rehearsal-plans{grid-template-columns:repeat(3,1fr)}.preview-pitch{position:relative;aspect-ratio:1.55;background:#123f31;border:2px solid rgba(255,255,255,.55);border-radius:12px;margin-top:1rem}.preview-pitch:before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,.55)}.preview-player{position:absolute;transform:translate(-50%,-50%);width:66px;padding:.28rem;border-radius:8px;background:#082c50;border:1px solid var(--tenant-accent);font-size:.64rem;text-align:center}
+  @media(max-width:850px){.rehearsal-steps,.rehearsal-plans{grid-template-columns:1fr 1fr}}@media(max-width:560px){.rehearsal-steps,.rehearsal-plans{grid-template-columns:1fr}}
+</style>
+
+<section class="hero">
+  <span class="eyebrow">Ensaio com elenco público não confirmado</span>
+  <h1>{{ rehearsal.club.name }} contra {{ rehearsal.opponent.name }}</h1>
+  <p>{{ rehearsal.match.scheduled_at|date:'d/m/Y H:i' }} · fonte {{ rehearsal.source }}</p>
+</section>
+
+<section class="rehearsal-warning" data-testid="public-squad-rehearsal-warning">
+  <strong>Não é uma escalação operacional.</strong>
+  <p>Este ensaio permite explicar a jornada visual usando nomes publicados pelo provider, sem criar Person, Contract, disponibilidade ou decisão oficial no tenant.</p>
+  <ul>{% for limitation in rehearsal.limitations %}<li>{{ limitation }}</li>{% endfor %}</ul>
+</section>
+
+<div class="rehearsal-steps" aria-label="Jornada do ensaio">
+  <div class="rehearsal-step"><strong>1 · Adversário</strong><br><small>Confronto real do catálogo global</small></div>
+  <div class="rehearsal-step"><strong>2 · Dossiê</strong><br><small>Limitações e proveniência explícitas</small></div>
+  <div class="rehearsal-step"><strong>3 · Plano</strong><br><small>Três hipóteses comparáveis</small></div>
+  <div class="rehearsal-step"><strong>4 · Prancheta</strong><br><small>Posicionamento apenas para apresentação</small></div>
+</div>
+
+<section class="card">
+  <span class="eyebrow">Dossiê de ensaio</span>
+  <h2>{{ rehearsal.players|length }} atletas publicados pelo provider</h2>
+  <p>O dado confirma apenas que os nomes constam no elenco público. Titularidade, vínculo, saúde e disponibilidade não foram confirmados pelo tenant.</p>
+</section>
+
+<div class="rehearsal-plans">
+  {% for plan in rehearsal.plans %}
+  <article class="rehearsal-plan">
+    <span class="eyebrow">Plano {{ plan.label|lower }}</span>
+    <h2>{{ plan.formation }}</h2>
+    <p>{{ plan.summary }}</p>
+    <div class="preview-pitch" aria-label="Prancheta de ensaio {{ plan.label }}">
+      {% for player in plan.players %}<span class="preview-player" style="left:{{ player.x }}%;top:{{ player.y }}%">{{ player.name }}</span>{% endfor %}
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+<p><a class="button button-secondary" href="{% url 'intelligent-coach-center' %}?club={{ rehearsal.club.pk }}&match={{ rehearsal.match.pk }}">Voltar ao modo operacional</a></p>
+{% endblock %}

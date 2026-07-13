@@ -31,12 +31,12 @@ licença, limites, ambiente e capacidades habilitadas.
 4. Como administrador da plataforma, quero declarar ambiente de sandbox ou produção, para testar antes de liberar dados reais.
 5. Como administrador da plataforma, quero armazenar credenciais fora do banco de domínio, para reduzir exposição de segredos.
 6. Como administrador da plataforma, quero testar uma credencial sem persistir sua representação em logs, para validar a configuração com segurança.
-7. Como administrador do Tenant, quero habilitar somente conexões permitidas para meu clube, para respeitar contrato e licença.
-8. Como administrador do Tenant, quero selecionar quais capacidades consumir, para controlar escopo e custo.
+7. Como administrador da plataforma, quero liberar ao Tenant somente fontes cobertas pelo serviço contratado, para respeitar contrato e licença sem transferir a operação da ingestão ao cliente.
+8. Como administrador da plataforma, quero restringir fontes ou capacidades para um Tenant quando o contrato exigir, mantendo o acesso padrão do módulo Inteligência Esportiva à base pública compartilhada.
 9. Como gestor, quero visualizar saúde, última sincronização e próxima tentativa, para acompanhar disponibilidade.
 10. Como gestor, quero limites de requisições, tokens e orçamento, para impedir consumo inesperado.
 11. Como gestor, quero receber alerta antes de atingir o orçamento, para ajustar o uso.
-12. Como gestor, quero desativar imediatamente uma conexão, para responder a incidentes ou mudanças contratuais.
+12. Como operador da plataforma, quero desativar imediatamente uma fonte global, para responder a incidentes ou mudanças contratuais em todos os Tenants.
 13. Como engenheiro de dados, quero um adaptador por fornecedor, para isolar autenticação e schema externo.
 14. Como engenheiro de dados, quero um modelo canônico de partidas, eventos, classificação, tracking e disponibilidade, para comparar fontes.
 15. Como engenheiro de dados, quero preservar o payload bruto e o normalizado, para auditoria e reprocessamento.
@@ -77,13 +77,13 @@ licença, limites, ambiente e capacidades habilitadas.
 ## Implementation Decisions
 
 - Não será criado um novo Módulo Contratado chamado Fontes, Data Hub ou Providers. A solução aprofundará **Integrações**, **IA**, **Automações**, **Auditoria** e **Relatórios/BI**.
-- O módulo **Integrações** será proprietário de Sistemas Externos, Fontes de Dados Esportivos, sincronizações, lotes, quarentena, cache e reprocessamento.
+- A plataforma será proprietária da Base Esportiva Global, seus conectores, sincronizações, lotes, cache e reprocessamento. **Integrações** continuará proprietário apenas das conexões e dados privados fornecidos pelo Tenant.
 - O módulo **IA** continuará proprietário do catálogo de providers, modelos, Agentes Especialistas, prompts, roteamento e fallback determinístico.
-- O módulo **Automações** será proprietário de agendas, gatilhos, retries automáticos e alertas. Sincronização manual continuará disponível em Integrações sem exigir esse módulo.
+- A atualização da Base Esportiva Global é infraestrutura contínua da SaaS e não depende de **Automações** nem de ação do Tenant. Automações permanece responsável somente por rotinas contratadas da operação do clube.
 - O módulo **Auditoria** será proprietário da trilha de credenciais configuradas, ativações, execuções, custos e alterações, sem armazenar o segredo.
 - O módulo **Relatórios/BI** consumirá métricas agregadas de qualidade, cobertura, latência e custo; não será responsável por operar conectores.
 - Operação, Transferências e o Treinador Inteligente consumirão somente registros normalizados; nenhum deles conhecerá autenticação, paginação ou schema específico do fornecedor.
-- O gating seguirá o contrato comercial: fontes esportivas reais exigem Integrações; execução de Agentes Especialistas exige IA; rotinas programadas exigem Automações; consultas históricas avançadas exigem Relatórios.
+- O gating seguirá o contrato comercial: **IA/Inteligência Esportiva** habilita o consumo da Base Esportiva Global; restrições adicionais por fonte ou capacidade são entitlements internos, não módulos vendáveis separados. Integrações habilita entradas privadas do Tenant; execução de Agentes Especialistas exige IA; rotinas privadas programadas exigem Automações; consultas históricas avançadas exigem Relatórios.
 - A implementação evoluirá as estruturas já existentes: Sistema Externo representará a conexão operacional; Fonte de Dados Esportivos continuará representando proveniência e licença; provider de IA continuará representando catálogo e execução de modelos. Não será criado um cadastro paralelo com o mesmo significado.
 - Registros de Integração continuarão sendo a trilha técnica de recebimento e processamento; Lotes e Registros Esportivos continuarão sendo o histórico imutável dos dados normalizados.
 - Segredos serão referenciados por identificador de secret manager ou variável de ambiente; valores não serão persistidos em payloads, auditoria ou mensagens de erro.
@@ -102,12 +102,12 @@ licença, limites, ambiente e capacidades habilitadas.
 - Prompts serão templates versionados; alterações exigirão nova versão e não modificarão execuções históricas.
 - O pacote enviado ao provider será montado por allowlist de campos e classificação de sensibilidade.
 - A execução assíncrona usará chaves idempotentes, retry com backoff, circuit breaker e fila de falhas.
-- Cache será separado por Tenant, conexão, capacidade e parâmetros; a validade virá da fonte ou de política mais restritiva.
+- Cache de provider público será global por fonte, dataset, capacidade e parâmetros; cache de conexão privada ou de execução de IA permanecerá isolado por Tenant. A validade virá da fonte ou de política mais restritiva.
 - Telemetria armazenará identificadores técnicos e métricas, nunca credenciais ou conteúdo sensível completo.
 - A ativação seguirá estados `draft`, `testing`, `active`, `degraded`, `disabled` e `revoked`.
 - Uma conexão somente poderá ficar `active` após teste de credencial, validação contratual, confirmação de licença, fixture contratual e aprovação administrativa.
 - O cadastro futuro de cada vendor deverá fornecer: nome, tipo, URL oficial, documentação, autenticação, segredo de referência, ambiente, licença, atribuição, capacidades, limites, custo, residência de dados, retenção e contato de suporte.
-- O rollout será feito primeiro em sandbox, depois em um Tenant piloto e por fim disponibilizado a outros Tenants habilitados.
+- O rollout será feito primeiro em catálogo controlado, depois validado em um Tenant piloto e por fim disponibilizado aos Tenants com Inteligência Esportiva habilitada.
 - A ordem inicial já planejada será: dados internos do clube; football-data.org para agenda, tabela e resultados; laboratório isolado com StatsBomb e SkillCorner; somente depois feeds espaciais licenciados para recomendações do adversário.
 - Recomendações espaciais sobre o adversário exigirão, por padrão, ao menos cinco partidas recentes com eventos coordenados ou tracking e qualidade mensurada; abaixo disso, a saída continuará identificada como hipótese.
 
@@ -127,7 +127,7 @@ licença, limites, ambiente e capacidades habilitadas.
 - Testes de integração HTTP usarão servidor falso local ou transporte mockado; a suíte não acessará vendors reais.
 - Smoke tests reais serão executados separadamente, somente em ambiente autorizado, com orçamento mínimo e credenciais de teste.
 - O gate de ativação verificará migrations, segurança, licença, atribuição, limites, telemetria, rollback e revogação.
-- Testes de composição verificarão que Integrações funciona sem Automações para sincronização manual, IA funciona sem fonte real por fallback e cada tela respeita o Módulo Contratado correspondente.
+- Testes de composição verificarão que a Base Global atualiza sem Tenant, usuário ou Automações; IA funciona sem uma fonte específica por fallback; e cada leitura respeita módulo, entitlement e kill switch.
 - Os testes cruzarão os seams existentes de Sistema Externo, Registro de Integração, Fonte de Dados Esportivos, provider de IA e Agente Especialista, evitando uma segunda infraestrutura de testes para os mesmos conceitos.
 
 ## Out of Scope

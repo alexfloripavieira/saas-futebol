@@ -78,8 +78,8 @@ NAV_GROUPS = (
         'icon': '🧠',
         'open': True,
         'items': (
-            {'label': 'Preparação de Partida', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
-            {'label': 'Atualização de dados', 'url_name': 'sports-data-source-list', 'icon': '📡'},
+            {'label': 'Treinador Inteligente', 'url_name': 'intelligent-coach-center', 'icon': '🧑‍🏫'},
+            {'label': 'Cobertura dos dados', 'url_name': 'sports-data-source-list', 'icon': '📡'},
             {'label': 'Laboratório de IA', 'url_name': 'ai-center', 'icon': '✨'},
             {'label': 'Configuração · Providers', 'url_name': 'ai-provider-list', 'icon': '🔌'},
             {'label': 'Configuração · Agentes', 'url_name': 'ai-agent-list', 'icon': '🤖'},

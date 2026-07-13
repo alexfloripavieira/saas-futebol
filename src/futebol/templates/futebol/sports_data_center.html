@@ -9,10 +9,10 @@
 </section>
 
 <div class="summary-cards">
-  <div class="summary-card"><span>Fontes ativas</span><strong>{{ active_count }}</strong></div>
-  <div class="summary-card"><span>Registros</span><strong>{{ record_count }}</strong></div>
+  <div class="summary-card"><span>Fontes atualizadas</span><strong>{{ connected_count }}</strong></div>
+  <div class="summary-card"><span>Registros canônicos</span><strong>{{ record_count }}</strong></div>
   <div class="summary-card"><span>Registros vencidos</span><strong>{{ expired_count }}</strong></div>
-  <div class="summary-card"><span>Sincronização</span><strong>Controlada</strong><span class="muted">rotina recorrente e atualização manual</span></div>
+  <div class="summary-card"><span>Atualização da plataforma</span><strong>Contínua</strong><span class="muted">Operada continuamente pela SaaS</span></div>
 </div>
 
 {% if rows %}
@@ -24,15 +24,12 @@
     <h2>{{ row.source.name }}</h2>
     <p class="muted">{{ row.source.capabilities|join:', '|default:'Sem capacidades declaradas' }}</p>
     <div class="stack">
-      <div><strong>{{ row.valid_record_count }}</strong> registros válidos · <strong>{{ row.expired_record_count }}</strong> vencidos</div>
+      <div><strong>{{ row.valid_record_count }}</strong> registros válidos · <strong>{{ row.expired_record_count }}</strong> vencidos · <strong>{{ row.dataset_count }}</strong> dataset(s)</div>
       {% if row.latest_batch %}
-      <div class="state"><strong>Última importação</strong><br>Dataset {{ row.latest_batch.dataset_id }} v{{ row.latest_batch.dataset_version }}<br><span class="muted">{{ row.latest_batch.imported_at|date:'d/m/Y H:i'|default:'Em processamento' }} · {{ row.latest_batch.get_status_display }}</span></div>
+      <div class="state"><strong>Última atualização</strong><br>Dataset {{ row.latest_batch.dataset_id }} v{{ row.latest_batch.dataset_version }}<br><span class="muted">{{ row.latest_batch.published_at|date:'d/m/Y H:i'|default:'Em processamento' }} · {{ row.latest_batch.get_status_display }}</span></div>
       {% else %}<div class="state state-empty">Nenhuma importação registrada.</div>{% endif %}
       <div class="muted">Qualidade: {{ row.source.quality }} · licença {{ row.source.license_id }}</div>
-      <div class="muted">{% if row.freshness_status == 'live' %}Atualizada em tempo real pelo uso da aplicação.{% elif row.freshness_status == 'disconnected' %}Aguardando contratação e credencial.{% else %}Última checagem confirmada: {{ row.source.last_sync_at|date:'d/m/Y H:i'|default:'nunca' }}{% endif %}</div>
-      {% if row.source.code == 'football-data-org' or row.source.code == 'statsbomb-open' or row.source.code == 'skillcorner-open' %}
-      <form method="post" action="{% url 'sports-data-source-sync' row.source.pk %}">{% csrf_token %}<button class="button button-primary" type="submit">Atualizar agora</button></form>
-      {% endif %}
+      <div class="muted">{% if row.freshness_status == 'disconnected' %}Aguardando contratação e credencial da plataforma.{% else %}Última checagem da plataforma: {{ row.source.last_checked_at|date:'d/m/Y H:i'|default:'nunca' }}{% endif %}</div>
       <a class="button button-secondary" href="{% url 'sports-data-source-detail' row.source.pk %}">Ver histórico e licença</a>
     </div>
   </article>

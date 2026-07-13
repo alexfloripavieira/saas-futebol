@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import tempfile
 import urllib.request
@@ -23,6 +24,10 @@ from django.utils.dateparse import parse_datetime
 
 from futebol.models import (
     ExternalSystem,
+    GlobalSportsDataBatch,
+    GlobalSportsDataRecord,
+    GlobalSportsDataSource,
+    GlobalSportsSyncRun,
     IntegrationRecord,
     SportsDataImportBatch,
     SportsDataArtifact,
@@ -35,6 +40,9 @@ from futebol.services.tracking_analytics import (
     build_tracking_analysis, build_tracking_context, parse_tracking_stream,
 )
 from futebol.services.tactical_engine import detect_tactical_moments
+
+
+logger = logging.getLogger(__name__)
 
 
 SKILLCORNER_OPEN_BASE_URL = (
@@ -125,6 +133,73 @@ STATSBOMB_OPEN_BASE_URL = (
 )
 STATSBOMB_MAX_MATCHES = 3
 STATSBOMB_MAX_EVENTS_PER_MATCH = 5000
+
+
+GLOBAL_FOOTBALL_DATA_SOURCE = {
+    'code': 'football-data-org',
+    'name': 'football-data.org',
+    'kind': GlobalSportsDataSource.Kind.FOOTBALL_DATA_ORG,
+    'capabilities': [
+        'fixtures_results', 'standings_form', 'team_squad', 'player_profile',
+    ],
+    'license_id': 'football-data-org-terms',
+    'license_url': 'https://www.football-data.org/about',
+    'attribution': 'Dados fornecidos por football-data.org.',
+    'quality': 'production_basic',
+    'adapter_version': '1.0',
+    'schema_version': 'football-data-v4',
+}
+
+GLOBAL_OPEN_DATA_SOURCES = {
+    'statsbomb-open': {
+        'code': 'statsbomb-open',
+        'name': 'StatsBomb Open Data',
+        'kind': GlobalSportsDataSource.Kind.STATSBOMB_OPEN,
+        'capabilities': ['fixtures_results', 'event_stream', 'xg'],
+        'license_id': 'statsbomb-open-data',
+        'license_url': 'https://github.com/statsbomb/open-data/blob/master/LICENSE.pdf',
+        'attribution': 'StatsBomb Open Data — uso restrito ao laboratório autorizado.',
+        'quality': 'research_sample',
+        'adapter_version': '1.0',
+        'schema_version': 'statsbomb-open-v1.1',
+        'active': False,
+        'operational_status': GlobalSportsDataSource.OperationalStatus.RESEARCH_ONLY,
+    },
+    'skillcorner-open': {
+        'code': 'skillcorner-open',
+        'name': 'SkillCorner Open Data',
+        'kind': GlobalSportsDataSource.Kind.SKILLCORNER_OPEN,
+        'capabilities': ['match_catalog', 'match_metadata', 'tracking_frames'],
+        'license_id': 'skillcorner-open-data',
+        'license_url': 'https://github.com/SkillCorner/opendata',
+        'attribution': 'SkillCorner Open Data — amostra para pesquisa.',
+        'quality': 'research_sample',
+        'adapter_version': '1.0',
+        'schema_version': 'skillcorner-open-2024-25',
+        'active': False,
+        'operational_status': GlobalSportsDataSource.OperationalStatus.RESEARCH_ONLY,
+    },
+}
+
+
+def provision_global_football_data_source():
+    values = dict(GLOBAL_FOOTBALL_DATA_SOURCE)
+    code = values.pop('code')
+    source, _created = GlobalSportsDataSource.objects.update_or_create(
+        code=code,
+        defaults=values,
+    )
+    return source
+
+
+def _provision_global_open_data_source(code):
+    values = dict(GLOBAL_OPEN_DATA_SOURCES[code])
+    source_code = values.pop('code')
+    source, _created = GlobalSportsDataSource.objects.update_or_create(
+        code=source_code,
+        defaults=values,
+    )
+    return source
 
 
 def provision_provider_catalog(*, tenant):
@@ -235,12 +310,162 @@ def _normalize_skillcorner_metadata(metadata):
     }
 
 
+def _begin_global_open_sync(*, source, dataset_id, trigger):
+    return GlobalSportsSyncRun.objects.create(
+        source=source,
+        dataset_id=dataset_id,
+        trigger=(trigger or 'scheduler')[:32],
+        started_at=timezone.now(),
+    )
+
+
+@transaction.atomic
+def _persist_global_open_dataset(
+    *, source, run, dataset_id, dataset_version, raw_document, records, manifest,
+):
+    """Persiste uma versão global de pesquisa com idempotência e freshness.
+
+    O hash identifica conteúdo; ``published_at`` identifica a observação mais
+    recente. Assim, uma sequência A → B → A volta a apontar corretamente para A
+    sem duplicar a versão ou seus registros.
+    """
+    now = timezone.now()
+    raw = json.dumps(
+        raw_document, sort_keys=True, separators=(',', ':'), ensure_ascii=False,
+    ).encode('utf-8')
+    content_hash = hashlib.sha256(raw).hexdigest()
+    batch = GlobalSportsDataBatch.objects.filter(
+        source=source,
+        dataset_id=dataset_id,
+        content_hash=content_hash,
+        status=GlobalSportsDataBatch.Status.COMPLETED,
+    ).first()
+    if batch is None:
+        batch = GlobalSportsDataBatch.objects.create(
+            source=source,
+            dataset_id=dataset_id,
+            dataset_version=dataset_version,
+            content_hash=content_hash,
+            status=GlobalSportsDataBatch.Status.PROCESSING,
+            manifest=manifest,
+            license_id=source.license_id,
+            attribution=source.attribution,
+            quality=source.quality,
+        )
+        for record in records:
+            canonical_raw = json.dumps(
+                record['raw_payload'],
+                sort_keys=True,
+                separators=(',', ':'),
+                ensure_ascii=False,
+            ).encode('utf-8')
+            provider_updated_at = record.get('observed_at')
+            GlobalSportsDataRecord.objects.create(
+                source=source,
+                batch=batch,
+                capability=record['capability'],
+                provider_record_id=record['provider_record_id'],
+                provider_updated_at=provider_updated_at,
+                observed_at=now,
+                ingested_at=now,
+                expires_at=now + timedelta(days=7),
+                payload=record['payload'],
+                raw_payload=record['raw_payload'],
+                source_url=record['source_url'],
+                content_hash=hashlib.sha256(canonical_raw).hexdigest(),
+            )
+        batch.status = GlobalSportsDataBatch.Status.COMPLETED
+        batch.record_count = len(records)
+    else:
+        batch.records.update(expires_at=now + timedelta(days=7))
+    batch.published_at = now
+    batch.save(update_fields=[
+        'status', 'record_count', 'published_at', 'updated_at',
+    ])
+
+    source.active = False
+    source.operational_status = GlobalSportsDataSource.OperationalStatus.RESEARCH_ONLY
+    source.last_checked_at = now
+    source.last_success_at = now
+    source.last_error = ''
+    source.save(update_fields=[
+        'active', 'operational_status', 'last_checked_at', 'last_success_at',
+        'last_error', 'updated_at',
+    ])
+    run.batch = batch
+    run.status = GlobalSportsSyncRun.Status.COMPLETED
+    run.finished_at = now
+    run.error = ''
+    run.save(update_fields=[
+        'batch', 'status', 'finished_at', 'error', 'updated_at',
+    ])
+    return run
+
+
+def _fail_global_open_sync(*, source, run):
+    _record_platform_sync_failure(source=source, run=run)
+
+
+def sync_platform_skillcorner_open(*, max_matches=1, trigger='scheduler'):
+    """Rechecagem global do catálogo e metadados públicos da SkillCorner."""
+    if not isinstance(max_matches, int) or not 1 <= max_matches <= SKILLCORNER_OPEN_MAX_MATCHES:
+        raise ValidationError(
+            f'A amostra deve conter entre 1 e {SKILLCORNER_OPEN_MAX_MATCHES} partidas.'
+        )
+    source = _provision_global_open_data_source('skillcorner-open')
+    dataset_id = 'skillcorner-open-controlled-sample'
+    run = _begin_global_open_sync(source=source, dataset_id=dataset_id, trigger=trigger)
+    try:
+        catalog_url = f'{SKILLCORNER_OPEN_BASE_URL}/matches.json'
+        catalog = _get_public_json(catalog_url)
+        if not isinstance(catalog, list) or not catalog:
+            raise ValidationError('O catálogo público da SkillCorner está vazio ou inválido.')
+        metadata_items = []
+        for match in catalog[:max_matches]:
+            match_id = str(match.get('id') or '')
+            if not match_id.isdigit():
+                raise ValidationError('O catálogo da SkillCorner contém partida inválida.')
+            metadata_items.append(_get_public_json(
+                f'{SKILLCORNER_OPEN_BASE_URL}/matches/{match_id}/{match_id}_match.json'
+            ))
+        records = [_normalize_skillcorner_match(match) for match in catalog]
+        records.extend(_normalize_skillcorner_metadata(item) for item in metadata_items)
+        return _persist_global_open_dataset(
+            source=source,
+            run=run,
+            dataset_id=dataset_id,
+            dataset_version=timezone.now().date().isoformat(),
+            raw_document={'catalog': catalog, 'metadata': metadata_items},
+            records=records,
+            manifest={
+                'provider': 'SkillCorner Open Data',
+                'repository': 'https://github.com/SkillCorner/opendata',
+                'catalog_match_count': len(catalog),
+                'selected_metadata_count': max_matches,
+                'capabilities': ['match_catalog', 'match_metadata'],
+                'excluded_large_files': [
+                    'tracking_extrapolated', 'dynamic_events', 'phases_of_play',
+                    'aggregates',
+                ],
+                'usage_scope': 'research_only',
+                'limits': {'max_matches': max_matches},
+            },
+        )
+    except Exception:
+        _fail_global_open_sync(source=source, run=run)
+        raise
+
+
 def sync_skillcorner_open(*, tenant, imported_by, max_matches=1):
     """Sincroniza somente catálogo e metadados pequenos da amostra pública.
 
     Arquivos de tracking, eventos dinâmicos e agregados não são baixados por
     este adaptador. A fonte permanece ``research_sample`` e ``research_only``.
     """
+    raise ValidationError(
+        'A ingestão pública por Tenant foi desativada; use '
+        'sync_platform_sports_provider na infraestrutura da plataforma.'
+    )
     if not isinstance(max_matches, int) or not 1 <= max_matches <= SKILLCORNER_OPEN_MAX_MATCHES:
         raise ValidationError(
             f'A amostra deve conter entre 1 e {SKILLCORNER_OPEN_MAX_MATCHES} partidas.'
@@ -509,7 +734,377 @@ def _normalize_standings(payload, competition_code):
     return records
 
 
+def _normalize_team_squad(team):
+    team_id = str(team.get('id') or '')
+    source_url = f'https://api.football-data.org/v4/teams/{team_id}'
+    squad = team.get('squad') or []
+    records = [{
+        'capability': 'team_squad',
+        'provider_record_id': f'team:{team_id}:squad',
+        'source_url': source_url,
+        'payload': {
+            'provider_team_id': team_id,
+            'team': team.get('name', ''),
+            'short_name': team.get('shortName', ''),
+            'tla': team.get('tla', ''),
+            'crest': team.get('crest', ''),
+            'player_ids': [str(player.get('id') or '') for player in squad],
+            'player_count': len(squad),
+        },
+        'raw_payload': team,
+    }]
+    for player in squad:
+        player_id = str(player.get('id') or '')
+        if not player_id:
+            continue
+        records.append({
+            'capability': 'player_profile',
+            'provider_record_id': f'player:{player_id}',
+            'source_url': source_url,
+            'payload': {
+                'provider_player_id': player_id,
+                'provider_team_id': team_id,
+                'team': team.get('name', ''),
+                'name': player.get('name', ''),
+                'position': player.get('position', ''),
+                'date_of_birth': player.get('dateOfBirth'),
+                'nationality': player.get('nationality', ''),
+            },
+            'raw_payload': player,
+        })
+    return records
+
+
+def _fixture_team_ids(matches_payload, max_teams, explicit_team_ids=()):
+    if max_teams == 0:
+        return []
+    team_ids = list(explicit_team_ids)
+    if len(team_ids) == max_teams:
+        return team_ids
+    matches = list(matches_payload.get('matches', []))
+    upcoming_statuses = {'SCHEDULED', 'TIMED', 'IN_PLAY', 'PAUSED'}
+    upcoming = [match for match in matches if match.get('status') in upcoming_statuses]
+    matches = sorted(
+        upcoming or matches,
+        key=lambda match: match.get('utcDate') or '',
+    )
+    for match in matches:
+        for side in ('homeTeam', 'awayTeam'):
+            team_id = str((match.get(side) or {}).get('id') or '')
+            if team_id and team_id not in team_ids:
+                team_ids.append(team_id)
+                if len(team_ids) == max_teams:
+                    return team_ids
+    return team_ids
+
+
+def _validate_explicit_team_ids(team_ids, max_teams):
+    normalized = []
+    for raw_team_id in team_ids or ():
+        team_id = str(raw_team_id or '').strip()
+        if not team_id.isdigit():
+            raise ValidationError('Os IDs explícitos de equipes devem ser numéricos.')
+        if team_id not in normalized:
+            normalized.append(team_id)
+    if len(normalized) > max_teams:
+        raise ValidationError(
+            'A quantidade de equipes explícitas não pode exceder o limite do ciclo.'
+        )
+    return tuple(normalized)
+
+
+def sync_platform_football_data(
+    *, api_key, competition_code='BSA', max_teams=0, team_ids=(), trigger='scheduler',
+):
+    """Atualiza a Base Esportiva Global sem depender de Tenant ou usuário."""
+    if not (api_key or '').strip():
+        raise ValidationError('Configure a credencial do football-data.org no ambiente.')
+    competition_code = (competition_code or '').strip().upper()
+    if not competition_code.isalnum() or len(competition_code) > 12:
+        raise ValidationError('Código de competição inválido.')
+    if not isinstance(max_teams, int) or not 0 <= max_teams <= 20:
+        raise ValidationError('O limite de equipes por ciclo deve estar entre 0 e 20.')
+    team_ids = _validate_explicit_team_ids(team_ids, max_teams)
+    source = provision_global_football_data_source()
+    dataset_id = f'competition-{competition_code.lower()}'
+    started_at = timezone.now()
+    run = GlobalSportsSyncRun.objects.create(
+        source=source,
+        dataset_id=dataset_id,
+        trigger=(trigger or 'scheduler')[:32],
+        started_at=started_at,
+    )
+    base = f'https://api.football-data.org/v4/competitions/{competition_code}'
+    try:
+        matches_payload, matches_rate = _get_json(f'{base}/matches', api_key=api_key)
+        standings_payload, standings_rate = _get_json(f'{base}/standings', api_key=api_key)
+        records = _normalize_matches(matches_payload) + _normalize_standings(
+            standings_payload, competition_code,
+        )
+        run = _persist_platform_football_data(
+            source=source,
+            run=run,
+            competition_code=competition_code,
+            matches_payload=matches_payload,
+            standings_payload=standings_payload,
+            records=records,
+            rate_limit={'matches': matches_rate, 'standings': standings_rate},
+        )
+    except Exception:
+        _record_platform_sync_failure(source=source, run=run)
+        raise
+
+    teams_rate = []
+    team_failures = []
+    for team_id in _fixture_team_ids(matches_payload, max_teams, team_ids):
+        team_run = _begin_global_open_sync(
+            source=source,
+            dataset_id=f'team-{team_id}-squad',
+            trigger=trigger,
+        )
+        try:
+            team, rate_limit = _get_json(
+                f'https://api.football-data.org/v4/teams/{team_id}', api_key=api_key,
+            )
+            teams_rate.append({'team_id': team_id, **rate_limit})
+            _persist_platform_team_squad(
+                source=source,
+                run=team_run,
+                team=team,
+                records=_normalize_team_squad(team),
+                rate_limit=rate_limit,
+            )
+            requests_available = rate_limit.get('requests_available')
+            if requests_available is not None:
+                try:
+                    if int(requests_available) <= 1:
+                        break
+                except (TypeError, ValueError):
+                    logger.warning('Header X-RequestsAvailable inválido: %r', requests_available)
+        except Exception:
+            _record_platform_sync_failure(source=source, run=team_run)
+            logger.exception('Falha ao atualizar o elenco global da equipe %s.', team_id)
+            team_failures.append(team_id)
+    run.rate_limit = {
+        **run.rate_limit,
+        'teams': teams_rate,
+        'team_failures': team_failures,
+    }
+    run.save(update_fields=['rate_limit', 'updated_at'])
+    if team_failures:
+        raise ValidationError(
+            'A competição foi atualizada, mas falhou a atualização dos elencos: '
+            + ', '.join(team_failures)
+        )
+    try:
+        from futebol.services.coach_workspace import refresh_all_materialized_provider_matches
+        refresh_all_materialized_provider_matches()
+    except Exception:
+        logger.exception(
+            'A Base Esportiva Global foi atualizada, mas uma projeção de Tenant falhou.'
+        )
+    return run
+
+
+@transaction.atomic
+def _persist_platform_football_data(
+    *, source, run, competition_code, matches_payload, standings_payload,
+    records, rate_limit,
+):
+    now = timezone.now()
+    raw = json.dumps(
+        {
+            'matches': matches_payload,
+            'standings': standings_payload,
+        },
+        sort_keys=True,
+        separators=(',', ':'),
+        ensure_ascii=False,
+    ).encode('utf-8')
+    content_hash = hashlib.sha256(raw).hexdigest()
+    dataset_id = f'competition-{competition_code.lower()}'
+    batch = GlobalSportsDataBatch.objects.filter(
+        source=source,
+        dataset_id=dataset_id,
+        content_hash=content_hash,
+        status=GlobalSportsDataBatch.Status.COMPLETED,
+    ).first()
+    if batch is None:
+        batch = GlobalSportsDataBatch.objects.create(
+            source=source,
+            dataset_id=dataset_id,
+            dataset_version=now.date().isoformat(),
+            content_hash=content_hash,
+            status=GlobalSportsDataBatch.Status.PROCESSING,
+            manifest={
+                'provider': 'football-data.org',
+                'competition': competition_code,
+                'capabilities': ['fixtures_results', 'standings_form'],
+            },
+            license_id=source.license_id,
+            attribution=source.attribution,
+            quality=source.quality,
+        )
+        for record in records:
+            canonical_raw = json.dumps(
+                record['raw_payload'],
+                sort_keys=True,
+                separators=(',', ':'),
+                ensure_ascii=False,
+            ).encode('utf-8')
+            GlobalSportsDataRecord.objects.create(
+                source=source,
+                batch=batch,
+                capability=record['capability'],
+                provider_record_id=record['provider_record_id'],
+                provider_updated_at=parse_datetime(
+                    str(record['raw_payload'].get('lastUpdated') or '')
+                ),
+                observed_at=now,
+                ingested_at=now,
+                expires_at=now + timedelta(hours=24),
+                payload=record['payload'],
+                raw_payload=record['raw_payload'],
+                source_url=record['source_url'],
+                content_hash=hashlib.sha256(canonical_raw).hexdigest(),
+            )
+        batch.status = GlobalSportsDataBatch.Status.COMPLETED
+        batch.record_count = len(records)
+        batch.published_at = now
+        batch.save(update_fields=[
+            'status', 'record_count', 'published_at', 'updated_at',
+        ])
+    else:
+        batch.records.update(expires_at=now + timedelta(hours=24))
+        batch.published_at = now
+        batch.save(update_fields=['published_at', 'updated_at'])
+
+    source.active = True
+    source.operational_status = GlobalSportsDataSource.OperationalStatus.ACTIVE
+    source.last_checked_at = now
+    source.last_success_at = now
+    source.last_error = ''
+    source.save(update_fields=[
+        'active', 'operational_status', 'last_checked_at', 'last_success_at',
+        'last_error', 'updated_at',
+    ])
+    run.batch = batch
+    run.status = GlobalSportsSyncRun.Status.COMPLETED
+    run.finished_at = now
+    run.rate_limit = rate_limit
+    run.error = ''
+    run.save(update_fields=[
+        'batch', 'status', 'finished_at', 'rate_limit', 'error', 'updated_at',
+    ])
+    return run
+
+
+@transaction.atomic
+def _persist_platform_team_squad(*, source, run, team, records, rate_limit):
+    """Atualiza somente o dataset do elenco efetivamente observado."""
+    now = timezone.now()
+    team_id = str(team.get('id') or '')
+    if not team_id:
+        raise ValidationError('A equipe retornada pelo provider não possui identificador.')
+    dataset_id = f'team-{team_id}-squad'
+    raw = json.dumps(
+        team, sort_keys=True, separators=(',', ':'), ensure_ascii=False,
+    ).encode('utf-8')
+    content_hash = hashlib.sha256(raw).hexdigest()
+    batch = GlobalSportsDataBatch.objects.filter(
+        source=source,
+        dataset_id=dataset_id,
+        content_hash=content_hash,
+        status=GlobalSportsDataBatch.Status.COMPLETED,
+    ).first()
+    if batch is None:
+        batch = GlobalSportsDataBatch.objects.create(
+            source=source,
+            dataset_id=dataset_id,
+            dataset_version=(team.get('lastUpdated') or now.isoformat())[:80],
+            content_hash=content_hash,
+            status=GlobalSportsDataBatch.Status.PROCESSING,
+            manifest={
+                'provider': 'football-data.org',
+                'provider_team_id': team_id,
+                'team': team.get('name', ''),
+                'capabilities': ['team_squad', 'player_profile'],
+            },
+            license_id=source.license_id,
+            attribution=source.attribution,
+            quality=source.quality,
+        )
+        for record in records:
+            canonical_raw = json.dumps(
+                record['raw_payload'],
+                sort_keys=True,
+                separators=(',', ':'),
+                ensure_ascii=False,
+            ).encode('utf-8')
+            GlobalSportsDataRecord.objects.create(
+                source=source,
+                batch=batch,
+                capability=record['capability'],
+                provider_record_id=record['provider_record_id'],
+                provider_updated_at=parse_datetime(str(team.get('lastUpdated') or '')),
+                observed_at=now,
+                ingested_at=now,
+                expires_at=now + timedelta(hours=24),
+                payload=record['payload'],
+                raw_payload=record['raw_payload'],
+                source_url=record['source_url'],
+                content_hash=hashlib.sha256(canonical_raw).hexdigest(),
+            )
+        batch.status = GlobalSportsDataBatch.Status.COMPLETED
+        batch.record_count = len(records)
+    else:
+        batch.records.update(expires_at=now + timedelta(hours=24))
+    batch.published_at = now
+    batch.save(update_fields=[
+        'status', 'record_count', 'published_at', 'updated_at',
+    ])
+
+    source.active = True
+    source.operational_status = GlobalSportsDataSource.OperationalStatus.ACTIVE
+    source.last_checked_at = now
+    source.last_success_at = now
+    source.last_error = ''
+    source.save(update_fields=[
+        'active', 'operational_status', 'last_checked_at', 'last_success_at',
+        'last_error', 'updated_at',
+    ])
+    run.batch = batch
+    run.status = GlobalSportsSyncRun.Status.COMPLETED
+    run.finished_at = now
+    run.rate_limit = rate_limit
+    run.error = ''
+    run.save(update_fields=[
+        'batch', 'status', 'finished_at', 'rate_limit', 'error', 'updated_at',
+    ])
+    return run
+
+
+@transaction.atomic
+def _record_platform_sync_failure(*, source, run):
+    now = timezone.now()
+    message = 'Falha de comunicação ou validação do provider.'
+    source.operational_status = GlobalSportsDataSource.OperationalStatus.DEGRADED
+    source.last_checked_at = now
+    source.last_error = message
+    source.save(update_fields=[
+        'operational_status', 'last_checked_at', 'last_error', 'updated_at',
+    ])
+    run.status = GlobalSportsSyncRun.Status.FAILED
+    run.finished_at = now
+    run.error = message
+    run.save(update_fields=['status', 'finished_at', 'error', 'updated_at'])
+
+
 def sync_football_data_org(*, tenant, imported_by, api_key, competition_code='BSA'):
+    raise ValidationError(
+        'A ingestão pública por Tenant foi desativada; use '
+        'sync_platform_sports_provider na infraestrutura da plataforma.'
+    )
     if not (api_key or '').strip():
         raise ValidationError('Configure a credencial do football-data.org no ambiente.')
     competition_code = (competition_code or '').strip().upper()
@@ -869,10 +1464,79 @@ def _normalize_statsbomb_event(event, match_id):
     }
 
 
+def sync_platform_statsbomb_open(
+    *, competition_id, season_id, max_matches=1, max_events=200,
+    trigger='scheduler',
+):
+    """Rechecagem global e limitada da amostra oficial StatsBomb Open Data."""
+    competition_id, season_id = _validate_statsbomb_sample(
+        competition_id=competition_id,
+        season_id=season_id,
+        max_matches=max_matches,
+        max_events=max_events,
+    )
+    source = _provision_global_open_data_source('statsbomb-open')
+    dataset_id = f'competition-{competition_id}-season-{season_id}-sample'
+    run = _begin_global_open_sync(source=source, dataset_id=dataset_id, trigger=trigger)
+    try:
+        matches_url = (
+            f'{STATSBOMB_OPEN_BASE_URL}/matches/{competition_id}/{season_id}.json'
+        )
+        matches_payload = _get_public_json(matches_url)
+        if not isinstance(matches_payload, list):
+            raise ValidationError('A lista de partidas do StatsBomb é inválida.')
+        selected_matches = matches_payload[:max_matches]
+        records = []
+        raw_events = {}
+        for match in selected_matches:
+            match_id = str(match.get('match_id') or '')
+            if not match_id.isdigit():
+                raise ValidationError('Partida do StatsBomb sem identificador válido.')
+            records.append(_normalize_statsbomb_match(match, matches_url))
+            events = _get_public_json(
+                f'{STATSBOMB_OPEN_BASE_URL}/events/{match_id}.json'
+            )
+            if not isinstance(events, list):
+                raise ValidationError('A lista de eventos do StatsBomb é inválida.')
+            raw_events[match_id] = events[:max_events]
+            records.extend(
+                _normalize_statsbomb_event(event, match_id)
+                for event in raw_events[match_id]
+            )
+        limits = {
+            'max_matches': max_matches,
+            'max_events_per_match': max_events,
+        }
+        return _persist_global_open_dataset(
+            source=source,
+            run=run,
+            dataset_id=dataset_id,
+            dataset_version=timezone.now().date().isoformat(),
+            raw_document={'matches': selected_matches, 'events': raw_events},
+            records=records,
+            manifest={
+                'provider': 'StatsBomb Open Data',
+                'competition_id': competition_id,
+                'season_id': season_id,
+                'capabilities': ['fixtures_results', 'event_stream'],
+                'limits': limits,
+                'research_only': True,
+                'repository': 'https://github.com/statsbomb/open-data',
+            },
+        )
+    except Exception:
+        _fail_global_open_sync(source=source, run=run)
+        raise
+
+
 def sync_statsbomb_open(
     *, tenant, imported_by, competition_id, season_id, max_matches=1, max_events=200
 ):
     """Importa uma amostra pequena do repositório oficial, exclusivamente para P&D."""
+    raise ValidationError(
+        'A ingestão pública por Tenant foi desativada; use '
+        'sync_platform_sports_provider na infraestrutura da plataforma.'
+    )
     competition_id, season_id = _validate_statsbomb_sample(
         competition_id=competition_id,
         season_id=season_id,

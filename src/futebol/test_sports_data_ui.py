@@ -1,11 +1,17 @@
-from io import StringIO
+from datetime import datetime, timezone
 
 from django.contrib.auth import get_user_model
-from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
 
-from futebol.models import SportsDataSource, Tenant, TenantMembership, TenantModuleSubscription
+from futebol.models import (
+    GlobalSportsDataBatch,
+    GlobalSportsDataSource,
+    SportsDataSource,
+    Tenant,
+    TenantMembership,
+    TenantModuleSubscription,
+)
 
 
 User = get_user_model()
@@ -21,13 +27,12 @@ class SportsDataSourceUITests(TestCase):
             role=TenantMembership.Role.GESTOR_CLUBE,
         )
         TenantModuleSubscription.objects.create(
-            tenant=self.tenant, module_code='integracoes', module_name='Integrações', enabled=True
+            tenant=self.tenant, module_code='ia', module_name='IA', enabled=True
         )
-        self.source = SportsDataSource.objects.create(
-            tenant=self.tenant,
+        self.source = GlobalSportsDataSource.objects.create(
             code='football-data-org',
             name='football-data.org',
-            kind=SportsDataSource.Kind.FOOTBALL_DATA_ORG,
+            kind=GlobalSportsDataSource.Kind.FOOTBALL_DATA_ORG,
             capabilities=['fixtures_results', 'standings_form'],
             license_id='provider-terms',
             attribution='Dados fornecidos por football-data.org',
@@ -35,7 +40,7 @@ class SportsDataSourceUITests(TestCase):
         )
         self.client.force_login(self.user)
 
-    def test_centro_lista_somente_fontes_do_tenant_ativo(self):
+    def test_centro_lista_base_global_e_nao_expoe_fonte_privada_alheia(self):
         other_tenant = Tenant.objects.create(name='Outro clube', slug='outro-clube')
         SportsDataSource.objects.create(
             tenant=other_tenant,
@@ -53,27 +58,23 @@ class SportsDataSourceUITests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'football-data.org')
         self.assertNotContains(response, 'Fonte secreta')
+        self.assertContains(response, 'Treinador Inteligente')
+        self.assertNotContains(response, 'Atualizar agora')
 
-    def test_detalhe_de_fonte_de_outro_tenant_retorna_404(self):
-        other_tenant = Tenant.objects.create(name='Outro clube', slug='outro-clube')
-        other_source = SportsDataSource.objects.create(
-            tenant=other_tenant,
-            code='outra',
-            name='Outra fonte',
-            kind=SportsDataSource.Kind.CLUB_INTERNAL,
-            capabilities=['fixtures_results'],
-            license_id='interno',
-            attribution='Outro clube',
-            quality='internal',
-        )
-
-        response = self.client.get(reverse('sports-data-source-detail', args=[other_source.pk]))
+    def test_detalhe_global_inexistente_retorna_404(self):
+        response = self.client.get(reverse('sports-data-source-detail', args=[999999]))
 
         self.assertEqual(response.status_code, 404)
 
-    def test_modulo_integracoes_desabilitado_bloqueia_centro(self):
-        TenantModuleSubscription.objects.filter(tenant=self.tenant, module_code='integracoes').update(
+    def test_modulo_ia_desabilitado_bloqueia_centro(self):
+        TenantModuleSubscription.objects.filter(tenant=self.tenant, module_code='ia').update(
             enabled=False
+        )
+        TenantModuleSubscription.objects.create(
+            tenant=self.tenant,
+            module_code='integracoes',
+            module_name='Integrações',
+            enabled=True,
         )
 
         response = self.client.get(reverse('sports-data-source-list'))
@@ -89,24 +90,30 @@ class SportsDataSourceUITests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse('login'), response.url)
 
-    def test_sincronizacao_recorrente_respeita_modulo_automacoes(self):
-        output = StringIO()
-
-        call_command(
-            'sync_sports_provider',
-            tenant=self.tenant.slug,
-            provider='football-data-org',
-            user=self.user.username,
-            scheduled=True,
-            stdout=output,
-        )
-
-        self.assertIn('módulo Automações desativado', output.getvalue())
-
     def test_centro_exibe_estado_verificavel_da_sincronizacao(self):
         response = self.client.get(reverse('sports-data-source-list'))
 
-        self.assertContains(response, 'Sincronização')
-        self.assertContains(response, 'Controlada')
-        self.assertContains(response, 'Última checagem confirmada')
-        self.assertNotContains(response, 'próxima prevista')
+        self.assertContains(response, 'Atualização da plataforma')
+        self.assertContains(response, 'Operada continuamente pela SaaS')
+        self.assertNotContains(response, 'Sincronizar agora')
+
+    def test_centro_exibe_publicacao_da_ultima_versao_global(self):
+        GlobalSportsDataBatch.objects.create(
+            source=self.source,
+            dataset_id='competition-bsa',
+            dataset_version='2026-07-13',
+            content_hash='a' * 64,
+            status=GlobalSportsDataBatch.Status.COMPLETED,
+            record_count=0,
+            manifest={'provider': 'football-data.org'},
+            license_id=self.source.license_id,
+            attribution=self.source.attribution,
+            quality=self.source.quality,
+            published_at=datetime(2026, 7, 13, 18, 30, tzinfo=timezone.utc),
+        )
+
+        response = self.client.get(reverse('sports-data-source-list'))
+
+        self.assertContains(response, 'Última atualização')
+        self.assertContains(response, '13/07/2026 15:30')
+        self.assertNotContains(response, 'Em processamento')

@@ -94,8 +94,6 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       SPORTS_SYNC_PROJECT_ROOT: /app
-      SPORTS_SYNC_TENANT: ${SPORTS_SYNC_TENANT:-avai}
-      SPORTS_SYNC_USER: ${SPORTS_SYNC_USER:-demo_admin}
       SPORTS_SYNC_INTERVAL_SECONDS: ${SPORTS_SYNC_INTERVAL_SECONDS:-21600}
     volumes:
       - .:/app

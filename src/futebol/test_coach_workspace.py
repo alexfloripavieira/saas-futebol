@@ -11,6 +11,9 @@ from django.utils import timezone
 from futebol.models import (
     Club,
     Contract,
+    GlobalSportsDataBatch,
+    GlobalSportsDataRecord,
+    GlobalSportsDataSource,
     Match,
     MatchDossier,
     Person,
@@ -117,6 +120,7 @@ class CoachWorkspaceHTTPTests(TestCase):
         self.opponent = Club.objects.create(
             tenant=self.tenant, name='Adversário FC', slug='adversario-fc',
         )
+
         player = Person.objects.create(
             tenant=self.tenant, full_name='Atleta cadastrado', kind=Person.Kind.ATHLETE,
         )
@@ -148,6 +152,13 @@ class CoachWorkspaceHTTPTests(TestCase):
             status=Match.Status.CONFIRMED,
         )
         self.client.force_login(self.user)
+
+    def test_menu_destaca_treinador_inteligente_como_acesso_primario(self):
+        response = self.client.get(reverse('home'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-testid="coach-primary-shortcut"')
+        self.assertContains(response, reverse('intelligent-coach-center'))
 
     def test_central_explica_dados_motor_e_proximo_passo_do_time(self):
         response = self.client.get(
@@ -186,3 +197,68 @@ class CoachWorkspaceHTTPTests(TestCase):
         )
 
         self.assertTrue(MatchDossier.objects.filter(pk=dossier.pk).exists())
+
+    def test_treinador_combina_base_global_com_elenco_privado_do_tenant(self):
+        for index in range(10):
+            player = Person.objects.create(
+                tenant=self.tenant,
+                full_name=f'Atleta privado {index + 2}',
+                kind=Person.Kind.ATHLETE,
+            )
+            Contract.objects.create(
+                tenant=self.tenant,
+                person=player,
+                club=self.our_club,
+                start_date=timezone.localdate() - timedelta(days=10),
+                status=Contract.Status.ACTIVE,
+            )
+        source = GlobalSportsDataSource.objects.create(
+            code='football-data-org',
+            name='football-data.org',
+            kind=GlobalSportsDataSource.Kind.FOOTBALL_DATA_ORG,
+            capabilities=['fixtures_results'],
+            license_id='provider-terms',
+            attribution='Dados globais da plataforma.',
+            quality='production_basic',
+            active=True,
+            operational_status=GlobalSportsDataSource.OperationalStatus.ACTIVE,
+            last_checked_at=timezone.now(),
+            last_success_at=timezone.now(),
+        )
+        batch = GlobalSportsDataBatch.objects.create(
+            source=source,
+            dataset_id='competition-bsa',
+            dataset_version='2026-07-13',
+            content_hash='a' * 64,
+            status=GlobalSportsDataBatch.Status.COMPLETED,
+            record_count=1,
+            manifest={'provider': 'football-data.org'},
+            license_id=source.license_id,
+            attribution=source.attribution,
+            quality=source.quality,
+            published_at=timezone.now(),
+        )
+        GlobalSportsDataRecord.objects.create(
+            source=source,
+            batch=batch,
+            capability='fixtures_results',
+            provider_record_id='match:global-1',
+            observed_at=timezone.now(),
+            ingested_at=timezone.now(),
+            expires_at=timezone.now() + timedelta(hours=24),
+            payload={
+                'home_team': self.our_club.name,
+                'away_team': self.opponent.name,
+            },
+            content_hash='b' * 64,
+        )
+
+        dossier = generate_match_dossier(
+            match=self.match, club=self.our_club, requested_by=self.user,
+        )
+
+        self.assertEqual(dossier.tenant, self.tenant)
+        self.assertEqual(
+            dossier.data_snapshot['external_sources'][0]['code'],
+            'football-data-org',
+        )

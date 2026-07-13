@@ -71,3 +71,15 @@ _Avoid_: estratégia (genérico), escalação (é apenas uma parte do plano)
 **Fonte de Dados Esportivos**:
 Origem estruturada de partidas, eventos, métricas ou tracking, com proveniência, licença, qualidade e validade conhecidas.
 _Avoid_: Fonte de Conhecimento (reservada a documentos e conteúdo textual)
+
+**Base Esportiva Global**:
+Conjunto compartilhado de dados esportivos que a plataforma mantém continuamente atualizado a partir de Fontes de Dados Esportivos públicas ou licenciadas. É um ativo da SaaS e pode ser consultado por todo Tenant que contratou o serviço correspondente; não pertence a nenhum Tenant individual.
+_Avoid_: importação do tenant, cópia do provider por clube, banco do cliente
+
+**Dado Privado do Tenant**:
+Informação fornecida ou produzida exclusivamente dentro da área de um Tenant, como GPS próprio, saúde, contratos, disponibilidade interna, relatórios e decisões da comissão. Nunca integra a Base Esportiva Global e não pode ser consultada por outro Tenant.
+_Avoid_: dado global, dado público (mesmo quando o Tenant opta por compartilhar internamente)
+
+**Atualização da Plataforma**:
+Processo contínuo, operado pela SaaS, que incorpora à Base Esportiva Global as novidades disponibilizadas por cada provider conforme sua cadência, licença e limites. O Tenant observa atualidade e proveniência, mas não inicia nem agenda esse processo.
+_Avoid_: sincronização do tenant, automação do clube, importação manual do cliente

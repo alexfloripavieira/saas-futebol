@@ -1,4 +1,5 @@
 {% extends 'futebol/base.html' %}
+{% load l10n %}
 
 {% block content %}
 <style>
@@ -26,20 +27,20 @@
 <div class="lab-grid" style="margin-top:1.2rem">
   <article class="lab-card"><h2>Mapa de ações</h2><p class="muted">Densidade de eventos; não representa tempo de ocupação sem tracking.</p>
     {% if analysis.heatmap_available %}<svg class="lab-pitch" viewBox="0 0 100 100" role="img"><title>Densidade de ações no campo</title>
-      {% for cell in analysis.heatmap %}<rect x="{{ cell.x }}" y="{{ cell.y }}" width="{{ cell.width }}" height="{{ cell.height }}" fill="#ff9e42" opacity="{{ cell.opacity }}"><title>{{ cell.count }} ações</title></rect>{% endfor %}
+      {% for cell in analysis.heatmap %}<rect x="{{ cell.x|unlocalize }}" y="{{ cell.y|unlocalize }}" width="{{ cell.width|unlocalize }}" height="{{ cell.height|unlocalize }}" fill="#ff9e42" opacity="{{ cell.opacity|unlocalize }}"><title>{{ cell.count }} ações</title></rect>{% endfor %}
       <rect class="pitch-line" x="1" y="1" width="98" height="98"/><line class="pitch-line" x1="50" y1="1" x2="50" y2="99"/><circle class="pitch-line" cx="50" cy="50" r="10"/>
-      {% for event in analysis.actions %}<circle class="action" cx="{{ event.point.x }}" cy="{{ event.point.y }}" r=".75"><title>{{ event.player }} · {{ event.type }}</title></circle>{% endfor %}
+      {% for event in analysis.actions %}<circle class="action" cx="{{ event.point.x|unlocalize }}" cy="{{ event.point.y|unlocalize }}" r=".75"><title>{{ event.player }} · {{ event.type }}</title></circle>{% endfor %}
     </svg>{% else %}<p class="lab-warning">Cobertura insuficiente: são necessárias ao menos 10 ações com coordenadas.</p>{% endif %}
   </article>
   <article class="lab-card"><h2>Rede de passes</h2><p class="muted">Posição média por ações e conexões de passes completos.</p>
     {% if analysis.pass_network_available %}<svg class="lab-pitch" viewBox="0 0 100 100" role="img"><title>Rede de passes</title><rect class="pitch-line" x="1" y="1" width="98" height="98"/><line class="pitch-line" x1="50" y1="1" x2="50" y2="99"/>
-      {% for edge in analysis.pass_edges %}<line class="edge" x1="{{ edge.x1 }}" y1="{{ edge.y1 }}" x2="{{ edge.x2 }}" y2="{{ edge.y2 }}" stroke-width="{{ edge.width }}"><title>{{ edge.source }} para {{ edge.target }}: {{ edge.count }}</title></line>{% endfor %}
-      {% for node in analysis.nodes %}<circle class="node" cx="{{ node.x }}" cy="{{ node.y }}" r="3.2"><title>{{ node.player }} · {{ node.actions }} ações</title></circle><text class="node-label" x="{{ node.x }}" y="{{ node.y|add:'0.8' }}">{{ node.player|truncatechars:9 }}</text>{% endfor %}
+      {% for edge in analysis.pass_edges %}<line class="edge" x1="{{ edge.x1|unlocalize }}" y1="{{ edge.y1|unlocalize }}" x2="{{ edge.x2|unlocalize }}" y2="{{ edge.y2|unlocalize }}" stroke-width="{{ edge.width|unlocalize }}"><title>{{ edge.source }} para {{ edge.target }}: {{ edge.count }}</title></line>{% endfor %}
+      {% for node in analysis.nodes %}<circle class="node" cx="{{ node.x|unlocalize }}" cy="{{ node.y|unlocalize }}" r="3.2"><title>{{ node.player }} · {{ node.actions }} ações</title></circle><text class="node-label" x="{{ node.x|unlocalize }}" y="{{ node.y|add:'0.8'|unlocalize }}">{{ node.player|truncatechars:9 }}</text>{% endfor %}
     </svg>{% else %}<p class="lab-warning">Selecione uma equipe com passes completos para visualizar sua rede sem misturar adversários.</p>{% endif %}
   </article>
   <article class="lab-card"><h2>Finalizações e xG</h2><p class="muted">O tamanho do marcador representa a probabilidade estimada da chance.</p>
     {% if analysis.shots_available %}<svg class="lab-pitch" viewBox="0 0 100 100" role="img"><title>Mapa de finalizações e gols esperados</title><rect class="pitch-line" x="1" y="1" width="98" height="98"/><line class="pitch-line" x1="50" y1="1" x2="50" y2="99"/>
-      {% for shot in analysis.shots %}<circle class="shot {% if shot.goal %}goal{% endif %}" cx="{{ shot.x }}" cy="{{ shot.y }}" r="{{ shot.radius }}"><title>{{ shot.player }} · xG {{ shot.xg }} · {{ shot.outcome }}</title></circle>{% endfor %}
+      {% for shot in analysis.shots %}<circle class="shot {% if shot.goal %}goal{% endif %}" cx="{{ shot.x|unlocalize }}" cy="{{ shot.y|unlocalize }}" r="{{ shot.radius|unlocalize }}"><title>{{ shot.player }} · xG {{ shot.xg }} · {{ shot.outcome }}</title></circle>{% endfor %}
     </svg>{% else %}<p class="lab-warning">Não há finalizações com coordenadas neste recorte.</p>{% endif %}
   </article>
   <article class="lab-card"><h2>Tracking e movimentos observados</h2><p class="lab-warning">Ainda indisponível nesta carga: a SkillCorner aberta está conectada apenas para catálogo e metadados. Trajetórias só serão exibidas após importação controlada dos frames.</p></article>

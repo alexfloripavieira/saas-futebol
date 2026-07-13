@@ -2,18 +2,22 @@
 
 {% block content %}
 <style>
-  .dossier-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.confidence{min-width:92px;text-align:center;padding:1rem;border-radius:50%;background:conic-gradient(var(--tenant-accent) calc(var(--confidence)*1%),rgba(255,255,255,.08) 0);position:relative}.confidence:after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--tenant-bg)}.confidence span{position:relative;z-index:1;font-weight:800}.metric-grid,.opinion-grid,.plan-grid{display:grid;gap:1rem}.metric-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:1.2rem 0}.metric{padding:1rem;border-radius:14px;background:rgba(255,255,255,.05)}.metric strong{display:block;font-size:1.55rem}.section-title{margin-top:2rem}.opinion-grid{grid-template-columns:repeat(auto-fit,minmax(235px,1fr))}.opinion,.plan{border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:1rem;background:rgba(255,255,255,.035)}.opinion h3,.plan h2{margin:.2rem 0}.confidence-bar{height:7px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}.confidence-bar span{display:block;height:100%;background:var(--tenant-accent)}.plan-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}.plan[data-variant="balanced"]{border-color:color-mix(in srgb,var(--tenant-accent) 55%,transparent)}.pitch{position:relative;aspect-ratio:1.55;min-height:340px;overflow:hidden;background:repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 10%,rgba(255,255,255,.055) 10%,rgba(255,255,255,.055) 20%),#123f31;border:2px solid rgba(255,255,255,.52);border-radius:12px;margin:1rem 0}.pitch:before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,.55)}.pitch:after{content:"";position:absolute;left:50%;top:50%;width:20%;aspect-ratio:1;border:1px solid rgba(255,255,255,.55);border-radius:50%;transform:translate(-50%,-50%)}.pitch-box{position:absolute;top:24%;bottom:24%;width:12%;border:1px solid rgba(255,255,255,.5);z-index:1}.pitch-box.left{left:0;border-left:0}.pitch-box.right{right:0;border-right:0}.pitch-svg{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}.player-chip,.opponent-chip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;width:68px;min-height:38px;padding:.28rem;border-radius:9px;font-size:.68rem;line-height:1.05;text-align:center;z-index:4;box-shadow:0 4px 12px rgba(0,0,0,.3)}.player-chip{background:rgba(2,37,73,.92);border:1px solid var(--tenant-accent)}.opponent-chip{background:rgba(105,27,35,.88);border:1px solid #ff8e98}.player-chip b{color:var(--tenant-accent)}.opponent-chip b{color:#ffc5ca}.pitch-label{position:absolute;top:.4rem;z-index:5;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.pitch-label.ours{left:.55rem;color:var(--tenant-accent)}.pitch-label.opponent{right:.55rem;color:#ffc5ca}.pitch-legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;margin-top:-.5rem}.legend-dot{display:inline-block;width:.65rem;height:.65rem;border-radius:50%;margin-right:.3rem}.legend-dot.ours{background:var(--tenant-accent)}.legend-dot.opponent{background:#ff8e98}.plan ul,.opinion ul{padding-left:1.1rem}.warning{padding:.75rem;border-radius:10px;background:rgba(255,184,77,.12);color:#ffd79b}.evidence{font-size:.85rem;color:var(--tenant-muted)}
+  .dossier-head{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start}.confidence{min-width:92px;text-align:center;padding:1rem;border-radius:50%;background:conic-gradient(var(--tenant-accent) calc(var(--confidence)*1%),rgba(255,255,255,.08) 0);position:relative}.confidence:after{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--tenant-bg)}.confidence span{position:relative;z-index:1;font-weight:800}.room-nav{display:flex;gap:.55rem;flex-wrap:wrap;margin:1rem 0 1.4rem}.room-nav a{padding:.55rem .8rem;border:1px solid rgba(255,255,255,.14);border-radius:999px;text-decoration:none}.metric-grid,.opinion-grid,.plan-grid,.microcycle-grid{display:grid;gap:1rem}.metric-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:1.2rem 0}.metric{padding:1rem;border-radius:14px;background:rgba(255,255,255,.05)}.metric strong{display:block;font-size:1.55rem}.section-title{margin-top:2rem;scroll-margin-top:1rem}.opinion-grid{grid-template-columns:repeat(auto-fit,minmax(235px,1fr))}.opinion,.plan,.training-session{border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:1rem;background:rgba(255,255,255,.035)}.opinion h3,.plan h2{margin:.2rem 0}.plan summary,.panel-toggle summary{cursor:pointer}.plan summary::marker,.panel-toggle summary::marker{color:var(--tenant-accent)}.panel-toggle{margin-top:2rem}.panel-toggle .section-title{display:inline-block;margin:.3rem}.microcycle-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}.training-session strong{display:block;color:var(--tenant-accent);font-size:1.1rem}.confidence-bar{height:7px;background:rgba(255,255,255,.08);border-radius:999px;overflow:hidden}.confidence-bar span{display:block;height:100%;background:var(--tenant-accent)}.plan-grid{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}.plan[data-variant="balanced"]{border-color:color-mix(in srgb,var(--tenant-accent) 55%,transparent)}.pitch{position:relative;aspect-ratio:1.55;min-height:340px;overflow:hidden;background:repeating-linear-gradient(90deg,rgba(255,255,255,.025) 0,rgba(255,255,255,.025) 10%,rgba(255,255,255,.055) 10%,rgba(255,255,255,.055) 20%),#123f31;border:2px solid rgba(255,255,255,.52);border-radius:12px;margin:1rem 0}.pitch:before{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:1px solid rgba(255,255,255,.55)}.pitch:after{content:"";position:absolute;left:50%;top:50%;width:20%;aspect-ratio:1;border:1px solid rgba(255,255,255,.55);border-radius:50%;transform:translate(-50%,-50%)}.pitch-box{position:absolute;top:24%;bottom:24%;width:12%;border:1px solid rgba(255,255,255,.5);z-index:1}.pitch-box.left{left:0;border-left:0}.pitch-box.right{right:0;border-right:0}.pitch-svg{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}.player-chip,.opponent-chip{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;justify-content:center;width:68px;min-height:38px;padding:.28rem;border-radius:9px;font-size:.68rem;line-height:1.05;text-align:center;z-index:4;box-shadow:0 4px 12px rgba(0,0,0,.3)}.player-chip{background:rgba(2,37,73,.92);border:1px solid var(--tenant-accent)}.opponent-chip{background:rgba(105,27,35,.88);border:1px solid #ff8e98}.player-chip b{color:var(--tenant-accent)}.opponent-chip b{color:#ffc5ca}.pitch-label{position:absolute;top:.4rem;z-index:5;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}.pitch-label.ours{left:.55rem;color:var(--tenant-accent)}.pitch-label.opponent{right:.55rem;color:#ffc5ca}.pitch-legend{display:flex;gap:1rem;flex-wrap:wrap;font-size:.78rem;margin-top:-.5rem}.legend-dot{display:inline-block;width:.65rem;height:.65rem;border-radius:50%;margin-right:.3rem}.legend-dot.ours{background:var(--tenant-accent)}.legend-dot.opponent{background:#ff8e98}.plan ul,.opinion ul{padding-left:1.1rem}.warning{padding:.75rem;border-radius:10px;background:rgba(255,184,77,.12);color:#ffd79b}.evidence{font-size:.85rem;color:var(--tenant-muted)}
   @media(max-width:620px){.plan-grid{grid-template-columns:1fr}.pitch{min-height:300px}.player-chip,.opponent-chip{width:54px;font-size:.59rem}}
 </style>
 
 <section class="dossier-head">
   <div>
-    <span class="eyebrow">Comissão Técnica Digital · Dossiê v{{ dossier.version }}</span>
+    <span class="eyebrow">Sala da Próxima Partida · análise v{{ dossier.version }}</span>
     <h1>{{ dossier.match.home_club.name }} × {{ dossier.match.away_club.name }}</h1>
     <p>Análise para <strong>{{ dossier.analyzed_club.name }}</strong> · {{ dossier.match.scheduled_at|date:'d/m/Y H:i' }} · gerada por {{ dossier.generated_by.username }}</p>
   </div>
   <div class="confidence" style="--confidence:{{ dossier.confidence }}"><span>{{ dossier.confidence }}%</span></div>
 </section>
+
+<nav class="room-nav" aria-label="Decisões da sala da partida">
+  <a href="#decisao">Decisão</a><a href="#treino">Treino</a><a href="#planos">Planos de jogo</a><a href="#comissao">Comissão Técnica Digital</a><a href="#fontes">Fontes</a>
+</nav>
 
 <div class="metric-grid">
   <div class="metric"><span>Atletas elegíveis</span><strong>{{ dossier.data_snapshot.available_players }}</strong></div>
@@ -38,7 +42,35 @@
 <p class="warning"><strong>Dados insuficientes para recomendação espacial.</strong> As orientações de corredor e zona permanecem hipóteses até existirem eventos coordenados, tracking ou vídeo anotado recente.</p>
 {% endif %}
 
-<h2 class="section-title">Conselho da Comissão Técnica Digital</h2>
+<section id="decisao">
+  <h2 class="section-title">Recomendação de escalação explicável</h2>
+  <p><strong>Sugestão para revisão da comissão.</strong> A escolha pondera posição, prontidão, disponibilidade e titularidade recente; nunca altera a escalação oficial automaticamente.</p>
+  <p class="evidence">Método {{ dossier.data_snapshot.lineup_recommendation.method }} · prontidão neutra {{ dossier.data_snapshot.lineup_recommendation.default_readiness }}/100 quando não há medição.</p>
+  <h3>Escalação provável do adversário</h3>
+  <p>{{ dossier.data_snapshot.opponent_prediction.label }}</p>
+  <p class="evidence">Método {{ dossier.data_snapshot.opponent_prediction.method }} · {{ dossier.data_snapshot.opponent_prediction.sample_matches }} jogo(s) · cobertura {{ dossier.data_snapshot.opponent_prediction.coverage }}%. {{ dossier.data_snapshot.opponent_prediction.coverage_label }}</p>
+  <p class="warning"><strong>Formação: hipótese.</strong> {{ dossier.data_snapshot.opponent_prediction.formation_label }} {{ dossier.data_snapshot.opponent_prediction.probability_label }}</p>
+  {% if dossier.data_snapshot.opponent_prediction.limitations %}<p class="evidence">Limitações: {{ dossier.data_snapshot.opponent_prediction.limitations|join:' · ' }}</p>{% endif %}
+</section>
+
+<section id="treino">
+  <h2 class="section-title">Plano de treinamento sugerido</h2>
+  <p><strong>Sugestão para revisão da comissão.</strong> Microciclo relativo à partida, com {{ dossier.data_snapshot.training_microcycle.restricted_players }} atleta(s) sob restrição registrada.</p>
+  <div class="microcycle-grid">
+    {% for session in dossier.data_snapshot.training_microcycle.sessions %}
+    <article class="training-session">
+      <span class="eyebrow">{{ session.day }} · carga {{ session.load }}</span>
+      <strong>{{ session.focus }}</strong>
+      <ul>{% for objective in session.objectives %}<li>{{ objective }}</li>{% endfor %}</ul>
+      <p class="evidence">{{ session.staff_decision }}</p>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="warning">{{ dossier.data_snapshot.training_microcycle.limitations|join:' · ' }}</p>
+</section>
+
+<details class="panel-toggle" id="comissao">
+<summary><h2 class="section-title">Conselho da Comissão Técnica Digital</h2></summary>
 <div class="opinion-grid">
   {% for opinion in opinions %}
   <article class="opinion">
@@ -52,13 +84,13 @@
   </article>
   {% endfor %}
 </div>
+</details>
 
-<h2 class="section-title">Comparação dos Planos de Jogo</h2>
+<h2 class="section-title" id="planos">Comparação dos Planos de Jogo</h2>
 <div class="plan-grid">
   {% for plan in plans %}
-  <article class="plan" data-variant="{{ plan.variant }}">
-    <span class="eyebrow">{{ plan.formation }} · confiança {{ plan.confidence }}%</span>
-    <h2>Plano {{ plan.get_variant_display|lower }}</h2>
+  <details class="plan" data-variant="{{ plan.variant }}"{% if plan.variant == 'balanced' %} open{% endif %}>
+    <summary><span class="eyebrow">{{ plan.formation }} · confiança {{ plan.confidence }}%</span><h2>Plano {{ plan.get_variant_display|lower }}</h2></summary>
     <p>{{ plan.summary }}</p>
     <div class="pitch" aria-label="Prancheta tática com adversário espelhado">
       <span class="pitch-label ours">{{ dossier.analyzed_club.name }} →</span>
@@ -92,9 +124,15 @@
     </div>
     <div class="pitch-legend">
       <span><i class="legend-dot ours"></i>Nosso plano e movimentos</span>
-      <span><i class="legend-dot opponent"></i>Espelho do adversário — movimento hipotético</span>
+      <span><i class="legend-dot opponent"></i>Espelho do adversário — movimento estimado</span>
       <span>{{ dossier.data_snapshot.opponent_shape.label }}</span>
     </div>
+    {% if plan.variant == 'balanced' %}
+    <h3>Por que estes titulares?</h3>
+    <ul class="evidence">
+      {% for selection in plan.players.all %}{% if selection.is_starter %}<li><strong>{{ selection.player.full_name }} · {{ selection.position }}</strong> — {{ selection.rationale }}</li>{% endif %}{% endfor %}
+    </ul>
+    {% endif %}
     <p class="evidence"><strong>Movimentos planejados:</strong> setas azuis são instruções do plano; linhas vermelhas tracejadas representam a resposta adversária estimada.</p>
     <h3>Com a bola</h3><ul>{% for item in plan.attacking_plan %}<li>{{ item }}</li>{% endfor %}</ul>
     <h3>Sem a bola</h3><ul>{% for item in plan.defensive_plan %}<li>{{ item }}</li>{% endfor %}</ul>
@@ -106,11 +144,11 @@
       <label><input type="checkbox" name="confirm" value="apply-draft" required> Confirmo que quero criar um rascunho para revisão humana.</label>
       <button class="button button-primary" type="submit">Aplicar como rascunho</button>
     </form>
-  </article>
+  </details>
   {% endfor %}
 </div>
 
-<h2 class="section-title">Proveniência dos dados</h2>
+<h2 class="section-title" id="fontes">Proveniência dos dados</h2>
 {% if dossier.data_snapshot.external_sources %}
 <div class="opinion-grid">
   {% for source in dossier.data_snapshot.external_sources %}

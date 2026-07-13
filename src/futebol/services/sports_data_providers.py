@@ -19,6 +19,7 @@ from uuid import uuid4
 from django.core.exceptions import ValidationError
 from django.core.files import File
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -775,7 +776,9 @@ def _normalize_team_squad(team):
     return records
 
 
-def _fixture_team_ids(matches_payload, max_teams, explicit_team_ids=()):
+def _fixture_team_ids(
+    matches_payload, max_teams, explicit_team_ids=(), *, source=None,
+):
     if max_teams == 0:
         return []
     team_ids = list(explicit_team_ids)
@@ -788,14 +791,36 @@ def _fixture_team_ids(matches_payload, max_teams, explicit_team_ids=()):
         upcoming or matches,
         key=lambda match: match.get('utcDate') or '',
     )
+    fixture_team_ids = []
     for match in matches:
         for side in ('homeTeam', 'awayTeam'):
             team_id = str((match.get(side) or {}).get('id') or '')
-            if team_id and team_id not in team_ids:
-                team_ids.append(team_id)
-                if len(team_ids) == max_teams:
-                    return team_ids
-    return team_ids
+            if (
+                team_id and team_id not in team_ids
+                and team_id not in fixture_team_ids
+            ):
+                fixture_team_ids.append(team_id)
+    if source is not None and fixture_team_ids:
+        dataset_ids = [f'team-{team_id}-squad' for team_id in fixture_team_ids]
+        last_success_by_dataset = {
+            item['dataset_id']: item['last_success']
+            for item in source.sync_runs.filter(
+                dataset_id__in=dataset_ids,
+                status=GlobalSportsSyncRun.Status.COMPLETED,
+            ).values('dataset_id').annotate(last_success=Max('finished_at'))
+        }
+        fixture_order = {
+            team_id: index for index, team_id in enumerate(fixture_team_ids)
+        }
+
+        def rotation_key(team_id):
+            last_success = last_success_by_dataset.get(f'team-{team_id}-squad')
+            if last_success is None:
+                return 0, 0, fixture_order[team_id]
+            return 1, last_success.timestamp(), fixture_order[team_id]
+
+        fixture_team_ids.sort(key=rotation_key)
+    return team_ids + fixture_team_ids[:max_teams - len(team_ids)]
 
 
 def _validate_explicit_team_ids(team_ids, max_teams):
@@ -856,7 +881,9 @@ def sync_platform_football_data(
 
     teams_rate = []
     team_failures = []
-    for team_id in _fixture_team_ids(matches_payload, max_teams, team_ids):
+    for team_id in _fixture_team_ids(
+        matches_payload, max_teams, team_ids, source=source,
+    ):
         team_run = _begin_global_open_sync(
             source=source,
             dataset_id=f'team-{team_id}-squad',

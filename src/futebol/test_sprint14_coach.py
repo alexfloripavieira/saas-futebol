@@ -298,6 +298,271 @@ class IntelligentCoachServiceTests(TestCase):
         self.assertTrue(any(item.get('record_id') for item in scout.evidence))
         self.assertTrue(all(item.get('kind') == 'internal_snapshot' for item in physical.evidence))
 
+    def test_dossie_converte_forma_real_do_provider_em_amostra_comparavel(self):
+        import_local_sports_dataset(
+            tenant=self.tenant,
+            dataset_slug='demo-treinador-sintetico-v1',
+            imported_by=self.user,
+            root=Path(__file__).resolve().parent / 'data' / 'sports',
+        )
+        our_record = SportsDataRecord.objects.get(
+            tenant=self.tenant,
+            capability='standings_form',
+            provider_record_id='demo-form-ilha-azul',
+        )
+        our_record.payload = {
+            **our_record.payload,
+            'team': self.our_club.name,
+            'form': 'W,D,L,W,W',
+        }
+        our_record.payload.pop('recent_points', None)
+        our_record.save()
+        opponent_record = SportsDataRecord.objects.get(
+            tenant=self.tenant,
+            capability='standings_form',
+            provider_record_id='demo-form-vale-dourado',
+        )
+        opponent_record.payload = {
+            **opponent_record.payload,
+            'team': self.opponent.name,
+            'form': 'L,L,D,L,W',
+        }
+        opponent_record.payload.pop('recent_points', None)
+        opponent_record.save()
+
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+        )
+
+        self.assertEqual(dossier.data_snapshot['external_form']['sequence'], [3, 1, 0, 3, 3])
+        self.assertEqual(dossier.data_snapshot['opponent_external_form']['sequence'], [0, 0, 1, 0, 3])
+        self.assertIn('vantagem recente do nosso time', dossier.plans.get(
+            variant=GamePlan.Variant.BALANCED,
+        ).summary)
+
+    def test_dossie_nao_perde_evidencia_do_clube_apos_cem_registros_irrelevantes(self):
+        import_local_sports_dataset(
+            tenant=self.tenant,
+            dataset_slug='demo-treinador-sintetico-v1',
+            imported_by=self.user,
+            root=Path(__file__).resolve().parent / 'data' / 'sports',
+        )
+        relevant = SportsDataRecord.objects.get(
+            tenant=self.tenant,
+            capability='standings_form',
+            provider_record_id='demo-form-ilha-azul',
+        )
+        relevant.payload = {
+            **relevant.payload,
+            'team': self.our_club.name,
+            'recent_points': [3, 3, 1],
+        }
+        relevant.save()
+        for index in range(101):
+            SportsDataRecord.objects.create(
+                tenant=self.tenant,
+                source=relevant.source,
+                batch=relevant.batch,
+                capability='fixtures_results',
+                provider_record_id=f'irrelevante-{index:03d}',
+                observed_at=timezone.now() + timedelta(seconds=index),
+                payload={'home_team': f'Outro Clube {index}', 'away_team': 'Terceiro Clube'},
+                content_hash=f'{index:064d}',
+            )
+
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+        )
+
+        self.assertEqual(dossier.data_snapshot['external_form']['sequence'], [3, 3, 1])
+        self.assertTrue(any(
+            item['record_id'] == relevant.provider_record_id
+            for item in dossier.data_snapshot['external_evidence']
+        ))
+
+    def test_dossie_projeta_escalacao_adversaria_com_cinco_jogos_observados(self):
+        opponent_players = []
+        opponent_positions = [
+            'GOL', 'LD', 'ZAG', 'ZAG', 'LE', 'VOL', 'MC', 'MEI', 'PD', 'PE', 'ATA', 'ATA',
+        ]
+        for index, position in enumerate(opponent_positions, start=1):
+            player = Person.objects.create(
+                tenant=self.tenant,
+                full_name=f'Adversário {index:02d}',
+                kind=Person.Kind.ATHLETE,
+            )
+            opponent_players.append((player, position))
+        for game_index in range(5):
+            observed_match = Match.objects.create(
+                tenant=self.tenant,
+                phase=self.match.phase,
+                home_club=self.opponent,
+                away_club=self.our_club,
+                reference_code=f'OPP-HISTORY-{game_index}',
+                scheduled_at=timezone.now() - timedelta(days=game_index + 2),
+                status=Match.Status.PLAYED,
+                home_score=1,
+                away_score=0,
+            )
+            starters = opponent_players[:11]
+            if game_index == 0:
+                starters = opponent_players[:10] + [opponent_players[11]]
+            for player, position in starters:
+                MatchLineup.objects.create(
+                    tenant=self.tenant,
+                    match=observed_match,
+                    player=player,
+                    club=self.opponent,
+                    position=position,
+                    is_starter=True,
+                )
+
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+        )
+
+        prediction = dossier.data_snapshot['opponent_prediction']
+        self.assertEqual(prediction['status'], 'data_supported')
+        self.assertEqual(prediction['sample_matches'], 5)
+        self.assertEqual(len(prediction['players']), 11)
+        regular = next(item for item in prediction['candidates'] if item['name'] == 'Adversário 01')
+        rotational = next(item for item in prediction['candidates'] if item['name'] == 'Adversário 12')
+        self.assertGreater(regular['start_probability'], rotational['start_probability'])
+        self.assertEqual(prediction['method'], 'weighted-start-frequency-v1')
+        self.assertEqual(prediction['formation_status'], 'hypothesis')
+        self.assertTrue(any(
+            'núcleo provável' in item
+            for item in dossier.plans.get(
+                variant=GamePlan.Variant.BALANCED,
+            ).defensive_plan
+        ))
+
+    def test_plano_prioriza_atleta_apto_e_expoe_pontuacao_da_recomendacao(self):
+        current_forward = self.players[10]
+        AthleteMatchAvailability.objects.create(
+            tenant=self.tenant,
+            match=self.match,
+            player=current_forward,
+            club=self.our_club,
+            status=AthleteMatchAvailability.Status.DOUBT,
+            readiness=30,
+            max_minutes=35,
+            note='Baixa prontidão registrada pela preparação física.',
+        )
+        ready_forward = Person.objects.create(
+            tenant=self.tenant,
+            full_name='Atacante em alta prontidão',
+            kind=Person.Kind.ATHLETE,
+        )
+        Contract.objects.create(
+            tenant=self.tenant,
+            person=ready_forward,
+            club=self.our_club,
+            start_date=timezone.localdate() - timedelta(days=30),
+            status=Contract.Status.ACTIVE,
+        )
+        AthleteSportProfile.objects.create(
+            tenant=self.tenant,
+            player=ready_forward,
+            primary_position='ATA',
+            secondary_positions=['PD'],
+            tactical_roles=['atacar profundidade'],
+        )
+        AthleteMatchAvailability.objects.create(
+            tenant=self.tenant,
+            match=self.match,
+            player=ready_forward,
+            club=self.our_club,
+            status=AthleteMatchAvailability.Status.AVAILABLE,
+            readiness=95,
+        )
+
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+        )
+
+        balanced = dossier.plans.get(variant=GamePlan.Variant.BALANCED)
+        recommended = balanced.players.get(player=ready_forward)
+        restricted = balanced.players.get(player=current_forward)
+        self.assertTrue(recommended.is_starter)
+        self.assertFalse(restricted.is_starter)
+        self.assertIn('prontidão 95/100', recommended.rationale)
+        self.assertIn('pontuação', recommended.rationale)
+        self.assertEqual(
+            dossier.data_snapshot['lineup_recommendation']['method'],
+            'position-readiness-history-v1',
+        )
+
+    def test_historico_de_titularidade_nao_conta_partida_sem_escalacao_observada(self):
+        Match.objects.create(
+            tenant=self.tenant,
+            phase=self.match.phase,
+            home_club=self.our_club,
+            away_club=self.opponent,
+            reference_code='SEM-ESCALACAO',
+            scheduled_at=timezone.now() - timedelta(days=2),
+            status=Match.Status.PLAYED,
+            home_score=1,
+            away_score=0,
+        )
+
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+        )
+
+        starter = dossier.plans.get(
+            variant=GamePlan.Variant.BALANCED,
+        ).players.filter(is_starter=True).first()
+        self.assertIn('titular em 0/0 jogos observados', starter.rationale)
+
+    def test_dossie_rejeita_elenco_sem_goleiro_apto(self):
+        goalkeeper_profile = AthleteSportProfile.objects.get(player=self.players[0])
+        goalkeeper_profile.primary_position = 'ZAG'
+        goalkeeper_profile.save()
+
+        with self.assertRaisesMessage(ValidationError, 'goleiro apto'):
+            generate_match_dossier(
+                match=self.match,
+                club=self.our_club,
+                requested_by=self.user,
+            )
+
+    def test_dossie_sugere_microciclo_contextual_sem_simular_dado_fisico_ausente(self):
+        AthleteMatchAvailability.objects.create(
+            tenant=self.tenant,
+            match=self.match,
+            player=self.players[0],
+            club=self.our_club,
+            status=AthleteMatchAvailability.Status.LIMITED,
+            readiness=55,
+            max_minutes=60,
+            note='Carga individual sob revisão.',
+        )
+
+        dossier = generate_match_dossier(
+            match=self.match,
+            club=self.our_club,
+            requested_by=self.user,
+        )
+
+        microcycle = dossier.data_snapshot['training_microcycle']
+        self.assertEqual(microcycle['method'], 'match-relative-microcycle-v1')
+        self.assertEqual(microcycle['status'], 'suggestion_for_staff_review')
+        self.assertTrue(microcycle['sessions'])
+        self.assertTrue(any(item['day'] == 'D-1' for item in microcycle['sessions']))
+        self.assertTrue(any('GPS' in item for item in microcycle['limitations']))
+        self.assertEqual(microcycle['restricted_players'], 1)
+
     def test_plano_rejeita_atleta_sem_contrato_ativo_com_clube_analisado(self):
         plan = self._create_plan()
         athlete_without_contract = Person.objects.create(
@@ -409,13 +674,29 @@ class IntelligentCoachHTTPTests(IntelligentCoachServiceTests):
         )
 
         detail_response = self.client.get(reverse('intelligent-coach-dossier', args=[dossier.pk]))
-        self.assertContains(detail_response, 'Comissão Técnica Digital')
+        self.assertContains(detail_response, 'Sala da Próxima Partida')
+        self.assertContains(detail_response, 'Recomendação de escalação explicável')
+        self.assertContains(detail_response, 'Escalação provável do adversário')
+        self.assertContains(detail_response, 'Plano de treinamento sugerido')
+        self.assertContains(detail_response, 'Sugestão para revisão da comissão')
         self.assertContains(detail_response, 'Plano equilibrado')
         self.assertContains(detail_response, 'Dados insuficientes para recomendação espacial')
         self.assertContains(detail_response, 'Espelho do adversário')
         self.assertContains(detail_response, 'Movimentos planejados')
         self.assertContains(detail_response, 'Gols pró/contra')
         self.assertContains(detail_response, 'Cartões recentes')
+
+        counts_before = (
+            MatchDossier.objects.count(),
+            GamePlan.objects.count(),
+            GamePlanPlayer.objects.count(),
+        )
+        self.client.get(reverse('intelligent-coach-dossier', args=[dossier.pk]))
+        self.assertEqual(counts_before, (
+            MatchDossier.objects.count(),
+            GamePlan.objects.count(),
+            GamePlanPlayer.objects.count(),
+        ))
 
         plan = dossier.plans.get(variant=GamePlan.Variant.BALANCED)
         rejected_response = self.client.post(

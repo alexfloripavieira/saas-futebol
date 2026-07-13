@@ -38,6 +38,53 @@ class _Response:
 
 class PlatformOpenDataSyncTests(TestCase):
     @patch('futebol.services.sports_data_providers.safe_urlopen')
+    def test_ciclos_sucessivos_rotacionam_equipes_ainda_nao_observadas(self, urlopen):
+        matches = {'matches': [
+            {
+                'id': 101, 'utcDate': '2026-07-15T19:00:00Z',
+                'status': 'SCHEDULED',
+                'homeTeam': {'id': 1, 'name': 'Time 1'},
+                'awayTeam': {'id': 2, 'name': 'Time 2'},
+                'score': {'fullTime': {'home': None, 'away': None}},
+            },
+            {
+                'id': 102, 'utcDate': '2026-07-16T19:00:00Z',
+                'status': 'SCHEDULED',
+                'homeTeam': {'id': 3, 'name': 'Time 3'},
+                'awayTeam': {'id': 4, 'name': 'Time 4'},
+                'score': {'fullTime': {'home': None, 'away': None}},
+            },
+        ]}
+
+        def team(team_id):
+            return {'id': team_id, 'name': f'Time {team_id}', 'squad': []}
+
+        urlopen.side_effect = [
+            _Response(matches), _Response({'standings': []}),
+            _Response(team(1)), _Response(team(2)),
+            _Response(matches), _Response({'standings': []}),
+            _Response(team(3)), _Response(team(4)),
+        ]
+
+        sync_platform_football_data(
+            api_key='segredo', competition_code='BSA', max_teams=2,
+        )
+        sync_platform_football_data(
+            api_key='segredo', competition_code='BSA', max_teams=2,
+        )
+
+        requested_team_urls = [
+            call.args[0].full_url for call in urlopen.call_args_list
+            if '/v4/teams/' in call.args[0].full_url
+        ]
+        self.assertEqual(requested_team_urls, [
+            'https://api.football-data.org/v4/teams/1',
+            'https://api.football-data.org/v4/teams/2',
+            'https://api.football-data.org/v4/teams/3',
+            'https://api.football-data.org/v4/teams/4',
+        ])
+
+    @patch('futebol.services.sports_data_providers.safe_urlopen')
     def test_equipes_explicitas_tem_prioridade_e_fixture_completa_limite(self, urlopen):
         matches = {'matches': [{
             'id': 101, 'utcDate': '2026-07-15T19:00:00Z', 'status': 'SCHEDULED',
@@ -274,6 +321,7 @@ class PlatformOpenDataSyncTests(TestCase):
         for _index in range(3):
             sync_platform_football_data(
                 api_key='segredo', competition_code='BSA', max_teams=1,
+                team_ids=('4241',),
             )
 
         team_batches = GlobalSportsDataBatch.objects.filter(

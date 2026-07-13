@@ -221,5 +221,9 @@ contratos reais fornecidos pelo responsável do produto.
   arquivos pesados de tracking não são rebaixados automaticamente.
 - O serviço Docker `sports-sync` executa as três fontes a cada seis horas, com
   importação idempotente e parâmetros configuráveis por ambiente.
+- A coleta de elencos do football-data.org respeita o teto de equipes por ciclo:
+  prioriza equipes nunca sincronizadas e depois as menos recentemente atualizadas.
+  O cursor é derivado das execuções concluídas no banco, sobrevive a reinícios e
+  evita consumir a cota gratuita repetindo sempre os primeiros próximos jogos.
 - O painel permite sincronização manual das três fontes. Nenhuma fonte aberta
   de laboratório passa a sustentar automaticamente uma recomendação comercial.

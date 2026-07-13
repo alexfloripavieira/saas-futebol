@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from futebol.models import (
+    AthleteSportProfile,
     Club,
     Contract,
     GlobalSportsDataBatch,
@@ -199,7 +200,14 @@ class CoachWorkspaceHTTPTests(TestCase):
         self.assertTrue(MatchDossier.objects.filter(pk=dossier.pk).exists())
 
     def test_treinador_combina_base_global_com_elenco_privado_do_tenant(self):
-        for index in range(10):
+        registered_player = Person.objects.get(
+            tenant=self.tenant, full_name='Atleta cadastrado',
+        )
+        AthleteSportProfile.objects.create(
+            tenant=self.tenant, player=registered_player, primary_position='GOL',
+        )
+        positions = ['LD', 'ZAG', 'ZAG', 'LE', 'VOL', 'MC', 'MEI', 'PD', 'PE', 'ATA']
+        for index, position in enumerate(positions):
             player = Person.objects.create(
                 tenant=self.tenant,
                 full_name=f'Atleta privado {index + 2}',
@@ -211,6 +219,9 @@ class CoachWorkspaceHTTPTests(TestCase):
                 club=self.our_club,
                 start_date=timezone.localdate() - timedelta(days=10),
                 status=Contract.Status.ACTIVE,
+            )
+            AthleteSportProfile.objects.create(
+                tenant=self.tenant, player=player, primary_position=position,
             )
         source = GlobalSportsDataSource.objects.create(
             code='football-data-org',
